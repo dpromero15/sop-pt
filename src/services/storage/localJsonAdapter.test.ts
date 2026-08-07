@@ -60,6 +60,63 @@ describe('LocalJsonAdapter', () => {
     expect(next.updatedAt >= before.updatedAt).toBe(true);
   });
 
+  it('seeds attendance metricIds on new sessions', () => {
+    const session = adapter.addSession({
+      title: 'Evening Practice',
+      date: '2026-08-10',
+      type: 'practice',
+      metricIds: [],
+    });
+    expect(session.metricIds[0]).toBe('m_attendance');
+    expect(session.metricIds).toEqual(['m_attendance']);
+  });
+
+  it('seeds match default game pack when metricIds omitted', () => {
+    const session = adapter.addSession({
+      title: 'League Match',
+      date: '2026-08-11',
+      type: 'match',
+      opponent: 'Rivals FC',
+      metricIds: [],
+    });
+    expect(session.metricIds).toEqual([
+      'm_attendance',
+      'm_goals',
+      'm_assists',
+      'm_tackles',
+    ]);
+  });
+
+  it('migrates legacy sessions missing metricIds', () => {
+    store.setItem(
+      STORAGE_KEYS.SESSIONS,
+      JSON.stringify([
+        {
+          id: 'sess_legacy',
+          date: '2026-08-01',
+          title: 'Legacy',
+          type: 'practice',
+        },
+      ]),
+    );
+    store.setItem(
+      STORAGE_KEYS.ENTRIES,
+      JSON.stringify([
+        {
+          id: 'e1',
+          sessionId: 'sess_legacy',
+          playerId: 'p1',
+          metricId: 'm_juggling',
+          value: 10,
+          timestamp: '2026-08-01',
+        },
+      ]),
+    );
+    const sessions = adapter.getSessions();
+    expect(sessions[0].metricIds[0]).toBe('m_attendance');
+    expect(sessions[0].metricIds).toContain('m_juggling');
+  });
+
   it('export/import includes team', () => {
     adapter.saveTeam({ ...adapter.getTeam(), name: 'Export FC' });
     const json = adapter.exportFullBackupJSON();

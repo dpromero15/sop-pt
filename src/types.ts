@@ -90,6 +90,8 @@ export interface Session {
   opponent?: string; // for matches
   score?: string; // e.g. "3 - 1"
   notes?: string;
+  /** Ordered metric plan for this session; attendance metric id is always first. */
+  metricIds: string[];
 }
 
 export interface MetricEntry {

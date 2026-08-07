@@ -390,7 +390,8 @@ export const INITIAL_SESSIONS: Session[] = [
     title: 'Pre-Season Sprint & Fitness Combine',
     type: 'fitness_test',
     location: 'Westside Athletic Complex',
-    notes: 'Baseline testing for 40m dash, shuttle run, and consecutive juggling count.'
+    notes: 'Baseline testing for 40m dash, shuttle run, and consecutive juggling count.',
+    metricIds: ['m_attendance', 'm_40m_dash', 'm_shuttle_run', 'm_juggling'],
   },
   {
     id: 'sess_2',
@@ -399,7 +400,8 @@ export const INITIAL_SESSIONS: Session[] = [
     title: 'Tactical Possession & Finishing Drill',
     type: 'practice',
     location: 'Field A',
-    notes: 'Focus on quick transitions and passing accuracy in tight spaces.'
+    notes: 'Focus on quick transitions and passing accuracy in tight spaces.',
+    metricIds: ['m_attendance', 'm_pass_acc', 'm_coach_rating', 'm_tackles'],
   },
   {
     id: 'sess_3',
@@ -410,7 +412,8 @@ export const INITIAL_SESSIONS: Session[] = [
     location: 'Central Stadium',
     opponent: 'St. Jude Academy',
     score: '3 - 1 (Win)',
-    notes: 'Dominant midfield display, 2 goals from Mateo, 1 goal from Lucas.'
+    notes: 'Dominant midfield display, 2 goals from Mateo, 1 goal from Lucas.',
+    metricIds: ['m_attendance', 'm_goals', 'm_assists', 'm_tackles', 'm_pass_acc'],
   }
 ];
 

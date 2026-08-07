@@ -24,6 +24,15 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 
 `id`, `name`, `shortName`, `season`, `ageGroup`, `clubName`, `homeVenue`, `primaryColor`, `secondaryColor`, `logoUrl?`, `coachName?`, `contactEmail?`, `timezone`, `notes?`, `updatedAt`
 
+### Session fields
+
+`id`, `date`, `time?`, `title`, `type`, `location?`, `opponent?`, `score?`, `notes?`, `metricIds`
+
+- **`metricIds`:** ordered list of metric definition ids that apply to this session.
+- Attendance metric id is always first and cannot be removed in the UI.
+- On create, seed `metricIds = [attendanceMetricId]`. Match sessions may additionally suggest a default game pack (`m_goals`, `m_assists`, `m_tackles`).
+- **Migration:** if a stored session lacks `metricIds`, derive the set from distinct `metricId` values in that session’s entries, ensure the attendance metric id is included first, then persist.
+
 ### Write policy
 
 - **Local adapter:** synchronous `localStorage` JSON
