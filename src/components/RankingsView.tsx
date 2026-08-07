@@ -28,6 +28,7 @@ import {
   RankingsMetricSelection,
   RankingsSortMode,
   RankingsTotalMode,
+  rankForMode,
   selectionAfterCategoryChange,
   totalForMode,
 } from '../utils/rankingsFilter';
@@ -111,9 +112,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     }
 
     if (selectedLabelId !== 'all') {
-      if (totalMode === 'weighted') {
+      if (totalMode === 'adjusted') {
         return rankings.some(
-          (r) => r.labelScores[selectedLabelId]?.weightedScore !== null,
+          (r) => r.labelScores[selectedLabelId]?.adjustedScore !== null,
         );
       }
       return rankings.some(
@@ -121,8 +122,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       );
     }
 
-    if (totalMode === 'weighted') {
-      return rankings.some((r) => r.weightedTotalScore !== null);
+    if (totalMode === 'adjusted') {
+      return rankings.some((r) => r.adjustedTotalScore !== null);
     }
 
     return rankings.some((r) => r.totalScore !== null);
@@ -172,7 +173,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
   const selectMetricTag = (metricId: string) => {
     // Second click clears metric rank-by → back to formula / category score
-    // (Totals toggle still controls Overall vs Weighted).
+    // (Rankings toggle still controls Overall vs Adjusted).
     if (selectedMetricId === metricId) {
       setSelectedMetricId('none');
       setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
@@ -199,18 +200,20 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         ? activeCalculated.name
         : sortBy === 'label' && activeLabel
           ? categoryScoreTagLabel(activeLabel)
-          : totalMode === 'weighted'
-            ? 'Weighted Total'
-            : 'Total Overall';
+          : totalMode === 'adjusted'
+            ? 'Adjusted Rank'
+            : 'Overall Rank';
 
   const handleExportCSV = () => {
     let csv =
-      'Rank,Player Name,Jersey,Position,Total Overall,Weighted Total,Attendance Rate\n';
+      'Rank,Player Name,Jersey,Position,Overall Rank,Adjusted Rank,Overall Score,Adjusted Score,Attendance Rate\n';
     sortedRankings.forEach((r, idx) => {
+      const overallRank = r.overallRank ?? 'Unscored';
+      const adjustedRank = r.adjustedRank ?? 'Unscored';
       const overall = r.totalScore ?? 'Unscored';
-      const weighted = r.weightedTotalScore ?? 'Unscored';
+      const adjusted = r.adjustedTotalScore ?? 'Unscored';
       const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overall},${weighted},${att}\n`;
+      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overallRank},${adjustedRank},${overall},${adjusted},${att}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -270,7 +273,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               Season Player Leaderboard
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-2xl">
-              Rankings automatically compute normalized scores across all logged metrics, weighted by your custom coaching labels formula.
+              Pool ranks from squad standing scores (Overall omits gaps; Adjusted counts them), mixed by your coaching formula.
             </p>
           </div>
 
@@ -325,15 +328,15 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           />
         </div>
 
-        {/* Total mode: Overall vs Weighted — applies to all ranks & categories */}
+        {/* Rank mode: Overall vs Adjusted — applies to all ranks & categories */}
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
-            Totals
+            Rankings
           </p>
           <div
             className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
             role="group"
-            aria-label="Total scoring mode"
+            aria-label="Ranking mode"
           >
             <button
               type="button"
@@ -345,26 +348,26 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               }`}
               title="Unscored values are omitted — not counted against the player"
             >
-              Total Overall
+              Overall Rank
             </button>
             <button
               type="button"
-              onClick={() => setTotalMode('weighted')}
+              onClick={() => setTotalMode('adjusted')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                totalMode === 'weighted'
+                totalMode === 'adjusted'
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Unscored values count as 0"
+              title="Unscored values count as 0 — gaps lower standing"
             >
-              Weighted Total
+              Adjusted Rank
             </button>
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
             {totalMode === 'overall'
-              ? 'Unscored / excused omitted from averages.'
-              : 'Unscored / excused count as 0.'}{' '}
-            Applies to every category and rank-by total.
+              ? 'Pool place from scored metrics only (gaps omitted).'
+              : 'Pool place from adjusted score (gaps count as 0).'}{' '}
+            Applies to every category and formula standing.
           </p>
         </div>
 
@@ -452,14 +455,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             {scopedMetrics.length === 0 && scopedCalculated.length === 0 ? (
               <span className="text-xs text-slate-500 px-1">
                 {selectedLabelId === 'all'
-                  ? 'No metric selected — ranking by formula total (see Totals toggle).'
-                  : 'No metrics in this category — ranking by category score (see Totals toggle).'}
+                  ? 'No metric selected — ranking by Overall / Adjusted (see Rankings toggle).'
+                  : 'No metrics in this category — ranking by category standing (see Rankings toggle).'}
               </span>
             ) : selectedMetricId === 'none' ? (
               <span className="text-xs text-slate-500 px-1">
                 {selectedLabelId === 'all'
-                  ? 'Formula total'
-                  : `${activeLabel?.name ?? 'Category'} score`}{' '}
+                  ? 'Formula standing'
+                  : `${activeLabel?.name ?? 'Category'} standing`}{' '}
                 · tap a metric to rank by it
               </span>
             ) : null}
@@ -572,26 +575,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               (sortBy === 'metric' || sortBy === 'calculated') &&
               specificMetricValue;
 
-            const primaryNumber =
-              sortBy === 'label'
-                ? categoryScore
-                : sortBy === 'total'
-                  ? totalForMode(item, totalMode)
-                  : totalForMode(item, totalMode);
-
-            const primaryDisplay = unscored
-              ? 'Unscored'
-              : showingMeasuredValue
-                ? specificMetricValue
-                : primaryNumber !== null
-                  ? String(primaryNumber)
-                  : 'Unscored';
-
-            const primaryIsNumericScore =
-              !unscored &&
-              !showingMeasuredValue &&
-              primaryDisplay !== 'Unscored';
-
             // Rank badge among scored players only; unscored share the bottom tier.
             const scoredAhead = sortedRankings
               .slice(0, idx)
@@ -606,7 +589,45 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     totalMode,
                   ),
               ).length;
-            const displayRank = unscored ? null : scoredAhead + 1;
+            const listRank = unscored ? null : scoredAhead + 1;
+            // Formula totals use competition ranks from scoring (ties share place).
+            const displayRank =
+              sortBy === 'total' && !unscored
+                ? rankForMode(item, totalMode)
+                : listRank;
+
+            const standingScore =
+              sortBy === 'label'
+                ? categoryScore
+                : sortBy === 'total' ||
+                    (sortBy !== 'metric' && sortBy !== 'calculated')
+                  ? totalForMode(item, totalMode)
+                  : null;
+
+            const poolRankPrimary =
+              !showingMeasuredValue &&
+              (sortBy === 'total' ||
+                sortBy === 'label' ||
+                (sortBy !== 'metric' && sortBy !== 'calculated'));
+
+            const primaryDisplay = unscored
+              ? 'Unscored'
+              : showingMeasuredValue
+                ? specificMetricValue!
+                : poolRankPrimary && displayRank !== null
+                  ? `#${displayRank}`
+                  : standingScore !== null
+                    ? String(standingScore)
+                    : 'Unscored';
+
+            const primaryIsPoolRank =
+              !unscored && poolRankPrimary && displayRank !== null;
+
+            const primaryIsNumericScore =
+              !unscored &&
+              !showingMeasuredValue &&
+              !primaryIsPoolRank &&
+              primaryDisplay !== 'Unscored';
 
             return (
               <React.Fragment key={item.player.id}>
@@ -756,23 +777,30 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     <div className="flex items-baseline gap-1">
                       <span
                         className={`text-2xl font-black tracking-tight ${
-                          !primaryIsNumericScore
+                          !primaryIsNumericScore && !primaryIsPoolRank
                             ? primaryDisplay === 'Unscored'
                               ? 'text-slate-500'
                               : 'text-emerald-400'
-                            : scoreToneClass(Number(primaryDisplay))
+                            : primaryIsPoolRank
+                              ? 'text-emerald-400'
+                              : scoreToneClass(Number(primaryDisplay))
                         }`}
                       >
                         {primaryDisplay}
                       </span>
-                      {sortBy !== 'metric' &&
-                        sortBy !== 'calculated' &&
-                        primaryIsNumericScore && (
+                      {primaryIsNumericScore && (
                         <span className="text-xs text-slate-500 font-bold">
                           /100
                         </span>
                       )}
                     </div>
+                    {primaryIsPoolRank &&
+                      standingScore !== null &&
+                      !unscored && (
+                      <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                        Standing {standingScore}
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-2 rounded-xl bg-slate-800/60 group-hover:bg-emerald-500/20 group-hover:text-emerald-400 text-slate-400 transition-all">

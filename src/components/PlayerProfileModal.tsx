@@ -144,29 +144,33 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               </div>
             </div>
 
-            {/* Total Score Metric Box */}
+            {/* Rank Metric Box */}
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center sm:text-right shrink-0 min-w-[9rem]">
               <span className="text-[10px] uppercase font-bold text-slate-400">
-                Total Overall
+                Overall Rank
               </span>
               <div className="text-3xl font-black text-emerald-400 tracking-tight mt-0.5">
-                {playerRanking?.totalScore ?? 'Unscored'}
-                {playerRanking?.totalScore !== null &&
-                  playerRanking?.totalScore !== undefined && (
-                  <span className="text-xs font-bold text-slate-500">/100</span>
-                )}
+                {playerRanking?.overallRank != null
+                  ? `#${playerRanking.overallRank}`
+                  : 'Unscored'}
               </div>
+              {playerRanking?.totalScore != null && (
+                <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                  Standing {playerRanking.totalScore}
+                </div>
+              )}
               <div className="text-xs text-slate-400 font-semibold mt-2">
-                Weighted:{' '}
+                Adjusted:{' '}
                 <span className="text-slate-200">
-                  {playerRanking?.weightedTotalScore !== null &&
-                  playerRanking?.weightedTotalScore !== undefined
-                    ? playerRanking.weightedTotalScore
+                  {playerRanking?.adjustedRank != null
+                    ? `#${playerRanking.adjustedRank}`
                     : '—'}
                 </span>
-                {playerRanking?.weightedTotalScore !== null &&
-                  playerRanking?.weightedTotalScore !== undefined && (
-                  <span className="text-slate-500">/100</span>
+                {playerRanking?.adjustedTotalScore != null && (
+                  <span className="text-slate-500">
+                    {' '}
+                    ({playerRanking.adjustedTotalScore})
+                  </span>
                 )}
               </div>
               <div className="text-xs text-slate-400 font-semibold mt-1">

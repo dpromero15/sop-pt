@@ -66,8 +66,8 @@ const speedLabel: LabelDefinition = {
   badgeText: '',
 };
 
-type LabelScoreInput = Omit<PlayerRanking['labelScores'][string], 'weightedScore'> & {
-  weightedScore?: number | null;
+type LabelScoreInput = Omit<PlayerRanking['labelScores'][string], 'adjustedScore'> & {
+  adjustedScore?: number | null;
 };
 
 function ranking(
@@ -75,7 +75,7 @@ function ranking(
   total: number | null,
   labelScores: Record<string, LabelScoreInput>,
   calculatedValues: Record<string, number> = {},
-  weightedTotal: number | null = total,
+  adjustedTotal: number | null = total,
 ): PlayerRanking {
   const player: Player = {
     id,
@@ -86,19 +86,21 @@ function ranking(
     joinedDate: '2026-01-01',
     status: 'active',
   };
-  const withWeighted: PlayerRanking['labelScores'] = {};
+  const withAdjusted: PlayerRanking['labelScores'] = {};
   for (const [key, ls] of Object.entries(labelScores)) {
-    withWeighted[key] = {
+    withAdjusted[key] = {
       ...ls,
-      weightedScore:
-        ls.weightedScore !== undefined ? ls.weightedScore : ls.score,
+      adjustedScore:
+        ls.adjustedScore !== undefined ? ls.adjustedScore : ls.score,
     };
   }
   return {
     player,
     totalScore: total,
-    weightedTotalScore: weightedTotal,
-    labelScores: withWeighted,
+    adjustedTotalScore: adjustedTotal,
+    overallRank: total === null ? null : 1,
+    adjustedRank: adjustedTotal === null ? null : 1,
+    labelScores: withAdjusted,
     rank: 1,
     attendanceRate: 100,
     recentTrend: 'stable',
@@ -192,7 +194,7 @@ describe('compareRankings', () => {
             metricName: '40 Meter Dash',
             aggregatedValue: 4.9,
             unit: 's',
-            normalizedScore: 90,
+            poolScore: 90,
           },
         ],
       },
@@ -214,7 +216,7 @@ describe('compareRankings', () => {
             metricName: '40 Meter Dash',
             aggregatedValue: 5.5,
             unit: 's',
-            normalizedScore: 60,
+            poolScore: 60,
           },
         ],
       },
@@ -242,7 +244,7 @@ describe('compareRankings', () => {
           metricName: '40 Meter Dash',
           aggregatedValue: 8,
           unit: 's',
-          normalizedScore: 0,
+          poolScore: 0,
         },
       ],
     },
@@ -298,7 +300,7 @@ describe('compareRankings', () => {
     ).toBeGreaterThan(0);
   });
 
-  it('sorts by weighted total mode', () => {
+  it('sorts by adjusted total mode', () => {
     const highOverallLowWeighted = ranking(
       'a',
       100,
@@ -307,7 +309,7 @@ describe('compareRankings', () => {
           labelId: 'speed',
           labelName: 'Speed',
           score: 100,
-          weightedScore: 50,
+          adjustedScore: 50,
           entryCount: 1,
           metrics: [],
         },
@@ -323,7 +325,7 @@ describe('compareRankings', () => {
           labelId: 'speed',
           labelName: 'Speed',
           score: 70,
-          weightedScore: 70,
+          adjustedScore: 70,
           entryCount: 1,
           metrics: [],
         },
@@ -340,7 +342,7 @@ describe('compareRankings', () => {
         'none',
         metrics,
         [],
-        'weighted',
+        'adjusted',
       ),
     ).toBeGreaterThan(0);
     expect(
@@ -374,7 +376,7 @@ describe('isUnscoredForRankMode', () => {
             metricName: '40 Meter Dash',
             aggregatedValue: 4.9,
             unit: 's',
-            normalizedScore: 90,
+            poolScore: 90,
           },
         ],
       },
@@ -411,7 +413,7 @@ describe('isUnscoredForRankMode', () => {
 });
 
 describe('categoryScoreTagLabel', () => {
-  it('appends score to the label name', () => {
-    expect(categoryScoreTagLabel(speedLabel)).toBe('Speed score');
+  it('appends standing to the label name', () => {
+    expect(categoryScoreTagLabel(speedLabel)).toBe('Speed standing');
   });
 });
