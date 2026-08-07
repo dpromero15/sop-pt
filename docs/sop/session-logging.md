@@ -58,10 +58,14 @@ When some or all active players are missing an attendance entry, work the remain
 Also supported:
 
 - Undo last action (including late toggles)
+- **Roster** — open the list (or tap a jersey chip) to jump any remaining player to the front of the deck, then keep swiping
 - Mark remaining present
+- **Continue to scoring** while players are still unmarked — marks every remaining player **out** (absent), then advances to scoring
 - Visible fallback buttons for accessibility
 - Each action persists immediately as a metric entry
 - Partial re-entry only queues **unmarked** players (already-marked players are skipped)
+
+Typical fast path for a small present group: Roster → jump → HERE → jump → HERE → … → Continue (rest out).
 
 Stored values: present=100, late=50, absent=0, excused=-1 (exempt from attendance rate).
 
@@ -71,7 +75,7 @@ When every active player already has an attendance entry:
 
 1. Do **not** open the swipe deck
 2. Show attendance status for all players (maintenance list) so any status can be adjusted
-3. Primary path: **Continue to scoring**
+3. Primary path: **Continue to scoring** (no bulk mark — everyone already has a status)
 
 ### 5. Score metrics (player cards)
 

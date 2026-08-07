@@ -12,48 +12,129 @@ import {
   LabelDefinition,
   ScoringFormulaConfig,
   PlayerRanking,
+  CalculatedFieldDefinition,
 } from '../types';
 import { formatMetricValue } from '../utils/scoring';
 import {
+  calculatedFieldsForCategory,
+  formatCalculatedFieldValue,
+} from '../utils/calculatedFields';
+import {
   categoryScoreTagLabel,
   compareRankings,
+  isUnscoredForRankMode,
+  labelScoreForMode,
   metricsForCategory,
   RankingsMetricSelection,
   RankingsSortMode,
+  RankingsTotalMode,
   selectionAfterCategoryChange,
+  totalForMode,
 } from '../utils/rankingsFilter';
 
 interface RankingsViewProps {
   rankings: PlayerRanking[];
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
+  calculatedFields: CalculatedFieldDefinition[];
   formula: ScoringFormulaConfig;
+  /** False when no metric entries exist (e.g. all sessions deleted). */
+  hasLoggedData: boolean;
   onOpenFormulaConfig: () => void;
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
 }
 
+const EMPTY_RANKINGS_LINES = [
+  'Wow. Such empty. Much no sessions.',
+  'No data? Even Cucurella looks unimpressed.',
+  'Leaderboard cleared the pitch. Log a session to kick off.',
+] as const;
+
 export const RankingsView: React.FC<RankingsViewProps> = ({
   rankings,
   labels,
   metrics,
+  calculatedFields,
   formula,
+  hasLoggedData,
   onOpenFormulaConfig,
   onSelectPlayer,
+  onOpenQuickInsert,
 }) => {
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
   const [selectedMetricId, setSelectedMetricId] =
     useState<RankingsMetricSelection>('none');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<RankingsSortMode>('total');
+  const [totalMode, setTotalMode] = useState<RankingsTotalMode>('overall');
+  const [emptyLine] = useState(
+    () =>
+      EMPTY_RANKINGS_LINES[
+        Math.floor(Math.random() * EMPTY_RANKINGS_LINES.length)
+      ],
+  );
 
   const scopedMetrics = useMemo(
     () => metricsForCategory(metrics, selectedLabelId),
     [metrics, selectedLabelId],
   );
 
+  const scopedCalculated = useMemo(
+    () =>
+      calculatedFieldsForCategory(calculatedFields, metrics, selectedLabelId),
+    [calculatedFields, metrics, selectedLabelId],
+  );
+
   const activeLabel = labels.find((l) => l.id === selectedLabelId);
   const activeMetric = metrics.find((m) => m.id === selectedMetricId);
+  const activeCalculated = calculatedFields.find(
+    (f) => f.id === selectedMetricId && f.enabled,
+  );
+
+  /** True when the current category / metric filter has any real logged values. */
+  const scopeHasData = useMemo(() => {
+    if (!hasLoggedData) return false;
+
+    if (sortBy === 'metric' && activeMetric) {
+      return rankings.some((r) =>
+        r.labelScores[activeMetric.labelId]?.metrics.some(
+          (m) => m.metricId === activeMetric.id,
+        ),
+      );
+    }
+
+    if (sortBy === 'calculated' && activeCalculated) {
+      return rankings.some(
+        (r) => r.calculatedValues[activeCalculated.id] !== undefined,
+      );
+    }
+
+    if (selectedLabelId !== 'all') {
+      if (totalMode === 'weighted') {
+        return rankings.some(
+          (r) => r.labelScores[selectedLabelId]?.weightedScore !== null,
+        );
+      }
+      return rankings.some(
+        (r) => (r.labelScores[selectedLabelId]?.entryCount ?? 0) > 0,
+      );
+    }
+
+    if (totalMode === 'weighted') {
+      return rankings.some((r) => r.weightedTotalScore !== null);
+    }
+
+    return rankings.some((r) => r.totalScore !== null);
+  }, [
+    hasLoggedData,
+    rankings,
+    selectedLabelId,
+    sortBy,
+    totalMode,
+    activeMetric,
+    activeCalculated,
+  ]);
 
   const filteredRankings = rankings.filter((r) => {
     const q = searchQuery.toLowerCase();
@@ -72,6 +153,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       selectedLabelId,
       selectedMetricId,
       metrics,
+      calculatedFields,
+      totalMode,
     ),
   );
 
@@ -80,33 +163,54 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       labelId,
       selectedMetricId,
       metrics,
+      calculatedFields,
     );
     setSelectedLabelId(labelId);
     setSelectedMetricId(next.selectedMetricId);
     setSortBy(next.sortBy);
   };
 
-  const selectOverallOrCategoryScore = () => {
-    setSelectedMetricId('none');
-    setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
-  };
-
   const selectMetricTag = (metricId: string) => {
+    // Second click clears metric rank-by → back to formula / category score
+    // (Totals toggle still controls Overall vs Weighted).
+    if (selectedMetricId === metricId) {
+      setSelectedMetricId('none');
+      setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
+      return;
+    }
     setSelectedMetricId(metricId);
     setSortBy('metric');
+  };
+
+  const selectCalculatedTag = (fieldId: string) => {
+    if (selectedMetricId === fieldId) {
+      setSelectedMetricId('none');
+      setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
+      return;
+    }
+    setSelectedMetricId(fieldId);
+    setSortBy('calculated');
   };
 
   const primaryScoreLabel =
     sortBy === 'metric' && activeMetric
       ? activeMetric.name
-      : sortBy === 'label' && activeLabel
-        ? categoryScoreTagLabel(activeLabel)
-        : 'Total Score';
+      : sortBy === 'calculated' && activeCalculated
+        ? activeCalculated.name
+        : sortBy === 'label' && activeLabel
+          ? categoryScoreTagLabel(activeLabel)
+          : totalMode === 'weighted'
+            ? 'Weighted Total'
+            : 'Total Overall';
 
   const handleExportCSV = () => {
-    let csv = 'Rank,Player Name,Jersey,Position,Total Score,Attendance Rate\n';
+    let csv =
+      'Rank,Player Name,Jersey,Position,Total Overall,Weighted Total,Attendance Rate\n';
     sortedRankings.forEach((r, idx) => {
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${r.totalScore},${r.attendanceRate}%\n`;
+      const overall = r.totalScore ?? 'Unscored';
+      const weighted = r.weightedTotalScore ?? 'Unscored';
+      const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
+      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overall},${weighted},${att}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -118,6 +222,38 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
   const isOverallMode =
     selectedLabelId === 'all' && selectedMetricId === 'none';
+
+  const scoreToneClass = (score: number | null | undefined) => {
+    if (score === null || score === undefined) return 'text-slate-500';
+    if (score >= 85) return 'text-emerald-400';
+    if (score >= 70) return 'text-blue-400';
+    return 'text-amber-400';
+  };
+
+  const emptyCopy =
+    !hasLoggedData
+      ? {
+          title: 'No rankings yet',
+          detail:
+            'Delete sessions and the board goes quiet — log metrics in Quick Insert to bring the leaderboard back.',
+        }
+      : selectedLabelId !== 'all' && sortBy === 'label'
+        ? {
+            title: `No ${activeLabel?.name ?? 'category'} data yet`,
+            detail:
+              'Nothing logged for this category. Keep the labels — just add session metrics here to unlock scores.',
+          }
+        : sortBy === 'metric' && activeMetric
+          ? {
+              title: `No ${activeMetric.name} logs yet`,
+              detail:
+                'This metric is on the board, but nobody has a value. Log it in Quick Insert.',
+            }
+          : {
+              title: 'No rankings for this view',
+              detail:
+                'Nothing logged for the current filters. Switch categories or log a session.',
+            };
 
   return (
     <div className="space-y-6 pb-24">
@@ -189,6 +325,49 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           />
         </div>
 
+        {/* Total mode: Overall vs Weighted — applies to all ranks & categories */}
+        <div>
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+            Totals
+          </p>
+          <div
+            className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+            role="group"
+            aria-label="Total scoring mode"
+          >
+            <button
+              type="button"
+              onClick={() => setTotalMode('overall')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                totalMode === 'overall'
+                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Unscored values are omitted — not counted against the player"
+            >
+              Total Overall
+            </button>
+            <button
+              type="button"
+              onClick={() => setTotalMode('weighted')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                totalMode === 'weighted'
+                  ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Unscored values count as 0"
+            >
+              Weighted Total
+            </button>
+          </div>
+          <p className="text-[11px] text-slate-500 mt-1.5">
+            {totalMode === 'overall'
+              ? 'Unscored / excused omitted from averages.'
+              : 'Unscored / excused count as 0.'}{' '}
+            Applies to every category and rank-by total.
+          </p>
+        </div>
+
         {/* Category Label Tabs */}
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
@@ -227,28 +406,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         </div>
 
-        {/* Metric tags scoped by category */}
+        {/* Rank by: metrics / calculated only — totals come from the Totals toggle */}
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
             Rank by
           </p>
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            <button
-              type="button"
-              onClick={selectOverallOrCategoryScore}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
-                selectedMetricId === 'none'
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                  : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-              }`}
-            >
-              {selectedLabelId === 'all'
-                ? 'Overall Total'
-                : activeLabel
-                  ? categoryScoreTagLabel(activeLabel)
-                  : 'Category score'}
-            </button>
-
             {scopedMetrics.map((m) => {
               const isSelected = selectedMetricId === m.id;
               return (
@@ -267,18 +430,70 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               );
             })}
 
-            {scopedMetrics.length === 0 && selectedLabelId !== 'all' && (
+            {scopedCalculated.map((f) => {
+              const isSelected = selectedMetricId === f.id;
+              return (
+                <button
+                  type="button"
+                  key={f.id}
+                  onClick={() => selectCalculatedTag(f.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                    isSelected
+                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                      : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                  }`}
+                  title="Calculated field"
+                >
+                  {f.name}
+                </button>
+              );
+            })}
+
+            {scopedMetrics.length === 0 && scopedCalculated.length === 0 ? (
               <span className="text-xs text-slate-500 px-1">
-                No metrics in this category yet
+                {selectedLabelId === 'all'
+                  ? 'No metric selected — ranking by formula total (see Totals toggle).'
+                  : 'No metrics in this category — ranking by category score (see Totals toggle).'}
               </span>
-            )}
+            ) : selectedMetricId === 'none' ? (
+              <span className="text-xs text-slate-500 px-1">
+                {selectedLabelId === 'all'
+                  ? 'Formula total'
+                  : `${activeLabel?.name ?? 'Category'} score`}{' '}
+                · tap a metric to rank by it
+              </span>
+            ) : null}
           </div>
         </div>
       </div>
 
       {/* Leaderboard Cards Grid */}
       <div className="space-y-3">
-        {sortedRankings.length === 0 ? (
+        {!scopeHasData ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center overflow-hidden">
+            <img
+              src="/cucurella-cat.jpg"
+              alt="Cat wearing a Cucurella curly wig"
+              className="mx-auto mb-5 w-full max-w-xs rounded-2xl object-cover border border-slate-700 shadow-lg"
+            />
+            <h3 className="text-lg font-bold text-slate-200 tracking-tight">
+              {emptyCopy.title}
+            </h3>
+            <p className="text-slate-400 text-sm mt-2 max-w-sm mx-auto">
+              {emptyLine}
+            </p>
+            <p className="text-slate-500 text-xs mt-3 max-w-md mx-auto">
+              {emptyCopy.detail}
+            </p>
+            <button
+              type="button"
+              onClick={onOpenQuickInsert}
+              className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium text-sm transition-all active:scale-95"
+            >
+              Open Quick Insert
+            </button>
+          </div>
+        ) : sortedRankings.length === 0 ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
             <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-300">No players found</h3>
@@ -288,9 +503,29 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         ) : (
           sortedRankings.map((item, idx) => {
-            const isTop1 = idx === 0 && isOverallMode;
-            const isTop2 = idx === 1 && isOverallMode;
-            const isTop3 = idx === 2 && isOverallMode;
+            const unscored = isUnscoredForRankMode(
+              item,
+              sortBy,
+              selectedLabelId,
+              selectedMetricId,
+              metrics,
+              totalMode,
+            );
+            const prevUnscored =
+              idx > 0 &&
+              isUnscoredForRankMode(
+                sortedRankings[idx - 1],
+                sortBy,
+                selectedLabelId,
+                selectedMetricId,
+                metrics,
+                totalMode,
+              );
+            const showUnscoredDivider = unscored && !prevUnscored && idx > 0;
+
+            const isTop1 = idx === 0 && isOverallMode && !unscored;
+            const isTop2 = idx === 1 && isOverallMode && !unscored;
+            const isTop3 = idx === 2 && isOverallMode && !unscored;
 
             let rankBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
             if (isTop1)
@@ -302,6 +537,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             if (isTop3)
               rankBadgeStyle =
                 'bg-amber-700/20 text-amber-400 border-amber-700/40 font-bold';
+            if (unscored)
+              rankBadgeStyle =
+                'bg-slate-900 text-slate-500 border-slate-800';
 
             let specificMetricValue: string | null = null;
             if (activeMetric) {
@@ -311,35 +549,88 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               );
               if (metricDetail) {
                 specificMetricValue = formatMetricValue(
-                  metricDetail.latestValue,
+                  metricDetail.aggregatedValue,
                   activeMetric,
+                );
+              }
+            } else if (activeCalculated) {
+              const calcVal = item.calculatedValues[activeCalculated.id];
+              if (calcVal !== undefined) {
+                specificMetricValue = formatCalculatedFieldValue(
+                  calcVal,
+                  activeCalculated,
                 );
               }
             }
 
             const categoryScore =
               selectedLabelId !== 'all'
-                ? (item.labelScores[selectedLabelId]?.score ?? null)
+                ? labelScoreForMode(item, selectedLabelId, totalMode)
                 : null;
 
-            const primaryDisplay =
-              sortBy === 'metric' && specificMetricValue
+            const showingMeasuredValue =
+              (sortBy === 'metric' || sortBy === 'calculated') &&
+              specificMetricValue;
+
+            const primaryNumber =
+              sortBy === 'label'
+                ? categoryScore
+                : sortBy === 'total'
+                  ? totalForMode(item, totalMode)
+                  : totalForMode(item, totalMode);
+
+            const primaryDisplay = unscored
+              ? 'Unscored'
+              : showingMeasuredValue
                 ? specificMetricValue
-                : sortBy === 'label' && categoryScore !== null
-                  ? String(categoryScore)
-                  : String(item.totalScore);
+                : primaryNumber !== null
+                  ? String(primaryNumber)
+                  : 'Unscored';
 
             const primaryIsNumericScore =
-              sortBy !== 'metric' || !specificMetricValue;
+              !unscored &&
+              !showingMeasuredValue &&
+              primaryDisplay !== 'Unscored';
+
+            // Rank badge among scored players only; unscored share the bottom tier.
+            const scoredAhead = sortedRankings
+              .slice(0, idx)
+              .filter(
+                (r) =>
+                  !isUnscoredForRankMode(
+                    r,
+                    sortBy,
+                    selectedLabelId,
+                    selectedMetricId,
+                    metrics,
+                    totalMode,
+                  ),
+              ).length;
+            const displayRank = unscored ? null : scoredAhead + 1;
 
             return (
+              <React.Fragment key={item.player.id}>
+              {showUnscoredDivider && (
+                <div
+                  className="flex items-center gap-3 pt-2 pb-1"
+                  role="separator"
+                  aria-label="Unscored players"
+                >
+                  <div className="h-px flex-1 bg-slate-800" />
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 shrink-0">
+                    Unscored
+                  </span>
+                  <div className="h-px flex-1 bg-slate-800" />
+                </div>
+              )}
               <div
-                key={item.player.id}
                 onClick={() => onSelectPlayer(item.player)}
                 className={`group bg-slate-900/90 hover:bg-slate-800/90 border transition-all duration-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99] shadow-md ${
                   isTop1
                     ? 'border-amber-500/30 bg-gradient-to-r from-amber-950/20 to-slate-900'
-                    : 'border-slate-800 hover:border-slate-700'
+                    : unscored
+                      ? 'border-slate-800/60 opacity-90'
+                      : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-4">
@@ -348,8 +639,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   >
                     {isTop1 ? (
                       <Trophy className="w-5 h-5 text-amber-400" />
+                    ) : unscored ? (
+                      <span className="text-slate-600">—</span>
                     ) : (
-                      <span>#{idx + 1}</span>
+                      <span>#{displayRank}</span>
                     )}
                   </div>
 
@@ -381,7 +674,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       <span>
                         Att:{' '}
                         <strong className="text-emerald-400 font-semibold">
-                          {item.attendanceRate}%
+                          {item.attendanceRate !== null
+                            ? `${item.attendanceRate}%`
+                            : '—'}
                         </strong>
                       </span>
                       <span>Foot: {item.player.preferredFoot}</span>
@@ -400,8 +695,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       <span className="text-xs text-slate-400 font-medium">
                         {activeMetric.name}:
                       </span>
-                      <span className="text-base font-extrabold text-emerald-400">
-                        {specificMetricValue ?? '—'}
+                      <span
+                        className={`text-base font-extrabold ${
+                          specificMetricValue
+                            ? 'text-emerald-400'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {specificMetricValue ?? 'Unscored'}
                       </span>
                     </div>
                   ) : sortBy === 'label' && activeLabel ? (
@@ -409,14 +710,24 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       <span className="text-xs text-slate-400 font-medium">
                         {categoryScoreTagLabel(activeLabel)}:
                       </span>
-                      <span className="text-base font-extrabold text-emerald-400">
-                        {categoryScore ?? '—'}
+                      <span
+                        className={`text-base font-extrabold ${
+                          categoryScore !== null
+                            ? 'text-emerald-400'
+                            : 'text-slate-500'
+                        }`}
+                      >
+                        {categoryScore ?? 'Unscored'}
                       </span>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
                       {labels.map((lbl) => {
-                        const lScore = item.labelScores[lbl.id]?.score ?? 70;
+                        const lScore = labelScoreForMode(
+                          item,
+                          lbl.id,
+                          totalMode,
+                        );
                         return (
                           <div
                             key={lbl.id}
@@ -426,15 +737,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                               {lbl.name}:
                             </span>
                             <span
-                              className={`font-extrabold ${
-                                lScore >= 85
-                                  ? 'text-emerald-400'
-                                  : lScore >= 70
-                                    ? 'text-blue-400'
-                                    : 'text-amber-400'
-                              }`}
+                              className={`font-extrabold ${scoreToneClass(lScore)}`}
                             >
-                              {lScore}
+                              {lScore ?? '—'}
                             </span>
                           </div>
                         );
@@ -452,17 +757,17 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       <span
                         className={`text-2xl font-black tracking-tight ${
                           !primaryIsNumericScore
-                            ? 'text-emerald-400'
-                            : Number(primaryDisplay) >= 88
-                              ? 'text-emerald-400'
-                              : Number(primaryDisplay) >= 75
-                                ? 'text-blue-400'
-                                : 'text-amber-400'
+                            ? primaryDisplay === 'Unscored'
+                              ? 'text-slate-500'
+                              : 'text-emerald-400'
+                            : scoreToneClass(Number(primaryDisplay))
                         }`}
                       >
                         {primaryDisplay}
                       </span>
-                      {sortBy !== 'metric' && (
+                      {sortBy !== 'metric' &&
+                        sortBy !== 'calculated' &&
+                        primaryIsNumericScore && (
                         <span className="text-xs text-slate-500 font-bold">
                           /100
                         </span>
@@ -475,6 +780,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   </div>
                 </div>
               </div>
+              </React.Fragment>
             );
           })
         )}

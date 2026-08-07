@@ -19,6 +19,7 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 | `metrics` | `MetricDefinition[]` blob | `stm_metrics_v1` | `teams/{teamId}/config/metrics` |
 | `labels` | `LabelDefinition[]` blob | `stm_labels_v1` | `teams/{teamId}/config/labels` |
 | `formula` | `ScoringFormulaConfig` blob | `stm_formula_v1` | `teams/{teamId}/config/formula` |
+| `calculatedFields` | `CalculatedFieldDefinition[]` blob | `stm_calculated_fields_v1` | `teams/{teamId}/config/calculatedFields` |
 
 ### Team fields
 
@@ -34,6 +35,17 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 - Attendance metric id is always first and cannot be removed in the UI.
 - On create, seed `metricIds = [attendanceMetricId]`. Match sessions may additionally suggest a default game pack (`m_goals`, `m_assists`, `m_tackles`).
 - **Migration:** if a stored session lacks `metricIds`, derive the set from distinct `metricId` values in that session’s entries, ensure the attendance metric id is included first, then persist.
+
+### Metric definition fields
+
+`id`, `name`, `labelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
+
+- **`aggregationMode`:** `sum` | `best` | `latest` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)).
+- **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`).
+
+### Calculated fields
+
+Pre-built derived stats (`average`, `per_session`, `percentile`) with `enabled` toggles. Not session-logged. See [sop/metrics.md](../sop/metrics.md).
 
 ### Write policy
 

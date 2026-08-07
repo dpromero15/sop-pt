@@ -6,6 +6,7 @@ import type {
   MetricDefinition,
   LabelDefinition,
   ScoringFormulaConfig,
+  CalculatedFieldDefinition,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -31,6 +32,7 @@ export interface TeamSnapshot {
   metrics: MetricDefinition[];
   labels: LabelDefinition[];
   formula: ScoringFormulaConfig;
+  calculatedFields: CalculatedFieldDefinition[];
 }
 
 export interface StorageRepository {
@@ -70,6 +72,10 @@ export interface StorageRepository {
 
   getFormula(): ScoringFormulaConfig;
   saveFormula(formula: ScoringFormulaConfig): void;
+
+  getCalculatedFields(): CalculatedFieldDefinition[];
+  saveCalculatedFields(fields: CalculatedFieldDefinition[]): void;
+  updateCalculatedField(updated: CalculatedFieldDefinition): void;
 
   resetToSampleData(): void;
   exportFullBackupJSON(): string;

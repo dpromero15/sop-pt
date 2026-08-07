@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, RotateCcw, UserCheck, X, Ban, Clock } from 'lucide-react';
+import { Check, List, RotateCcw, UserCheck, X, Ban, Clock } from 'lucide-react';
 import type { AttendanceStatus, Player } from '../../types';
 import { toggleLateStatus } from '../../utils/sessionMetrics';
 
@@ -24,6 +24,13 @@ type DragMode = 'idle' | 'dragging' | 'longpress';
 const LONG_PRESS_MS = 450;
 const THRESHOLD = 100;
 
+const STATUS_DOT: Record<AttendanceStatus, string> = {
+  present: 'bg-emerald-400',
+  late: 'bg-amber-400',
+  absent: 'bg-rose-400',
+  excused: 'bg-amber-600',
+};
+
 export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   players,
   attendanceMap,
@@ -44,6 +51,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const [rosterOpen, setRosterOpen] = useState(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const modeRef = useRef<DragMode>('idle');
   const longPressTimer = useRef<number | null>(null);
@@ -58,6 +66,25 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
     [resetKey, players],
   );
 
+  const playersById = useMemo(() => {
+    const map = new Map<string, Player>();
+    players.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [players]);
+
+  const queueSet = useMemo(() => new Set(queue), [queue]);
+
+  const rosterRows = useMemo(() => {
+    return [...players]
+      .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
+      .map((player) => ({
+        player,
+        inQueue: queueSet.has(player.id),
+        isActive: player.id === activePlayerId,
+        status: attendanceMap[player.id],
+      }));
+  }, [players, queueSet, activePlayerId, attendanceMap]);
+
   useEffect(() => {
     const allowed = new Set(players.map((p) => p.id));
     const seed = initialQueueRef.current;
@@ -68,6 +95,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
     );
     setUndoStack([]);
     setOffset({ x: 0, y: 0 });
+    setRosterOpen(false);
     // players / initialQueueIds are read when rosterKey changes (session or membership), not on every refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: depend on rosterKey only
   }, [rosterKey]);
@@ -93,6 +121,18 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
     },
     [attendanceMap, onSetStatus],
   );
+
+  const jumpToPlayer = (playerId: string) => {
+    if (!queueSet.has(playerId) || playerId === activePlayerId) {
+      setRosterOpen(false);
+      return;
+    }
+    setQueue((q) => [playerId, ...q.filter((id) => id !== playerId)]);
+    setOffset({ x: 0, y: 0 });
+    setDragging(false);
+    modeRef.current = 'idle';
+    setRosterOpen(false);
+  };
 
   const applySwipe = (dx: number, dy: number) => {
     if (!activePlayerId) return;
@@ -225,11 +265,23 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between text-sm text-slate-400">
+      <div className="flex items-center justify-between gap-2 text-sm text-slate-400">
         <span>
           {queue.length} remaining · {players.length - queue.length} done
         </span>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setRosterOpen((open) => !open)}
+            aria-expanded={rosterOpen}
+            className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 ${
+              rosterOpen
+                ? 'border-sky-500/50 bg-sky-500/10 text-sky-300'
+                : 'border-slate-700 text-slate-300'
+            }`}
+          >
+            <List className="h-3.5 w-3.5" /> Roster
+          </button>
           <button
             type="button"
             onClick={undo}
@@ -249,6 +301,104 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
             <UserCheck className="h-3.5 w-3.5" /> Mark rest present
           </button>
         </div>
+      </div>
+
+      {rosterOpen && (
+        <div className="overflow-hidden rounded-xl border border-slate-800 bg-slate-950/80">
+          <div className="flex items-center justify-between border-b border-slate-800 px-3 py-2">
+            <p className="text-xs font-medium text-slate-300">Jump to player</p>
+            <p className="text-[10px] uppercase tracking-wider text-slate-600">
+              Tap remaining · then swipe
+            </p>
+          </div>
+          <ul className="max-h-48 divide-y divide-slate-800/80 overflow-y-auto">
+            {rosterRows.map(({ player, inQueue, isActive, status }) => {
+              if (!inQueue) {
+                return (
+                  <li
+                    key={player.id}
+                    className="flex items-center gap-2 px-3 py-1.5 opacity-45"
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        status ? STATUS_DOT[status] : 'bg-slate-600'
+                      }`}
+                    />
+                    <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-500">
+                      {player.jerseyNumber}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm text-slate-500">
+                      {player.name}
+                    </span>
+                    <span className="text-[10px] uppercase tracking-wide text-slate-600">
+                      done
+                    </span>
+                  </li>
+                );
+              }
+
+              return (
+                <li key={player.id}>
+                  <button
+                    type="button"
+                    onClick={() => jumpToPlayer(player.id)}
+                    className={`flex w-full items-center gap-2 px-3 py-1.5 text-left transition-colors ${
+                      isActive
+                        ? 'bg-sky-500/15 text-sky-100'
+                        : 'text-slate-200 hover:bg-slate-900'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                        isActive ? 'bg-sky-400' : 'bg-slate-500'
+                      }`}
+                    />
+                    <span className="w-7 shrink-0 text-right text-xs font-semibold tabular-nums text-slate-400">
+                      {player.jerseyNumber}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                      {player.name}
+                    </span>
+                    {isActive ? (
+                      <span className="text-[10px] uppercase tracking-wide text-sky-400">
+                        now
+                      </span>
+                    ) : (
+                      <span className="text-[10px] uppercase tracking-wide text-slate-500">
+                        jump
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Compact jersey strip for one-thumb jump without opening the full list */}
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+        {queue.map((id) => {
+          const p = playersById.get(id);
+          if (!p) return null;
+          const isActive = id === activePlayerId;
+          return (
+            <button
+              key={id}
+              type="button"
+              onClick={() => jumpToPlayer(id)}
+              aria-label={`Jump to #${p.jerseyNumber} ${p.name}`}
+              aria-current={isActive ? 'true' : undefined}
+              className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold tabular-nums ${
+                isActive
+                  ? 'border-sky-500/60 bg-sky-500/15 text-sky-200'
+                  : 'border-slate-700 bg-slate-900/60 text-slate-300 hover:border-slate-500'
+              }`}
+            >
+              #{p.jerseyNumber}
+            </button>
+          );
+        })}
       </div>
 
       <div className="relative mx-auto h-[340px] w-full max-w-sm touch-none select-none">

@@ -48,6 +48,9 @@ export async function hydrateCloudToLocal(): Promise<TeamSnapshot> {
   localAdapter.saveMetrics(snapshot.metrics);
   localAdapter.saveLabels(snapshot.labels);
   localAdapter.saveFormula(snapshot.formula);
+  if (snapshot.calculatedFields) {
+    localAdapter.saveCalculatedFields(snapshot.calculatedFields);
+  }
   return snapshot;
 }
 

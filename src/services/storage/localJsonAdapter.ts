@@ -7,6 +7,7 @@ import type {
   LabelDefinition,
   ScoringFormulaConfig,
   Team,
+  CalculatedFieldDefinition,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -16,6 +17,7 @@ import {
   DEFAULT_LABELS,
   DEFAULT_FORMULA_CONFIG,
   DEFAULT_TEAM,
+  DEFAULT_CALCULATED_FIELDS,
 } from '../../data/initialData';
 import type { StorageRepository, TeamSnapshot } from './types';
 import {
@@ -26,6 +28,7 @@ import {
   normalizeSessionStatus,
   type LegacySession,
 } from '../../utils/sessionMetrics';
+import { migrateMetricsAggregation } from '../../utils/metricAggregation';
 
 export const STORAGE_KEYS = {
   TEAM: 'stm_team_v1',
@@ -35,6 +38,7 @@ export const STORAGE_KEYS = {
   METRICS: 'stm_metrics_v1',
   LABELS: 'stm_labels_v1',
   FORMULA: 'stm_formula_v1',
+  CALCULATED_FIELDS: 'stm_calculated_fields_v1',
 } as const;
 
 type StorageChangeListener = () => void;
@@ -280,7 +284,15 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getMetrics(): MetricDefinition[] {
-    return this.readJson(STORAGE_KEYS.METRICS, DEFAULT_METRICS);
+    const raw = this.readJson<MetricDefinition[]>(
+      STORAGE_KEYS.METRICS,
+      DEFAULT_METRICS,
+    );
+    const { metrics, changed } = migrateMetricsAggregation(raw);
+    if (changed) {
+      this.writeJson(STORAGE_KEYS.METRICS, metrics);
+    }
+    return metrics;
   }
 
   saveMetrics(metrics: MetricDefinition[]) {
@@ -343,6 +355,40 @@ export class LocalJsonAdapter implements StorageRepository {
     this.notify();
   }
 
+  getCalculatedFields(): CalculatedFieldDefinition[] {
+    const stored = this.readJson<CalculatedFieldDefinition[]>(
+      STORAGE_KEYS.CALCULATED_FIELDS,
+      DEFAULT_CALCULATED_FIELDS,
+    );
+    // Merge in any new catalog defaults without clobbering enabled flags
+    const byId = new Map(stored.map((f) => [f.id, f]));
+    let changed = false;
+    for (const def of DEFAULT_CALCULATED_FIELDS) {
+      if (!byId.has(def.id)) {
+        byId.set(def.id, def);
+        changed = true;
+      }
+    }
+    const merged = [...byId.values()];
+    if (changed) {
+      this.writeJson(STORAGE_KEYS.CALCULATED_FIELDS, merged);
+    }
+    return merged;
+  }
+
+  saveCalculatedFields(fields: CalculatedFieldDefinition[]) {
+    this.writeJson(STORAGE_KEYS.CALCULATED_FIELDS, fields);
+    this.notify();
+  }
+
+  updateCalculatedField(updated: CalculatedFieldDefinition) {
+    this.saveCalculatedFields(
+      this.getCalculatedFields().map((f) =>
+        f.id === updated.id ? updated : f,
+      ),
+    );
+  }
+
   resetToSampleData() {
     this.saveTeam(DEFAULT_TEAM);
     this.savePlayers(INITIAL_PLAYERS);
@@ -351,6 +397,7 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveMetrics(DEFAULT_METRICS);
     this.saveLabels(DEFAULT_LABELS);
     this.saveFormula(DEFAULT_FORMULA_CONFIG);
+    this.saveCalculatedFields(DEFAULT_CALCULATED_FIELDS);
   }
 
   getSnapshot(): TeamSnapshot {
@@ -362,12 +409,13 @@ export class LocalJsonAdapter implements StorageRepository {
       metrics: this.getMetrics(),
       labels: this.getLabels(),
       formula: this.getFormula(),
+      calculatedFields: this.getCalculatedFields(),
     };
   }
 
   exportFullBackupJSON(): string {
     const backup = {
-      version: '2.1',
+      version: '2.3',
       exportedAt: new Date().toISOString(),
       ...this.getSnapshot(),
     };
@@ -385,6 +433,9 @@ export class LocalJsonAdapter implements StorageRepository {
         if (data.metrics) this.saveMetrics(data.metrics);
         if (data.labels) this.saveLabels(data.labels);
         if (data.formula) this.saveFormula(data.formula);
+        if (data.calculatedFields) {
+          this.saveCalculatedFields(data.calculatedFields);
+        }
         return true;
       }
       return false;

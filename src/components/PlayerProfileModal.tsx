@@ -55,15 +55,18 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const rankings = calculatePlayerRankings(allPlayers, allEntries, metrics, labels, formula);
   const playerRanking = rankings.find(r => r.player.id === player.id);
 
-  // Radar Chart Data preparation
-  const radarData = labels.map(lbl => {
-    const lScore = playerRanking?.labelScores[lbl.id]?.score ?? 70;
-    return {
-      category: lbl.name,
-      score: lScore,
-      fullMark: 100
-    };
-  });
+  // Radar Chart Data preparation — only plot categories with real logs
+  const radarData = labels
+    .map((lbl) => {
+      const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
+      if (lScore === null) return null;
+      return {
+        category: lbl.name,
+        score: lScore,
+        fullMark: 100,
+      };
+    })
+    .filter((d): d is { category: string; score: number; fullMark: number } => d !== null);
 
   // Recent Metric Entries for history list
   const playerEntries = allEntries
@@ -142,16 +145,38 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             </div>
 
             {/* Total Score Metric Box */}
-            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center sm:text-right shrink-0">
+            <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center sm:text-right shrink-0 min-w-[9rem]">
               <span className="text-[10px] uppercase font-bold text-slate-400">
-                Season Score
+                Total Overall
               </span>
               <div className="text-3xl font-black text-emerald-400 tracking-tight mt-0.5">
-                {playerRanking?.totalScore ?? 70}
-                <span className="text-xs font-bold text-slate-500">/100</span>
+                {playerRanking?.totalScore ?? 'Unscored'}
+                {playerRanking?.totalScore !== null &&
+                  playerRanking?.totalScore !== undefined && (
+                  <span className="text-xs font-bold text-slate-500">/100</span>
+                )}
+              </div>
+              <div className="text-xs text-slate-400 font-semibold mt-2">
+                Weighted:{' '}
+                <span className="text-slate-200">
+                  {playerRanking?.weightedTotalScore !== null &&
+                  playerRanking?.weightedTotalScore !== undefined
+                    ? playerRanking.weightedTotalScore
+                    : '—'}
+                </span>
+                {playerRanking?.weightedTotalScore !== null &&
+                  playerRanking?.weightedTotalScore !== undefined && (
+                  <span className="text-slate-500">/100</span>
+                )}
               </div>
               <div className="text-xs text-slate-400 font-semibold mt-1">
-                Attendance: <span className="text-emerald-400">{playerRanking?.attendanceRate}%</span>
+                Attendance:{' '}
+                <span className="text-emerald-400">
+                  {playerRanking?.attendanceRate !== null &&
+                  playerRanking?.attendanceRate !== undefined
+                    ? `${playerRanking.attendanceRate}%`
+                    : '—'}
+                </span>
               </div>
             </div>
           </div>
@@ -165,20 +190,26 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 <span>Skill Polygon Radar</span>
               </h3>
               <div className="h-64 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                    <PolarGrid stroke="#334155" />
-                    <PolarAngleAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
-                    <Radar
-                      name={player.name}
-                      dataKey="score"
-                      stroke="#10b981"
-                      fill="#10b981"
-                      fillOpacity={0.4}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
+                {radarData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-xs text-slate-500 text-center px-4">
+                    No category scores yet — log metrics to build the radar.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                      <PolarGrid stroke="#334155" />
+                      <PolarAngleAxis dataKey="category" stroke="#94a3b8" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                      <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
+                      <Radar
+                        name={player.name}
+                        dataKey="score"
+                        stroke="#10b981"
+                        fill="#10b981"
+                        fillOpacity={0.4}
+                      />
+                    </RadarChart>
+                  </ResponsiveContainer>
+                )}
               </div>
             </div>
 
@@ -190,7 +221,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 {labels.map(lbl => {
-                  const lScore = playerRanking?.labelScores[lbl.id]?.score ?? 70;
+                  const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
                   return (
                     <div 
                       key={lbl.id}
@@ -198,9 +229,15 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     >
                       <span className="text-xs text-slate-400 font-medium">{lbl.name}:</span>
                       <span className={`text-sm font-extrabold ${
-                        lScore >= 85 ? 'text-emerald-400' : lScore >= 70 ? 'text-blue-400' : 'text-amber-400'
+                        lScore === null
+                          ? 'text-slate-500'
+                          : lScore >= 85
+                            ? 'text-emerald-400'
+                            : lScore >= 70
+                              ? 'text-blue-400'
+                              : 'text-amber-400'
                       }`}>
-                        {lScore}
+                        {lScore ?? '—'}
                       </span>
                     </div>
                   );

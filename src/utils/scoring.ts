@@ -5,18 +5,22 @@ import {
   LabelDefinition, 
   ScoringFormulaConfig, 
   PlayerRanking, 
-  PlayerLabelScore 
+  PlayerLabelScore,
+  CalculatedFieldDefinition,
 } from '../types';
+import { aggregateMetricValue } from './metricAggregation';
+import { computeAllCalculatedValues } from './calculatedFields';
 
 /**
  * Normalizes a raw metric value into a standardized 0-100 score scale.
+ * Attendance: present=100, late=50, absent=0. Excused (negative value) is unscored
+ * and must be filtered out before calling — never normalized as a score.
  */
 export function normalizeMetricValue(
   value: number, 
   metric: MetricDefinition
 ): number {
   if (metric.type === 'attendance') {
-    if (value < 0) return 100; // Excused / exempt does not penalize
     return Math.min(100, Math.max(0, value));
   }
 
@@ -67,108 +71,131 @@ export function formatMetricValue(value: number, metric: MetricDefinition): stri
   return `${value} ${metric.unit}`;
 }
 
+function roundScore(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
 /**
  * Calculates complete player rankings based on current metric entries and formula weights.
+ *
+ * - **Overall** totals omit unscored / excused values (not counted against the player).
+ * - **Weighted** totals treat unscored / excused as 0.
  */
 export function calculatePlayerRankings(
   players: Player[],
   entries: MetricEntry[],
   metrics: MetricDefinition[],
   labels: LabelDefinition[],
-  formula: ScoringFormulaConfig
+  formula: ScoringFormulaConfig,
+  calculatedFields: CalculatedFieldDefinition[] = [],
 ): PlayerRanking[] {
   const metricMap = new Map<string, MetricDefinition>();
   metrics.forEach(m => metricMap.set(m.id, m));
 
-  const labelMap = new Map<string, LabelDefinition>();
-  labels.forEach(l => labelMap.set(l.id, l));
-
-  // Build weight lookup map
   const weightMap = new Map<string, { weightPercent: number; enabled: boolean }>();
   formula.weights.forEach(w => weightMap.set(w.labelId, { weightPercent: w.weightPercent, enabled: w.enabled }));
 
+  const calculatedByPlayer = computeAllCalculatedValues(
+    players,
+    entries,
+    metrics,
+    calculatedFields,
+  );
+
   const rankings: PlayerRanking[] = players.map(player => {
-    // Get all metric entries for this player
     const playerEntries = entries.filter(e => e.playerId === player.id);
 
-    // Group latest values per metric ID
-    const latestEntriesMap = new Map<string, MetricEntry>();
-    playerEntries.forEach(entry => {
-      const existing = latestEntriesMap.get(entry.metricId);
-      if (!existing || new Date(entry.timestamp) > new Date(existing.timestamp)) {
-        latestEntriesMap.set(entry.metricId, entry);
-      }
-    });
-
-    // Group entries by Label ID
     const labelScoresRecord: Record<string, PlayerLabelScore> = {};
 
     labels.forEach(label => {
-      // Find all metrics belonging to this label
       const labelMetrics = metrics.filter(m => m.labelId === label.id);
       const metricDetails: PlayerLabelScore['metrics'] = [];
-      let totalNormalizedScoreSum = 0;
-      let validMetricCount = 0;
+      let overallSum = 0;
+      let overallCount = 0;
+      let weightedSum = 0;
 
       labelMetrics.forEach(m => {
-        const latestEntry = latestEntriesMap.get(m.id);
-        if (latestEntry && latestEntry.value >= 0) {
-          const normScore = normalizeMetricValue(latestEntry.value, m);
+        // Excused attendance (value < 0) is excluded by aggregate → unscored.
+        const aggregated = aggregateMetricValue(playerEntries, m);
+        if (aggregated !== null) {
+          const normScore = normalizeMetricValue(aggregated, m);
           metricDetails.push({
             metricId: m.id,
             metricName: m.name,
-            latestValue: latestEntry.value,
+            aggregatedValue: aggregated,
             unit: m.unit,
             normalizedScore: normScore
           });
-          totalNormalizedScoreSum += normScore;
-          validMetricCount++;
+          overallSum += normScore;
+          overallCount++;
+          weightedSum += normScore;
+        } else {
+          // Missing / unscored / excused → 0 for weighted average only.
+          weightedSum += 0;
         }
       });
 
-      const labelScoreAvg = validMetricCount > 0 
-        ? Math.round((totalNormalizedScoreSum / validMetricCount) * 10) / 10 
-        : 70; // Default baseline if no entries logged yet
+      const overallScore =
+        overallCount > 0 ? roundScore(overallSum / overallCount) : null;
+      const weightedScore =
+        labelMetrics.length > 0
+          ? roundScore(weightedSum / labelMetrics.length)
+          : null;
 
       labelScoresRecord[label.id] = {
         labelId: label.id,
         labelName: label.name,
-        score: labelScoreAvg,
-        entryCount: validMetricCount,
+        score: overallScore,
+        weightedScore,
+        entryCount: overallCount,
         metrics: metricDetails
       };
     });
 
-    // Calculate Total Weighted Score
-    let totalScoreNumerator = 0;
-    let totalWeightDenominator = 0;
+    // Overall total: only labels with real scores contribute (unscored omitted).
+    let overallNumerator = 0;
+    let overallDenominator = 0;
+
+    // Weighted total: every enabled weight counts; missing labels = 0.
+    let weightedNumerator = 0;
+    let weightedDenominator = 0;
 
     labels.forEach(label => {
       const wConfig = weightMap.get(label.id);
-      if (wConfig && wConfig.enabled && wConfig.weightPercent > 0) {
-        const lScore = labelScoresRecord[label.id]?.score ?? 70;
-        totalScoreNumerator += lScore * wConfig.weightPercent;
-        totalWeightDenominator += wConfig.weightPercent;
+      if (!wConfig || !wConfig.enabled || wConfig.weightPercent <= 0) return;
+
+      weightedDenominator += wConfig.weightPercent;
+      const lScore = labelScoresRecord[label.id]?.score;
+      if (lScore !== null && lScore !== undefined) {
+        overallNumerator += lScore * wConfig.weightPercent;
+        overallDenominator += wConfig.weightPercent;
+        weightedNumerator += lScore * wConfig.weightPercent;
       }
+      // else weighted contributes 0 for this label (already via skipping add)
     });
 
-    const finalTotalScore = totalWeightDenominator > 0 
-      ? Math.round((totalScoreNumerator / totalWeightDenominator) * 10) / 10 
-      : 70;
+    const finalTotalScore =
+      overallDenominator > 0
+        ? roundScore(overallNumerator / overallDenominator)
+        : null;
 
-    // Attendance Rate Calculation
+    const finalWeightedTotal =
+      weightedDenominator > 0
+        ? roundScore(weightedNumerator / weightedDenominator)
+        : null;
+
+    // Attendance rate: present/late/absent only — excused is unscored / omitted.
     const attendanceEntries = playerEntries.filter(e => {
       const m = metricMap.get(e.metricId);
       return m && m.type === 'attendance' && e.value >= 0;
     });
 
-    let attendanceRate = 100;
+    let attendanceRate: number | null = null;
     if (attendanceEntries.length > 0) {
       const sum = attendanceEntries.reduce((acc, curr) => acc + curr.value, 0);
       attendanceRate = Math.round(sum / attendanceEntries.length);
     }
 
-    // Determine recent trend
     let recentTrend: 'up' | 'down' | 'stable' = 'stable';
     if (playerEntries.length >= 2) {
       const sorted = [...playerEntries].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
@@ -181,17 +208,23 @@ export function calculatePlayerRankings(
     return {
       player,
       totalScore: finalTotalScore,
+      weightedTotalScore: finalWeightedTotal,
       labelScores: labelScoresRecord,
-      rank: 0, // Will be set after sorting
+      rank: 0,
       attendanceRate,
-      recentTrend
+      recentTrend,
+      calculatedValues: calculatedByPlayer.get(player.id) ?? {},
     };
   });
 
-  // Sort rankings descending by totalScore
-  rankings.sort((a, b) => b.totalScore - a.totalScore);
+  // Default ordering by overall total; null / unrecorded sorts worst.
+  rankings.sort((a, b) => {
+    if (a.totalScore === null && b.totalScore === null) return 0;
+    if (a.totalScore === null) return 1;
+    if (b.totalScore === null) return -1;
+    return b.totalScore - a.totalScore;
+  });
 
-  // Assign 1-indexed ranks
   rankings.forEach((item, idx) => {
     item.rank = idx + 1;
   });

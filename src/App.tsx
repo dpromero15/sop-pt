@@ -29,6 +29,9 @@ export default function App() {
   const [metrics, setMetrics] = useState(() => StorageService.getMetrics());
   const [labels, setLabels] = useState(() => StorageService.getLabels());
   const [formula, setFormula] = useState(() => StorageService.getFormula());
+  const [calculatedFields, setCalculatedFields] = useState(() =>
+    StorageService.getCalculatedFields(),
+  );
 
   // Modal States
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -46,6 +49,7 @@ export default function App() {
     setMetrics(StorageService.getMetrics());
     setLabels(StorageService.getLabels());
     setFormula(StorageService.getFormula());
+    setCalculatedFields(StorageService.getCalculatedFields());
   };
 
   useEffect(() => {
@@ -71,7 +75,14 @@ export default function App() {
   };
 
   // Compute live rankings for views
-  const rankings = calculatePlayerRankings(players, entries, metrics, labels, formula);
+  const rankings = calculatePlayerRankings(
+    players,
+    entries,
+    metrics,
+    labels,
+    formula,
+    calculatedFields,
+  );
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
@@ -99,7 +110,9 @@ export default function App() {
             rankings={rankings}
             labels={labels}
             metrics={metrics}
+            calculatedFields={calculatedFields}
             formula={formula}
+            hasLoggedData={entries.length > 0}
             onOpenFormulaConfig={() => setIsFormulaModalOpen(true)}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onOpenQuickInsert={() => handleSelectTab('quick-insert')}
@@ -155,6 +168,7 @@ export default function App() {
             labels={labels}
             metrics={metrics}
             formula={formula}
+            calculatedFields={calculatedFields}
             onRefreshData={refreshData}
           />
         )}
