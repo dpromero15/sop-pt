@@ -8,7 +8,7 @@ import {
 export type RankingsSortMode = 'total' | 'label' | 'metric' | 'calculated';
 
 /** How totals / category scores treat unscored values — applies across all ranks & categories. */
-export type RankingsTotalMode = 'overall' | 'weighted';
+export type RankingsTotalMode = 'overall' | 'adjusted';
 
 export type RankingsMetricSelection = string | 'none';
 
@@ -98,17 +98,27 @@ function metricAggregatedValue(
   return detail?.aggregatedValue ?? null;
 }
 
-/** Formula total for the active overall/weighted mode. */
+/** Formula standing score for the active overall/adjusted mode. */
 export function totalForMode(
   ranking: PlayerRanking,
   totalMode: RankingsTotalMode,
 ): number | null {
-  return totalMode === 'weighted'
-    ? ranking.weightedTotalScore
+  return totalMode === 'adjusted'
+    ? ranking.adjustedTotalScore
     : ranking.totalScore;
 }
 
-/** Category score for the active overall/weighted mode. */
+/** Pool place for the active overall/adjusted mode. */
+export function rankForMode(
+  ranking: PlayerRanking,
+  totalMode: RankingsTotalMode,
+): number | null {
+  return totalMode === 'adjusted'
+    ? ranking.adjustedRank
+    : ranking.overallRank;
+}
+
+/** Category standing score for the active overall/adjusted mode. */
 export function labelScoreForMode(
   ranking: PlayerRanking,
   labelId: string,
@@ -116,7 +126,7 @@ export function labelScoreForMode(
 ): number | null {
   const ls = ranking.labelScores[labelId];
   if (!ls) return null;
-  return totalMode === 'weighted' ? ls.weightedScore : ls.score;
+  return totalMode === 'adjusted' ? ls.adjustedScore : ls.score;
 }
 
 /** True when the player has no value for the active rank-by mode. */
@@ -196,5 +206,5 @@ export function compareRankings(
 }
 
 export function categoryScoreTagLabel(label: LabelDefinition): string {
-  return `${label.name} score`;
+  return `${label.name} standing`;
 }

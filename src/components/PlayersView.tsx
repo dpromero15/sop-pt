@@ -197,7 +197,6 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlayers.map(player => {
           const rInfo = rankingMap.get(player.id);
-          const totalScore = rInfo?.totalScore ?? null;
 
           return (
             <div
@@ -229,20 +228,16 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Overall</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Overall Rank</span>
                     <span className={`text-xl font-black ${
-                      totalScore === null
+                      rInfo?.overallRank == null
                         ? 'text-slate-500'
-                        : totalScore >= 85
-                          ? 'text-emerald-400'
-                          : totalScore >= 70
-                            ? 'text-blue-400'
-                            : 'text-amber-400'
+                        : 'text-emerald-400'
                     }`}>
-                      {totalScore ?? 'Unscored'}
+                      {rInfo?.overallRank != null ? `#${rInfo.overallRank}` : 'Unscored'}
                     </span>
                     <span className="text-[10px] text-slate-500 block mt-0.5">
-                      Wtd {rInfo?.weightedTotalScore ?? '—'}
+                      Adj {rInfo?.adjustedRank != null ? `#${rInfo.adjustedRank}` : '—'}
                     </span>
                   </div>
                 </div>

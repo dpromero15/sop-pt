@@ -143,17 +143,17 @@ export interface PlayerLabelScore {
   labelId: string;
   labelName: string;
   /**
-   * Overall category score: average of logged metrics only.
-   * Unscored / excused metrics are omitted (not counted against the player).
+   * Overall category standing score: average of pool percentiles for
+   * logged metrics only. Unscored / excused omitted.
    * Null when nothing has been scored in this label.
    */
   score: number | null;
   /**
-   * Weighted category score: average over every metric in the label,
-   * treating missing / unscored / excused as 0.
+   * Adjusted category standing score: average over every metric in the label,
+   * treating missing / unscored / excused as 0 (gaps hurt standing).
    * Null when the label has no metrics defined.
    */
-  weightedScore: number | null;
+  adjustedScore: number | null;
   entryCount: number;
   metrics: {
     metricId: string;
@@ -161,23 +161,33 @@ export interface PlayerLabelScore {
     /** Value after applying the metric's aggregationMode. */
     aggregatedValue: number;
     unit: string;
-    normalizedScore: number;
+    /** Pool percentile vs squad (100 = best among players with this metric). */
+    poolScore: number;
   }[];
 }
 
 export interface PlayerRanking {
   player: Player;
   /**
-   * Overall total: formula weights applied only to labels with real scores.
-   * Unscored labels are omitted. Null when nothing scored in any weighted label.
+   * Overall combined standing score (pool-based): formula weights applied
+   * only to labels with real scores. Null when nothing scored.
    */
   totalScore: number | null;
   /**
-   * Weighted total: formula weights applied to all enabled labels;
+   * Adjusted combined standing score: formula weights on all enabled labels;
    * unscored labels count as 0. Null when no enabled formula weights.
    */
-  weightedTotalScore: number | null;
+  adjustedTotalScore: number | null;
+  /**
+   * Pool place for Overall (1 = best). Null when unscored for overall.
+   */
+  overallRank: number | null;
+  /**
+   * Pool place for Adjusted (1 = best). Null when no enabled formula weights.
+   */
+  adjustedRank: number | null;
   labelScores: Record<string, PlayerLabelScore>; // labelId -> label score details
+  /** @deprecated Prefer overallRank — kept as overall pool place for callers. */
   rank: number;
   /**
    * Overall attendance rate from present/late/absent only.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePlayerRankings } from './scoring';
+import { assignCompetitionRanks, calculatePlayerRankings } from './scoring';
 import type {
   LabelDefinition,
   MetricDefinition,
@@ -78,20 +78,32 @@ const formula: ScoringFormulaConfig = {
   ],
 };
 
-const players: Player[] = [
-  {
-    id: 'p1',
-    name: 'Alex',
+function player(id: string, name = id): Player {
+  return {
+    id,
+    name,
     jerseyNumber: 9,
     position: 'ST',
     preferredFoot: 'Right',
     joinedDate: '2026-01-01',
     status: 'active',
-  },
-];
+  };
+}
+
+const players: Player[] = [player('p1', 'Alex')];
+
+describe('assignCompetitionRanks', () => {
+  it('assigns 1-based places; ties share best place and skip', () => {
+    expect(assignCompetitionRanks([90, 80, 80, 70])).toEqual([1, 2, 2, 4]);
+  });
+
+  it('keeps nulls unscored', () => {
+    expect(assignCompetitionRanks([50, null, 100])).toEqual([2, null, 1]);
+  });
+});
 
 describe('calculatePlayerRankings', () => {
-  it('does not invent baseline 70 scores for unlogged categories', () => {
+  it('does not invent baseline scores for unlogged categories', () => {
     const entries: MetricEntry[] = [
       {
         id: 'e1',
@@ -114,12 +126,11 @@ describe('calculatePlayerRankings', () => {
     expect(ranking.labelScores.speed.score).not.toBeNull();
     expect(ranking.labelScores.technical.score).toBeNull();
     expect(ranking.labelScores.technical.entryCount).toBe(0);
-    // Overall uses only labels with data (speed), not a fake technical 70
     expect(ranking.totalScore).toBe(ranking.labelScores.speed.score);
     expect(ranking.attendanceRate).toBeNull();
   });
 
-  it('returns null overall when nothing is logged', () => {
+  it('returns null overall when nothing is logged; adjusted is 0', () => {
     const [ranking] = calculatePlayerRankings(
       players,
       [],
@@ -129,28 +140,22 @@ describe('calculatePlayerRankings', () => {
     );
 
     expect(ranking.totalScore).toBeNull();
-    expect(ranking.weightedTotalScore).toBe(0);
+    expect(ranking.adjustedTotalScore).toBe(0);
+    expect(ranking.overallRank).toBeNull();
+    expect(ranking.adjustedRank).toBe(1);
     expect(ranking.labelScores.speed.score).toBeNull();
-    expect(ranking.labelScores.speed.weightedScore).toBe(0);
+    expect(ranking.labelScores.speed.adjustedScore).toBe(0);
     expect(ranking.labelScores.technical.score).toBeNull();
   });
 
-  it('ranks unscored players after recorded zero totals', () => {
-    const scoredZero: Player = {
-      ...players[0],
-      id: 'p-zero',
-      name: 'Zero',
-    };
-    const neverScored: Player = {
-      ...players[0],
-      id: 'p-none',
-      name: 'None',
-    };
+  it('ranks unscored players after any recorded score', () => {
+    const scored: Player = player('p-scored', 'Scored');
+    const neverScored: Player = player('p-none', 'None');
     const entries: MetricEntry[] = [
       {
         id: 'e1',
         sessionId: 's1',
-        playerId: 'p-zero',
+        playerId: 'p-scored',
         metricId: 'm_juggle',
         value: 0,
         timestamp: '2026-01-01T00:00:00.000Z',
@@ -158,20 +163,22 @@ describe('calculatePlayerRankings', () => {
     ];
 
     const rankings = calculatePlayerRankings(
-      [scoredZero, neverScored],
+      [scored, neverScored],
       entries,
       metrics,
       labels,
       formula,
     );
 
-    expect(rankings[0].player.id).toBe('p-zero');
-    expect(rankings[0].totalScore).toBe(0);
+    expect(rankings[0].player.id).toBe('p-scored');
+    expect(rankings[0].totalScore).not.toBeNull();
+    expect(rankings[0].overallRank).toBe(1);
     expect(rankings[1].player.id).toBe('p-none');
     expect(rankings[1].totalScore).toBeNull();
+    expect(rankings[1].overallRank).toBeNull();
   });
 
-  it('overall omits unscored labels; weighted counts them as 0', () => {
+  it('overall omits unscored labels; adjusted counts them as 0', () => {
     const entries: MetricEntry[] = [
       {
         id: 'e1',
@@ -191,24 +198,128 @@ describe('calculatePlayerRankings', () => {
       formula,
     );
 
-    // Perfect speed (4s → 100), no technical
+    // Solo pool → 100 standing for logged 40m
     expect(ranking.labelScores.speed.score).toBe(100);
     expect(ranking.labelScores.technical.score).toBeNull();
     expect(ranking.totalScore).toBe(100);
-    // Weighted: (100*50 + 0*50) / 100 = 50
-    expect(ranking.weightedTotalScore).toBe(50);
-    // Category weighted: only m_40m in speed → still 100; technical has m_juggle → 0
-    expect(ranking.labelScores.speed.weightedScore).toBe(100);
-    expect(ranking.labelScores.technical.weightedScore).toBe(0);
+    // Adjusted: (100*50 + 0*50) / 100 = 50
+    expect(ranking.adjustedTotalScore).toBe(50);
+    expect(ranking.labelScores.speed.adjustedScore).toBe(100);
+    expect(ranking.labelScores.technical.adjustedScore).toBe(0);
+    expect(ranking.overallRank).toBe(1);
+    expect(ranking.adjustedRank).toBe(1);
+  });
+
+  it('uses squad pool percentiles, not absolute min/max', () => {
+    const fast = player('fast');
+    const mid = player('mid');
+    const slow = player('slow');
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'fast',
+        metricId: 'm_40m',
+        value: 5.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e2',
+        sessionId: 's1',
+        playerId: 'mid',
+        metricId: 'm_40m',
+        value: 5.5,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e3',
+        sessionId: 's1',
+        playerId: 'slow',
+        metricId: 'm_40m',
+        value: 6.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const rankings = calculatePlayerRankings(
+      [fast, mid, slow],
+      entries,
+      metrics,
+      labels,
+      formula,
+    );
+
+    const byId = Object.fromEntries(rankings.map((r) => [r.player.id, r]));
+    expect(byId.fast.labelScores.speed.metrics[0].poolScore).toBe(100);
+    expect(byId.mid.labelScores.speed.metrics[0].poolScore).toBe(50);
+    expect(byId.slow.labelScores.speed.metrics[0].poolScore).toBe(0);
+    expect(byId.fast.overallRank).toBe(1);
+    expect(byId.mid.overallRank).toBe(2);
+    expect(byId.slow.overallRank).toBe(3);
+  });
+
+  it('adjusted rank drops when gaps count against a strong single result', () => {
+    const specialist = player('spec');
+    const balanced = player('bal');
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'spec',
+        metricId: 'm_40m',
+        value: 4.5,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e2',
+        sessionId: 's1',
+        playerId: 'bal',
+        metricId: 'm_40m',
+        value: 5.5,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e3',
+        sessionId: 's1',
+        playerId: 'bal',
+        metricId: 'm_juggle',
+        value: 80,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const gapFormula: ScoringFormulaConfig = {
+      id: 'f-gap',
+      name: 'Gap',
+      weights: [
+        { labelId: 'speed', weightPercent: 40, enabled: true },
+        { labelId: 'technical', weightPercent: 60, enabled: true },
+      ],
+    };
+
+    const rankings = calculatePlayerRankings(
+      [specialist, balanced],
+      entries,
+      metrics,
+      labels,
+      gapFormula,
+    );
+    const byId = Object.fromEntries(rankings.map((r) => [r.player.id, r]));
+
+    // Specialist leads Overall (only speed, best time); Adjusted penalizes missing juggle
+    expect(byId.spec.overallRank).toBe(1);
+    expect(byId.bal.overallRank).toBe(2);
+    // Adjusted: spec ≈ 40 (speed only), bal ≈ 60 (covers technical weight)
+    expect(byId.spec.adjustedTotalScore!).toBeLessThan(byId.bal.adjustedTotalScore!);
+    expect(byId.bal.adjustedRank).toBe(1);
+    expect(byId.spec.adjustedRank).toBe(2);
   });
 
   it('treats excused attendance as unscored (omitted from overall)', () => {
     const attFormula: ScoringFormulaConfig = {
       id: 'f2',
       name: 'Att',
-      weights: [
-        { labelId: 'attendance', weightPercent: 100, enabled: true },
-      ],
+      weights: [{ labelId: 'attendance', weightPercent: 100, enabled: true }],
     };
     const entries: MetricEntry[] = [
       {
@@ -230,9 +341,9 @@ describe('calculatePlayerRankings', () => {
     );
 
     expect(ranking.labelScores.attendance.score).toBeNull();
-    expect(ranking.labelScores.attendance.weightedScore).toBe(0);
+    expect(ranking.labelScores.attendance.adjustedScore).toBe(0);
     expect(ranking.totalScore).toBeNull();
-    expect(ranking.weightedTotalScore).toBe(0);
+    expect(ranking.adjustedTotalScore).toBe(0);
     expect(ranking.attendanceRate).toBeNull();
   });
 
@@ -272,7 +383,6 @@ describe('calculatePlayerRankings', () => {
       formula,
     );
 
-    // (100 + 50) / 2 — excused omitted
     expect(ranking.attendanceRate).toBe(75);
   });
 });

@@ -22,16 +22,20 @@ Legacy metrics without `aggregationMode` are migrated on load via `defaultAggreg
 
 When a specific measurable metric tag is selected, the leaderboard shows the **aggregated raw value** with unit (e.g. `5.12s`, `14 goals`), sorted by that value and direction.
 
-### Total Overall vs Weighted Total
+### Overall Rank vs Adjusted Rank
 
-A global **Totals** toggle (not part of Rank by) applies to every category and every formula / category score:
+Standing scores are **squad pool percentiles** per metric (100 = best among players who have that metric logged) — **not** absolute min/max expected ranges (standards/benchmarks are deferred).
+
+A global **Rankings** toggle (not part of Rank by) applies to every category and every formula / category standing:
 
 | Mode | Behavior |
 |---|---|
-| **Total Overall** | Unscored / missing / excused values are **omitted** — they do not pull the average down |
-| **Weighted Total** | Unscored / missing / excused count as **0** against the full formula (or every metric in the category) |
+| **Overall Rank** | Pool place (1 = best) from scored metrics only. Unscored / missing / excused are **omitted** — they do not pull the average down |
+| **Adjusted Rank** | Pool place from the adjusted standing score. Unscored / missing / excused count as **0** (gaps lower standing) |
 
-**Rank by** only lists measurable metrics and calculated fields. With none selected, the board ranks by formula total (All Categories) or category score — using whichever Totals mode is active. Tap a selected metric again to clear it.
+Formula label weights still mix categories into the standing score that is then ranked. Primary display on the board is the **pool place** (`#1`, `#2`…), with standing score as secondary detail.
+
+**Rank by** only lists measurable metrics and calculated fields. With none selected, the board ranks by formula standing (All Categories) or category standing — using whichever Rankings mode is active. Tap a selected metric again to clear it.
 
 ### Attendance
 
@@ -40,7 +44,7 @@ A global **Totals** toggle (not part of Rank by) applies to every category and e
 | Present | 100 | Counted |
 | Late | 50 | Counted |
 | Absent | 0 | Counted (worst recorded) |
-| Excused | −1 | **Unscored** — omitted from Overall; 0 in Weighted |
+| Excused | −1 | **Unscored** — omitted from Overall; 0 in Adjusted |
 
 Attendance rate on cards uses Overall rules (present/late/absent only).
 
@@ -72,4 +76,4 @@ Config → Calculated Fields: toggle each catalog field on/off.
 - Aggregation: `src/utils/metricAggregation.ts`
 - Calculated: `src/utils/calculatedFields.ts`
 - Scoring: `src/utils/scoring.ts`
-- UI: `ConfigView.tsx`, `RankingsView.tsx`
+- UI: `ConfigView.tsx`, `RankingsView.tsx`, `PlayersView.tsx`, `PlayerProfileModal.tsx`
