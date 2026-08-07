@@ -64,7 +64,7 @@ describe('LocalJsonAdapter', () => {
     const session = adapter.addSession({
       title: 'Evening Practice',
       date: '2026-08-10',
-      type: 'practice',
+      type: 'session',
       metricIds: [],
     });
     expect(session.metricIds[0]).toBe('m_attendance');
@@ -96,7 +96,7 @@ describe('LocalJsonAdapter', () => {
           id: 'sess_legacy',
           date: '2026-08-01',
           title: 'Legacy',
-          type: 'practice',
+          type: 'session',
         },
       ]),
     );
@@ -123,7 +123,7 @@ describe('LocalJsonAdapter', () => {
     const session = adapter.addSession({
       title: 'To Close',
       date: '2026-08-12',
-      type: 'practice',
+      type: 'session',
       metricIds: [],
     });
     adapter.updateSession({ ...session, status: 'closed' });
@@ -154,6 +154,8 @@ describe('LocalJsonAdapter', () => {
     );
     const metrics = adapter.getMetrics();
     expect(metrics[0].aggregationMode).toBe('best');
+    expect(metrics[0].includeInAdjustedTotal).toBe(true);
+    expect(metrics[0].treatNoScoreAsZero).toBe(true);
   });
 
   it('loads calculated fields catalog', () => {
@@ -164,5 +166,131 @@ describe('LocalJsonAdapter', () => {
     expect(
       adapter.getCalculatedFields().find((f) => f.id === fields[0].id)?.enabled,
     ).toBe(true);
+  });
+
+  it('migrates attendance label to system: true', () => {
+    store.setItem(
+      STORAGE_KEYS.LABELS,
+      JSON.stringify([
+        {
+          id: 'attendance',
+          name: 'Attendance',
+          description: 'd',
+          color: 'emerald',
+          badgeBg: '',
+          badgeText: '',
+        },
+        {
+          id: 'speed',
+          name: 'Speed',
+          description: 'd',
+          color: 'blue',
+          badgeBg: '',
+          badgeText: '',
+        },
+      ]),
+    );
+    const labels = adapter.getLabels();
+    expect(labels.find((l) => l.id === 'attendance')?.system).toBe(true);
+    const persisted = JSON.parse(store.map.get(STORAGE_KEYS.LABELS)!);
+    expect(persisted.find((l: { id: string }) => l.id === 'attendance').system).toBe(
+      true,
+    );
+  });
+
+  it('refuses to delete labels still used by metrics', () => {
+    adapter.getLabels();
+    adapter.getMetrics();
+    expect(() => adapter.deleteLabel('speed')).toThrow(/reassign/i);
+  });
+
+  it('clearNonSystemLabels keeps system labels only', () => {
+    adapter.getLabels();
+    adapter.clearNonSystemLabels();
+    const labels = adapter.getLabels();
+    expect(labels.every((l) => l.system)).toBe(true);
+    expect(labels.some((l) => l.id === 'attendance')).toBe(true);
+    expect(adapter.getFormula().weights.every((w) => w.labelId === 'attendance')).toBe(
+      true,
+    );
+  });
+
+  it('clearNonSystemMetrics keeps attendance and scrubs sessions', () => {
+    adapter.getMetrics();
+    adapter.getSessions();
+    adapter.getCalculatedFields();
+    adapter.clearNonSystemMetrics();
+    const metrics = adapter.getMetrics();
+    expect(metrics.every((m) => m.id === 'm_attendance' || m.type === 'attendance')).toBe(
+      true,
+    );
+    expect(adapter.getCalculatedFields()).toEqual([]);
+    for (const session of adapter.getSessions()) {
+      expect(session.metricIds[0]).toBe('m_attendance');
+      expect(session.metricIds.every((id) => id === 'm_attendance')).toBe(true);
+    }
+  });
+
+  it('clearAllPlayers empties the roster', () => {
+    expect(adapter.getPlayers().length).toBeGreaterThan(0);
+    adapter.clearAllPlayers();
+    expect(adapter.getPlayers()).toEqual([]);
+  });
+
+  it('persists coaches, ballots, bumps, and bump budget', () => {
+    const coach = adapter.addCoach({ name: 'Test Coach' });
+    expect(adapter.getCoaches().some((c) => c.id === coach.id)).toBe(true);
+    expect(store.map.has(STORAGE_KEYS.COACHES)).toBe(true);
+
+    adapter.saveCoachBallot({
+      coachId: coach.id,
+      ranks: { p1: 1, p2: 2 },
+    });
+    expect(adapter.getCoachBallots()).toEqual([
+      { coachId: coach.id, ranks: { p1: 1, p2: 2 } },
+    ]);
+
+    adapter.saveBumpBudget({ plusBudget: 5, minusBudget: 2 });
+    expect(adapter.getBumpBudget()).toEqual({ plusBudget: 5, minusBudget: 2 });
+
+    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.getAdjustedBumps().p1).toBe(1);
+    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.applyBump('p1', 1)).toBe(false); // over plus budget of 5
+
+    adapter.clearAllPlayers();
+    expect(adapter.getAdjustedBumps()).toEqual({});
+  });
+
+  it('includes coaches and bumps in snapshot and backup round-trip', () => {
+    adapter.addCoach({ name: 'Backup Coach' });
+    adapter.saveAdjustedBumps({ p1: 1 });
+    adapter.saveBumpBudget({ plusBudget: 4, minusBudget: 1 });
+    const snap = adapter.getSnapshot();
+    expect(snap.coaches.length).toBeGreaterThan(0);
+    expect(snap.adjustedBumps.p1).toBe(1);
+    expect(snap.bumpBudget.plusBudget).toBe(4);
+
+    const json = adapter.exportFullBackupJSON();
+    const other = new LocalJsonAdapter(memoryStore());
+    expect(other.importFullBackupJSON(json)).toBe(true);
+    expect(other.getCoaches().map((c) => c.name)).toContain('Backup Coach');
+    expect(other.getAdjustedBumps().p1).toBe(1);
+    expect(other.getBumpBudget()).toEqual({ plusBudget: 4, minusBudget: 1 });
+  });
+
+  it('deleteCoach removes ballot; deletePlayer clears bump', () => {
+    const coach = adapter.addCoach({ name: 'Temp' });
+    adapter.saveCoachBallot({ coachId: coach.id, ranks: { p1: 1 } });
+    adapter.saveAdjustedBumps({ p1: 2, p2: -1 });
+    adapter.deleteCoach(coach.id);
+    expect(adapter.getCoachBallots().some((b) => b.coachId === coach.id)).toBe(
+      false,
+    );
+    adapter.deletePlayer('p1');
+    expect(adapter.getAdjustedBumps()).toEqual({ p2: -1 });
   });
 });

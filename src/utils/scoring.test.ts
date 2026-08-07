@@ -385,4 +385,148 @@ describe('calculatePlayerRankings', () => {
 
     expect(ranking.attendanceRate).toBe(75);
   });
+
+  it('exempt metric does not gap-penalize unscored players in Adjusted', () => {
+    const defenseLabel: LabelDefinition = {
+      id: 'defense',
+      name: 'Defense',
+      description: '',
+      color: 'rose',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const labelsWithDefense = [...labels, defenseLabel];
+    const metricsWithExempt: MetricDefinition[] = [
+      ...metrics,
+      {
+        id: 'm_sparse_def',
+        name: 'Sparse Def Look',
+        labelId: 'defense',
+        type: 'rating_10',
+        unit: '/10',
+        higherIsBetter: true,
+        aggregationMode: 'latest',
+        includeInAdjustedTotal: false,
+        treatNoScoreAsZero: true,
+      },
+    ];
+    const formulaWithDef: ScoringFormulaConfig = {
+      id: 'f-def',
+      name: 'With defense',
+      weights: [
+        { labelId: 'speed', weightPercent: 50, enabled: true },
+        { labelId: 'defense', weightPercent: 50, enabled: true },
+      ],
+    };
+    const observed = player('obs', 'Observed');
+    const other = player('oth', 'Other');
+    const third = player('thd', 'Third');
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'obs',
+        metricId: 'm_40m',
+        value: 5.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e2',
+        sessionId: 's1',
+        playerId: 'oth',
+        metricId: 'm_40m',
+        value: 5.5,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e3',
+        sessionId: 's1',
+        playerId: 'thd',
+        metricId: 'm_40m',
+        value: 6.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e4',
+        sessionId: 's1',
+        playerId: 'obs',
+        metricId: 'm_sparse_def',
+        value: 9,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const rankings = calculatePlayerRankings(
+      [observed, other, third],
+      entries,
+      metricsWithExempt,
+      labelsWithDefense,
+      formulaWithDef,
+    );
+    const byId = Object.fromEntries(rankings.map((r) => [r.player.id, r]));
+
+    // Defense category has only an exempt metric → null adjusted (no gap blend)
+    expect(byId.obs.labelScores.defense.adjustedScore).toBeNull();
+    expect(byId.oth.labelScores.defense.adjustedScore).toBeNull();
+    // Mid speed standing is 50; without exemption Adjusted would be
+    // (50*speed + 0*defense) / 100 = 25. Exemption keeps speed-only = 50.
+    expect(byId.oth.labelScores.speed.adjustedScore).toBe(50);
+    expect(byId.oth.adjustedTotalScore).toBe(50);
+    expect(byId.obs.adjustedTotalScore).toBe(100);
+  });
+
+  it('treatNoScoreAsZero false omits missing from adjusted average', () => {
+    const multiSpeed: MetricDefinition[] = [
+      {
+        id: 'm_40m',
+        name: '40m',
+        labelId: 'speed',
+        type: 'time_seconds',
+        unit: 's',
+        higherIsBetter: false,
+        aggregationMode: 'best',
+        includeInAdjustedTotal: true,
+        treatNoScoreAsZero: true,
+      },
+      {
+        id: 'm_shuttle',
+        name: 'Shuttle',
+        labelId: 'speed',
+        type: 'time_seconds',
+        unit: 's',
+        higherIsBetter: false,
+        aggregationMode: 'best',
+        includeInAdjustedTotal: true,
+        treatNoScoreAsZero: false,
+      },
+    ];
+    const speedOnlyFormula: ScoringFormulaConfig = {
+      id: 'f-speed',
+      name: 'Speed',
+      weights: [{ labelId: 'speed', weightPercent: 100, enabled: true }],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_40m',
+        value: 5.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      multiSpeed,
+      labels,
+      speedOnlyFormula,
+    );
+
+    // Solo pool on 40m → 100; shuttle omitted (no score + treatNoScoreAsZero false)
+    // Adjusted average is only 40m, not (100 + 0) / 2
+    expect(ranking.labelScores.speed.adjustedScore).toBe(100);
+    expect(ranking.adjustedTotalScore).toBe(100);
+  });
 });

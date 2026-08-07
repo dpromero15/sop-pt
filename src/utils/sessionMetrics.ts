@@ -27,6 +27,12 @@ export function defaultMetricIdsForSessionType(type: SessionType): string[] {
   return [ATTENDANCE_METRIC_ID];
 }
 
+/** Map legacy `practice` / `fitness_test` to `session`. */
+export function normalizeSessionType(type?: SessionType | string): SessionType {
+  if (type === 'match') return 'match';
+  return 'session';
+}
+
 /** Legacy sessions without status are treated as open so coaches can finish them. */
 export function normalizeSessionStatus(status?: SessionStatus | string): SessionStatus {
   return status === 'closed' ? 'closed' : 'open';
@@ -56,9 +62,11 @@ export function newQuickSessionTitle(date: Date = new Date()): string {
 /** Migrate legacy sessions missing metricIds / status using entries for that session. */
 export function migrateSessionMetricIds(session: LegacySession, entries: MetricEntry[]): Session {
   const status = normalizeSessionStatus(session.status);
+  const type = normalizeSessionType(session.type);
   if (session.metricIds && session.metricIds.length > 0) {
     return {
       ...session,
+      type,
       status,
       metricIds: ensureAttendanceFirst(session.metricIds),
     };
@@ -74,6 +82,7 @@ export function migrateSessionMetricIds(session: LegacySession, entries: MetricE
 
   return {
     ...session,
+    type,
     status,
     metricIds: ensureAttendanceFirst(fromEntries),
   };

@@ -7,8 +7,12 @@ import {
 
 export type RankingsSortMode = 'total' | 'label' | 'metric' | 'calculated';
 
-/** How totals / category scores treat unscored values — applies across all ranks & categories. */
-export type RankingsTotalMode = 'overall' | 'adjusted';
+/**
+ * How totals are ranked:
+ * - overall / adjusted: formula standing (higher better)
+ * - coaches: sum of ordinals from complete coach ballots (lower better)
+ */
+export type RankingsTotalMode = 'overall' | 'adjusted' | 'coaches';
 
 export type RankingsMetricSelection = string | 'none';
 
@@ -98,27 +102,27 @@ function metricAggregatedValue(
   return detail?.aggregatedValue ?? null;
 }
 
-/** Formula standing score for the active overall/adjusted mode. */
+/** Standing / coaches sum for the active total mode. */
 export function totalForMode(
   ranking: PlayerRanking,
   totalMode: RankingsTotalMode,
 ): number | null {
-  return totalMode === 'adjusted'
-    ? ranking.adjustedTotalScore
-    : ranking.totalScore;
+  if (totalMode === 'adjusted') return ranking.adjustedTotalScore;
+  if (totalMode === 'coaches') return ranking.coachesTotalSum;
+  return ranking.totalScore;
 }
 
-/** Pool place for the active overall/adjusted mode. */
+/** Pool place for the active total mode. */
 export function rankForMode(
   ranking: PlayerRanking,
   totalMode: RankingsTotalMode,
 ): number | null {
-  return totalMode === 'adjusted'
-    ? ranking.adjustedRank
-    : ranking.overallRank;
+  if (totalMode === 'adjusted') return ranking.adjustedRank;
+  if (totalMode === 'coaches') return ranking.coachesRank;
+  return ranking.overallRank;
 }
 
-/** Category standing score for the active overall/adjusted mode. */
+/** Category standing score — coaches mode falls back to overall category scores. */
 export function labelScoreForMode(
   ranking: PlayerRanking,
   labelId: string,
@@ -127,6 +131,11 @@ export function labelScoreForMode(
   const ls = ranking.labelScores[labelId];
   if (!ls) return null;
   return totalMode === 'adjusted' ? ls.adjustedScore : ls.score;
+}
+
+/** Whether total sort treats higher values as better (false for coaches ordinal sums). */
+export function totalHigherIsBetter(totalMode: RankingsTotalMode): boolean {
+  return totalMode !== 'coaches';
 }
 
 /** True when the player has no value for the active rank-by mode. */
@@ -201,7 +210,7 @@ export function compareRankings(
   return compareOptionalRankValue(
     totalForMode(a, totalMode),
     totalForMode(b, totalMode),
-    true,
+    totalHigherIsBetter(totalMode),
   );
 }
 

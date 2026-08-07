@@ -35,6 +35,8 @@ export interface LabelDefinition {
   badgeBg: string;
   badgeText: string;
   iconName?: string;
+  /** Built-in labels (e.g. attendance) cannot be deleted or cleared. */
+  system?: boolean;
 }
 
 export type MetricType = 'time_seconds' | 'count' | 'percentage' | 'rating_10' | 'attendance';
@@ -51,6 +53,10 @@ export interface MetricDefinition {
   higherIsBetter: boolean; // e.g. Sprint time: false (lower seconds is better); Juggling: true
   /** How logged entries aggregate for rankings (defaults applied on load if missing). */
   aggregationMode: MetricAggregationMode;
+  /** When false, metric is excluded from Adjusted category/overall blend (default true). */
+  includeInAdjustedTotal?: boolean;
+  /** When true and included in Adjusted, missing/unscored counts as 0 (default true). */
+  treatNoScoreAsZero?: boolean;
   minExpectedValue?: number; // for normalization scaling
   maxExpectedValue?: number; // for normalization scaling
   description?: string;
@@ -96,7 +102,8 @@ export interface Player {
   notes?: string;
 }
 
-export type SessionType = 'practice' | 'match' | 'fitness_test';
+/** Training / testing / drill days are `session`; competitive games are `match`. */
+export type SessionType = 'session' | 'match';
 
 /** Open sessions can be resumed in Quick Insert; closed are history-only until reopened. */
 export type SessionStatus = 'open' | 'closed';
@@ -149,9 +156,10 @@ export interface PlayerLabelScore {
    */
   score: number | null;
   /**
-   * Adjusted category standing score: average over every metric in the label,
-   * treating missing / unscored / excused as 0 (gaps hurt standing).
-   * Null when the label has no metrics defined.
+   * Adjusted category standing score: average over metrics with
+   * includeInAdjustedTotal !== false. Missing/unscored count as 0 when
+   * treatNoScoreAsZero !== false; otherwise omitted. Null when the label has
+   * no Adjusted-included metrics (or none contribute after omission).
    */
   adjustedScore: number | null;
   entryCount: number;
@@ -164,6 +172,28 @@ export interface PlayerLabelScore {
     /** Pool percentile vs squad (100 = best among players with this metric). */
     poolScore: number;
   }[];
+}
+
+/** Staff coach who submits ordinal ballots for Coaches Totals. */
+export interface Coach {
+  id: string;
+  name: string;
+}
+
+/**
+ * One coach's full or partial ordinal ranking of players.
+ * `ranks` maps playerId → ordinal (1 = best). Complete ballots assign
+ * unique 1…N over every active player.
+ */
+export interface CoachBallot {
+  coachId: string;
+  ranks: Record<string, number>;
+}
+
+/** Team-level ±1 bump budgets for Adjusted rankings only. */
+export interface AdjustedBumpConfig {
+  plusBudget: number;
+  minusBudget: number;
 }
 
 export interface PlayerRanking {
@@ -183,9 +213,22 @@ export interface PlayerRanking {
    */
   overallRank: number | null;
   /**
-   * Pool place for Adjusted (1 = best). Null when no enabled formula weights.
+   * Pool place for Adjusted (1 = best), after optional ± bumps.
+   * Null when no enabled formula weights.
    */
   adjustedRank: number | null;
+  /**
+   * Sum of ordinals across complete coach ballots only.
+   * Null when no complete ballots (or player not active in the pool).
+   */
+  coachesTotalSum: number | null;
+  /**
+   * Competition rank of coachesTotalSum (1 = best / lower sum).
+   * Null when coachesTotalSum is null.
+   */
+  coachesRank: number | null;
+  /** Net Adjusted ±1 bump for this player (0 when none). */
+  adjustedBump: number;
   labelScores: Record<string, PlayerLabelScore>; // labelId -> label score details
   /** @deprecated Prefer overallRank — kept as overall pool place for callers. */
   rank: number;

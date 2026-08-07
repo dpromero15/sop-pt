@@ -31,11 +31,24 @@ A global **Rankings** toggle (not part of Rank by) applies to every category and
 | Mode | Behavior |
 |---|---|
 | **Overall Rank** | Pool place (1 = best) from scored metrics only. Unscored / missing / excused are **omitted** — they do not pull the average down |
-| **Adjusted Rank** | Pool place from the adjusted standing score. Unscored / missing / excused count as **0** (gaps lower standing) |
+| **Adjusted Rank** | Pool place from the adjusted standing score. By default, unscored / missing / excused count as **0** (gaps lower standing). Per-metric flags can change this (below). |
 
 Formula label weights still mix categories into the standing score that is then ranked. Primary display on the board is the **pool place** (`#1`, `#2`…), with standing score as secondary detail.
 
 **Rank by** only lists measurable metrics and calculated fields. With none selected, the board ranks by formula standing (All Categories) or category standing — using whichever Rankings mode is active. Tap a selected metric again to clear it.
+
+#### Adjusted metric flags
+
+On each measurable metric (Config → Measured Metrics):
+
+| Flag | Default | Behavior |
+|---|---|---|
+| **Include in Adjusted total** (`includeInAdjustedTotal`) | on (`true`) | When **off**, the metric is excluded from Adjusted category / overall blend. Its own rankings still use logged values. Unobserved players are **not** gap-penalized in Adjusted because of this metric. |
+| **Treat no score as 0** (`treatNoScoreAsZero`) | on (`true`) | Only applies when the metric is included in Adjusted. When **on**, missing / unscored counts as **0** in the Adjusted average. When **off**, missing is omitted from that metric’s contribution (no gap penalty). |
+
+Exemption wins over gap-as-zero for the overall Adjusted blend: a metric with Include off never enters Adjusted, regardless of Treat no score as 0.
+
+Legacy metrics missing these flags are migrated on load to `true`.
 
 ### Attendance
 
@@ -67,8 +80,9 @@ Rules:
 
 ## Config
 
-Config → Measured Metrics: add or **edit** name, category, type, unit, direction, aggregation, expected min/max.  
-Config → Calculated Fields: toggle each catalog field on/off.
+Config → Measured Metrics: add or **edit** name, category, type, unit, direction, aggregation, expected min/max, and Adjusted flags (Include in Adjusted total / Treat no score as 0).  
+Config → Calculated Fields: toggle each catalog field on/off.  
+Config → Formula: Attendance category weight is system-locked (visible, not editable).
 
 ## Touchpoints
 

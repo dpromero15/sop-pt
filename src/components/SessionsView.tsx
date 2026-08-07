@@ -45,12 +45,12 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   const [formTitle, setFormTitle] = useState('');
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0]);
   const [formTime, setFormTime] = useState('18:00');
-  const [formType, setFormType] = useState<SessionType>('practice');
+  const [formType, setFormType] = useState<SessionType>('session');
   const [formLocation, setFormLocation] = useState('Central Turf Field');
   const [formOpponent, setFormOpponent] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formMetricIds, setFormMetricIds] = useState<string[]>(() =>
-    defaultMetricIdsForSessionType('practice'),
+    defaultMetricIdsForSessionType('session'),
   );
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     // Reset Form
     setFormTitle('');
     setFormNotes('');
-    setFormMetricIds(defaultMetricIdsForSessionType('practice'));
+    setFormMetricIds(defaultMetricIdsForSessionType('session'));
   };
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
@@ -119,10 +119,10 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               <span>Season Timeline</span>
             </div>
             <h2 className="text-2xl font-extrabold text-white tracking-tight">
-              Practice & Match Sessions ({sessions.length})
+              Sessions & Matches ({sessions.length})
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Schedule practices, competitive matches, and fitness combine testing days.
+              Schedule training sessions and competitive matches.
             </p>
           </div>
 
@@ -144,9 +144,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
         {[
           { id: 'all', label: 'All Sessions' },
-          { id: 'practice', label: 'Practices' },
+          { id: 'session', label: 'Sessions' },
           { id: 'match', label: 'Matches' },
-          { id: 'fitness_test', label: 'Fitness Testing' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -186,11 +185,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
                         session.type === 'match'
                           ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                          : session.type === 'fitness_test'
-                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
                           : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
                       }`}>
-                        {session.type.replace('_', ' ')}
+                        {session.type === 'match' ? 'Match' : 'Session'}
                       </span>
                       <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
                         session.status === 'open'
@@ -375,9 +372,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                     }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-purple-500"
                   >
-                    <option value="practice">Practice Session</option>
-                    <option value="match">Competitive Match</option>
-                    <option value="fitness_test">Fitness Combine Day</option>
+                    <option value="session">Session</option>
+                    <option value="match">Match</option>
                   </select>
                 </div>
 

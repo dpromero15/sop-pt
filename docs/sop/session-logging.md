@@ -77,15 +77,27 @@ When every active player already has an attendance entry:
 2. Show attendance status for all players (maintenance list) so any status can be adjusted
 3. Primary path: **Continue to scoring** (no bulk mark — everyone already has a status)
 
-### 5. Score metrics (player cards)
+### 5. Score metrics
+
+#### First-pass collection (player cards)
 
 For each non-attendance metric on the session:
 
 1. Build the deck from **eligible** players only: `present` and `late`
 2. Hide `absent` and `excused`
-3. Show one player card; enter the value (controls depend on metric type)
+3. Show one player card; enter the value (controls depend on metric type — numeric types always allow typing)
 4. Save → auto-advance to the next player
 5. Skip allowed
+
+#### Dense editor (after scores exist)
+
+Once the session has any non-attendance score entries:
+
+- Continuing / resuming prefers the **dense score editor** (players × planned metrics grid) for fast review and edits
+- Attendance can be adjusted from the first column (Present / Late / Absent / Excused)
+- Blank cells mean no entry; clearing a cell deletes the entry
+- Absent / excused players are muted and non-editable for metric cells
+- **Card scoring** remains available as a secondary path for first-pass per-metric collection
 
 ### 6. Done / close session
 

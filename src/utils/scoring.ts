@@ -115,7 +115,8 @@ export function assignCompetitionRanks(
  *
  * Standing scores use **squad pool percentiles** per metric (not absolute min/max).
  * - **Overall** omits unscored / excused values.
- * - **Adjusted** treats unscored / excused as 0 (gaps hurt standing).
+ * - **Adjusted** uses metrics with `includeInAdjustedTotal !== false`; missing
+ *   values count as 0 when `treatNoScoreAsZero !== false`, otherwise omitted.
  * Pool places (`overallRank` / `adjustedRank`) are competition ranks from those scores.
  */
 export function calculatePlayerRankings(
@@ -176,7 +177,7 @@ export function calculatePlayerRankings(
       const metricDetails: PlayerLabelScore['metrics'] = [];
       let overallSum = 0;
       let overallCount = 0;
-      let adjustedSum = 0;
+      const poolByMetric = new Map<string, number>();
 
       labelMetrics.forEach((m) => {
         const aggregated = playerAgg.get(m.id) ?? null;
@@ -194,20 +195,35 @@ export function calculatePlayerRankings(
             unit: m.unit,
             poolScore,
           });
+          poolByMetric.set(m.id, poolScore);
           overallSum += poolScore;
           overallCount++;
-          adjustedSum += poolScore;
-        } else {
+        }
+      });
+
+      const adjustedMetrics = labelMetrics.filter(
+        (m) => m.includeInAdjustedTotal !== false,
+      );
+      let adjustedSum = 0;
+      let adjustedCount = 0;
+
+      adjustedMetrics.forEach((m) => {
+        const aggregated = playerAgg.get(m.id) ?? null;
+        if (aggregated !== null) {
+          adjustedSum += poolByMetric.get(m.id) ?? 0;
+          adjustedCount++;
+        } else if (m.treatNoScoreAsZero !== false) {
           adjustedSum += 0;
+          adjustedCount++;
         }
       });
 
       const overallScore =
         overallCount > 0 ? roundScore(overallSum / overallCount) : null;
       const adjustedScore =
-        labelMetrics.length > 0
-          ? roundScore(adjustedSum / labelMetrics.length)
-          : null;
+        adjustedMetrics.length === 0 || adjustedCount === 0
+          ? null
+          : roundScore(adjustedSum / adjustedCount);
 
       labelScoresRecord[label.id] = {
         labelId: label.id,
@@ -280,6 +296,9 @@ export function calculatePlayerRankings(
       adjustedTotalScore: finalAdjustedTotal,
       overallRank: null,
       adjustedRank: null,
+      coachesTotalSum: null,
+      coachesRank: null,
+      adjustedBump: 0,
       labelScores: labelScoresRecord,
       rank: 0,
       attendanceRate,

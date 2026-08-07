@@ -7,6 +7,9 @@ import {
   ScoringFormulaConfig,
   Team,
   CalculatedFieldDefinition,
+  Coach,
+  CoachBallot,
+  AdjustedBumpConfig,
 } from '../types';
 
 export const DEFAULT_TEAM: Team = {
@@ -34,7 +37,8 @@ export const DEFAULT_LABELS: LabelDefinition[] = [
     color: 'emerald',
     badgeBg: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
     badgeText: 'text-emerald-700 dark:text-emerald-300',
-    iconName: 'CalendarCheck'
+    iconName: 'CalendarCheck',
+    system: true,
   },
   {
     id: 'speed',
@@ -430,7 +434,7 @@ export const INITIAL_SESSIONS: Session[] = [
     date: '2026-08-01',
     time: '17:30',
     title: 'Pre-Season Sprint & Fitness Combine',
-    type: 'fitness_test',
+    type: 'session',
     status: 'closed',
     location: 'Westside Athletic Complex',
     notes: 'Baseline testing for 40m dash, shuttle run, and consecutive juggling count.',
@@ -441,7 +445,7 @@ export const INITIAL_SESSIONS: Session[] = [
     date: '2026-08-03',
     time: '18:00',
     title: 'Tactical Possession & Finishing Drill',
-    type: 'practice',
+    type: 'session',
     status: 'closed',
     location: 'Field A',
     notes: 'Focus on quick transitions and passing accuracy in tight spaces.',
@@ -535,3 +539,18 @@ export const DEFAULT_FORMULA_CONFIG: ScoringFormulaConfig = {
     { labelId: 'character', weightPercent: 5, enabled: true }
   ]
 };
+
+/** Sample coaches for Coaches Totals (empty ballots until ranked). */
+export const DEFAULT_COACHES: Coach[] = [
+  { id: 'coach_1', name: 'Coach Rivera' },
+  { id: 'coach_2', name: 'Coach Patel' },
+];
+
+export const DEFAULT_COACH_BALLOTS: CoachBallot[] = [];
+
+export const DEFAULT_BUMP_BUDGET: AdjustedBumpConfig = {
+  plusBudget: 3,
+  minusBudget: 3,
+};
+
+export const DEFAULT_ADJUSTED_BUMPS: Record<string, number> = {};

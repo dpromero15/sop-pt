@@ -8,6 +8,9 @@ import type {
   ScoringFormulaConfig,
   Team,
   CalculatedFieldDefinition,
+  Coach,
+  CoachBallot,
+  AdjustedBumpConfig,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -18,6 +21,10 @@ import {
   DEFAULT_FORMULA_CONFIG,
   DEFAULT_TEAM,
   DEFAULT_CALCULATED_FIELDS,
+  DEFAULT_COACHES,
+  DEFAULT_COACH_BALLOTS,
+  DEFAULT_BUMP_BUDGET,
+  DEFAULT_ADJUSTED_BUMPS,
 } from '../../data/initialData';
 import type { StorageRepository, TeamSnapshot } from './types';
 import {
@@ -29,6 +36,7 @@ import {
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
+import { canApplyBump } from '../../utils/adjustedBumps';
 
 export const STORAGE_KEYS = {
   TEAM: 'stm_team_v1',
@@ -39,6 +47,10 @@ export const STORAGE_KEYS = {
   LABELS: 'stm_labels_v1',
   FORMULA: 'stm_formula_v1',
   CALCULATED_FIELDS: 'stm_calculated_fields_v1',
+  COACHES: 'stm_coaches_v1',
+  COACH_BALLOTS: 'stm_coach_ballots_v1',
+  ADJUSTED_BUMPS: 'stm_adjusted_bumps_v1',
+  BUMP_BUDGET: 'stm_bump_budget_v1',
 } as const;
 
 type StorageChangeListener = () => void;
@@ -142,6 +154,11 @@ export class LocalJsonAdapter implements StorageRepository {
 
   deletePlayer(id: string) {
     this.savePlayers(this.getPlayers().filter((p) => p.id !== id));
+    const bumps = { ...this.getAdjustedBumps() };
+    if (id in bumps) {
+      delete bumps[id];
+      this.saveAdjustedBumps(bumps);
+    }
   }
 
   getSessions(): Session[] {
@@ -156,6 +173,7 @@ export class LocalJsonAdapter implements StorageRepository {
         s.metricIds.length === 0 ||
         !('status' in s) ||
         normalizeSessionStatus(s.status) !== next.status ||
+        (s as { type?: string }).type !== next.type ||
         JSON.stringify(s.metricIds) !== JSON.stringify(next.metricIds)
       );
     });
@@ -170,6 +188,7 @@ export class LocalJsonAdapter implements StorageRepository {
       STORAGE_KEYS.SESSIONS,
       sessions.map((s) => ({
         ...s,
+        type: s.type === 'match' ? 'match' : 'session',
         status: normalizeSessionStatus(s.status),
         metricIds: ensureAttendanceFirst(s.metricIds?.length ? s.metricIds : [ATTENDANCE_METRIC_ID]),
       })),
@@ -320,7 +339,19 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getLabels(): LabelDefinition[] {
-    return this.readJson(STORAGE_KEYS.LABELS, DEFAULT_LABELS);
+    const labels = this.readJson(STORAGE_KEYS.LABELS, DEFAULT_LABELS);
+    let changed = false;
+    const migrated = labels.map((label) => {
+      if (label.id === 'attendance' && !label.system) {
+        changed = true;
+        return { ...label, system: true };
+      }
+      return label;
+    });
+    if (changed) {
+      this.writeJson(STORAGE_KEYS.LABELS, migrated);
+    }
+    return migrated;
   }
 
   saveLabels(labels: LabelDefinition[]) {
@@ -346,6 +377,80 @@ export class LocalJsonAdapter implements StorageRepository {
     return newLabel;
   }
 
+  updateLabel(updated: LabelDefinition) {
+    const labels = this.getLabels();
+    const existing = labels.find((l) => l.id === updated.id);
+    if (!existing) return;
+    const next: LabelDefinition = {
+      ...updated,
+      // Preserve system flag from storage / migration
+      system: existing.system || updated.system,
+    };
+    this.saveLabels(labels.map((l) => (l.id === updated.id ? next : l)));
+  }
+
+  deleteLabel(id: string) {
+    const labels = this.getLabels();
+    const label = labels.find((l) => l.id === id);
+    if (!label) return;
+    if (label.system) return;
+
+    const metrics = this.getMetrics();
+    if (metrics.some((m) => m.labelId === id)) {
+      throw new Error(
+        'Reassign or remove metrics that use this label before deleting it.',
+      );
+    }
+
+    this.saveLabels(labels.filter((l) => l.id !== id));
+
+    const formula = this.getFormula();
+    this.saveFormula({
+      ...formula,
+      weights: formula.weights.filter((w) => w.labelId !== id),
+    });
+  }
+
+  clearNonSystemLabels() {
+    const labels = this.getLabels();
+    const kept = labels.filter((l) => l.system);
+    const keptIds = new Set(kept.map((l) => l.id));
+    this.saveLabels(kept);
+
+    const formula = this.getFormula();
+    this.saveFormula({
+      ...formula,
+      weights: formula.weights.filter((w) => keptIds.has(w.labelId)),
+    });
+  }
+
+  clearNonSystemMetrics() {
+    const metrics = this.getMetrics();
+    const kept = metrics.filter(
+      (m) => m.id === ATTENDANCE_METRIC_ID || m.type === 'attendance',
+    );
+    const keptIds = new Set(kept.map((m) => m.id));
+    this.saveMetrics(kept);
+
+    const fields = this.getCalculatedFields().filter((f) =>
+      keptIds.has(f.baseMetricId),
+    );
+    this.saveCalculatedFields(fields);
+
+    const sessions = this.getSessions().map((s) => ({
+      ...s,
+      metricIds: ensureAttendanceFirst(
+        (s.metricIds || []).filter((id) => keptIds.has(id)),
+      ),
+    }));
+    this.saveSessions(sessions);
+  }
+
+  clearAllPlayers() {
+    this.savePlayers([]);
+    this.saveAdjustedBumps({});
+  }
+
   getFormula(): ScoringFormulaConfig {
     return this.readJson(STORAGE_KEYS.FORMULA, DEFAULT_FORMULA_CONFIG);
   }
@@ -360,17 +465,19 @@ export class LocalJsonAdapter implements StorageRepository {
       STORAGE_KEYS.CALCULATED_FIELDS,
       DEFAULT_CALCULATED_FIELDS,
     );
-    // Merge in any new catalog defaults without clobbering enabled flags
+    const metricIds = new Set(this.getMetrics().map((m) => m.id));
+    // Merge in any new catalog defaults without clobbering enabled flags,
+    // but only when the base metric still exists (cleared metrics stay gone).
     const byId = new Map(stored.map((f) => [f.id, f]));
     let changed = false;
     for (const def of DEFAULT_CALCULATED_FIELDS) {
-      if (!byId.has(def.id)) {
+      if (!byId.has(def.id) && metricIds.has(def.baseMetricId)) {
         byId.set(def.id, def);
         changed = true;
       }
     }
-    const merged = [...byId.values()];
-    if (changed) {
+    const merged = [...byId.values()].filter((f) => metricIds.has(f.baseMetricId));
+    if (changed || merged.length !== stored.length) {
       this.writeJson(STORAGE_KEYS.CALCULATED_FIELDS, merged);
     }
     return merged;
@@ -389,6 +496,88 @@ export class LocalJsonAdapter implements StorageRepository {
     );
   }
 
+  getCoaches(): Coach[] {
+    return this.readJson(STORAGE_KEYS.COACHES, DEFAULT_COACHES);
+  }
+
+  saveCoaches(coaches: Coach[]) {
+    this.writeJson(STORAGE_KEYS.COACHES, coaches);
+    this.notify();
+  }
+
+  addCoach(coach: Omit<Coach, 'id'>): Coach {
+    const coaches = this.getCoaches();
+    const newCoach: Coach = {
+      ...coach,
+      id: `coach_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    };
+    coaches.push(newCoach);
+    this.saveCoaches(coaches);
+    return newCoach;
+  }
+
+  deleteCoach(id: string) {
+    this.saveCoaches(this.getCoaches().filter((c) => c.id !== id));
+    this.saveCoachBallots(this.getCoachBallots().filter((b) => b.coachId !== id));
+  }
+
+  getCoachBallots(): CoachBallot[] {
+    return this.readJson(STORAGE_KEYS.COACH_BALLOTS, DEFAULT_COACH_BALLOTS);
+  }
+
+  saveCoachBallots(ballots: CoachBallot[]) {
+    this.writeJson(STORAGE_KEYS.COACH_BALLOTS, ballots);
+    this.notify();
+  }
+
+  saveCoachBallot(ballot: CoachBallot) {
+    const ballots = this.getCoachBallots();
+    const idx = ballots.findIndex((b) => b.coachId === ballot.coachId);
+    if (idx >= 0) {
+      ballots[idx] = ballot;
+    } else {
+      ballots.push(ballot);
+    }
+    this.saveCoachBallots(ballots);
+  }
+
+  getAdjustedBumps(): Record<string, number> {
+    return this.readJson(STORAGE_KEYS.ADJUSTED_BUMPS, DEFAULT_ADJUSTED_BUMPS);
+  }
+
+  saveAdjustedBumps(bumps: Record<string, number>) {
+    this.writeJson(STORAGE_KEYS.ADJUSTED_BUMPS, bumps);
+    this.notify();
+  }
+
+  applyBump(playerId: string, delta: 1 | -1): boolean {
+    const budget = this.getBumpBudget();
+    const bumps = { ...this.getAdjustedBumps() };
+    if (!canApplyBump(bumps, budget, playerId, delta)) {
+      return false;
+    }
+    const next = (bumps[playerId] ?? 0) + delta;
+    if (next === 0) {
+      delete bumps[playerId];
+    } else {
+      bumps[playerId] = next;
+    }
+    this.saveAdjustedBumps(bumps);
+    return true;
+  }
+
+  getBumpBudget(): AdjustedBumpConfig {
+    return this.readJson(STORAGE_KEYS.BUMP_BUDGET, DEFAULT_BUMP_BUDGET);
+  }
+
+  saveBumpBudget(budget: AdjustedBumpConfig) {
+    this.writeJson(STORAGE_KEYS.BUMP_BUDGET, {
+      plusBudget: Math.max(0, Math.floor(budget.plusBudget)),
+      minusBudget: Math.max(0, Math.floor(budget.minusBudget)),
+    });
+    this.notify();
+  }
+
   resetToSampleData() {
     this.saveTeam(DEFAULT_TEAM);
     this.savePlayers(INITIAL_PLAYERS);
@@ -398,6 +587,10 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveLabels(DEFAULT_LABELS);
     this.saveFormula(DEFAULT_FORMULA_CONFIG);
     this.saveCalculatedFields(DEFAULT_CALCULATED_FIELDS);
+    this.saveCoaches(DEFAULT_COACHES);
+    this.saveCoachBallots(DEFAULT_COACH_BALLOTS);
+    this.saveAdjustedBumps(DEFAULT_ADJUSTED_BUMPS);
+    this.saveBumpBudget(DEFAULT_BUMP_BUDGET);
   }
 
   getSnapshot(): TeamSnapshot {
@@ -410,12 +603,16 @@ export class LocalJsonAdapter implements StorageRepository {
       labels: this.getLabels(),
       formula: this.getFormula(),
       calculatedFields: this.getCalculatedFields(),
+      coaches: this.getCoaches(),
+      coachBallots: this.getCoachBallots(),
+      adjustedBumps: this.getAdjustedBumps(),
+      bumpBudget: this.getBumpBudget(),
     };
   }
 
   exportFullBackupJSON(): string {
     const backup = {
-      version: '2.3',
+      version: '2.5',
       exportedAt: new Date().toISOString(),
       ...this.getSnapshot(),
     };
@@ -436,6 +633,10 @@ export class LocalJsonAdapter implements StorageRepository {
         if (data.calculatedFields) {
           this.saveCalculatedFields(data.calculatedFields);
         }
+        if (data.coaches) this.saveCoaches(data.coaches);
+        if (data.coachBallots) this.saveCoachBallots(data.coachBallots);
+        if (data.adjustedBumps) this.saveAdjustedBumps(data.adjustedBumps);
+        if (data.bumpBudget) this.saveBumpBudget(data.bumpBudget);
         return true;
       }
       return false;

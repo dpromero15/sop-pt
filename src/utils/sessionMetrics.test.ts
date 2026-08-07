@@ -12,6 +12,7 @@ import {
   unmarkedPlayerIds,
   countAttendanceByStatus,
   normalizeSessionStatus,
+  normalizeSessionType,
   filterOpenSessions,
   newQuickSessionTitle,
   localDateString,
@@ -33,7 +34,14 @@ describe('sessionMetrics', () => {
       'm_assists',
       'm_tackles',
     ]);
-    expect(defaultMetricIdsForSessionType('practice')).toEqual([ATTENDANCE_METRIC_ID]);
+    expect(defaultMetricIdsForSessionType('session')).toEqual([ATTENDANCE_METRIC_ID]);
+  });
+
+  it('normalizes legacy practice and fitness_test to session', () => {
+    expect(normalizeSessionType('practice')).toBe('session');
+    expect(normalizeSessionType('fitness_test')).toBe('session');
+    expect(normalizeSessionType('session')).toBe('session');
+    expect(normalizeSessionType('match')).toBe('match');
   });
 
   it('migrates missing metricIds from entries and defaults status to open', () => {
@@ -41,7 +49,7 @@ describe('sessionMetrics', () => {
       id: 'sess_x',
       date: '2026-08-01',
       title: 'Test',
-      type: 'practice' as const,
+      type: 'session' as const,
     };
     const entries: MetricEntry[] = [
       {
@@ -80,7 +88,7 @@ describe('sessionMetrics', () => {
         id: 'a',
         date: '2026-08-06',
         title: 'Open',
-        type: 'practice',
+        type: 'session',
         status: 'open',
         metricIds: [ATTENDANCE_METRIC_ID],
       },
@@ -88,7 +96,7 @@ describe('sessionMetrics', () => {
         id: 'b',
         date: '2026-08-05',
         title: 'Done',
-        type: 'practice',
+        type: 'session',
         status: 'closed',
         metricIds: [ATTENDANCE_METRIC_ID],
       },

@@ -84,24 +84,48 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
       </div>
 
       {metric.type === 'count' && (
-        <div className="flex items-center justify-center gap-4 py-4">
-          <button
-            type="button"
-            onClick={() => setValue((v) => Math.max(0, v - 1))}
-            className="rounded-2xl border border-slate-600 bg-slate-800 p-4 text-slate-200"
-          >
-            <Minus className="h-6 w-6" />
-          </button>
-          <div className="min-w-[4rem] text-center text-5xl font-bold tabular-nums text-emerald-400">
-            {value}
+        <div className="space-y-3 py-2">
+          <div className="flex items-center justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                const next = Math.max(0, value - 1);
+                setValue(next);
+                setInputText(String(next));
+              }}
+              className="rounded-2xl border border-slate-600 bg-slate-800 p-4 text-slate-200"
+            >
+              <Minus className="h-6 w-6" />
+            </button>
+            <div className="min-w-[4rem] text-center text-5xl font-bold tabular-nums text-emerald-400">
+              {value}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = value + 1;
+                setValue(next);
+                setInputText(String(next));
+              }}
+              className="rounded-2xl border border-emerald-500/40 bg-emerald-500/15 p-4 text-emerald-300"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setValue((v) => v + 1)}
-            className="rounded-2xl border border-emerald-500/40 bg-emerald-500/15 p-4 text-emerald-300"
-          >
-            <Plus className="h-6 w-6" />
-          </button>
+          <input
+            type="number"
+            inputMode="numeric"
+            step="1"
+            min={0}
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              const n = parseFloat(e.target.value);
+              if (!Number.isNaN(n)) setValue(n);
+            }}
+            placeholder="Or type a number"
+            className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-3 text-center text-lg text-slate-100"
+          />
         </div>
       )}
 
