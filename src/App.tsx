@@ -35,6 +35,7 @@ export default function App() {
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
   const [isAddPlayerOpen, setIsAddPlayerOpen] = useState<boolean>(false);
   const [isAddSessionOpen, setIsAddSessionOpen] = useState<boolean>(false);
+  const [loggerSessionId, setLoggerSessionId] = useState<string | null>(null);
 
   // Sync state on storage updates
   const refreshData = () => {
@@ -110,6 +111,7 @@ export default function App() {
             players={players}
             sessions={sessions}
             metrics={metrics}
+            initialSessionId={loggerSessionId}
             onOpenCreateSession={() => {
               setCurrentTab('sessions');
               setIsAddSessionOpen(true);
@@ -138,7 +140,9 @@ export default function App() {
             onRefreshData={refreshData}
             isAddModalOpen={isAddSessionOpen}
             onCloseAddModal={() => setIsAddSessionOpen(false)}
+            onOpenAddModal={() => setIsAddSessionOpen(true)}
             onOpenQuickInsertForSession={(sId) => {
+              setLoggerSessionId(sId);
               handleSelectTab('quick-insert');
             }}
           />

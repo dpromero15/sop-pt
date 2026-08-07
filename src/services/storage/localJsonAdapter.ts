@@ -17,6 +17,12 @@ import {
   DEFAULT_TEAM,
 } from '../../data/initialData';
 import type { StorageRepository, TeamSnapshot } from './types';
+import {
+  ATTENDANCE_METRIC_ID,
+  defaultMetricIdsForSessionType,
+  ensureAttendanceFirst,
+  migrateSessionsMetricIds,
+} from '../../utils/sessionMetrics';
 
 export const STORAGE_KEYS = {
   TEAM: 'stm_team_v1',
@@ -132,18 +138,46 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getSessions(): Session[] {
-    return this.readJson(STORAGE_KEYS.SESSIONS, INITIAL_SESSIONS);
+    const raw = this.readJson<Array<Session | (Omit<Session, 'metricIds'> & { metricIds?: string[] })>>(
+      STORAGE_KEYS.SESSIONS,
+      INITIAL_SESSIONS,
+    );
+    const entries = this.readJson(STORAGE_KEYS.ENTRIES, INITIAL_ENTRIES);
+    const migrated = migrateSessionsMetricIds(raw, entries);
+    const needsWrite = raw.some(
+      (s, i) =>
+        !('metricIds' in s) ||
+        !s.metricIds ||
+        s.metricIds.length === 0 ||
+        JSON.stringify(s.metricIds) !== JSON.stringify(migrated[i].metricIds),
+    );
+    if (needsWrite) {
+      this.writeJson(STORAGE_KEYS.SESSIONS, migrated);
+    }
+    return migrated;
   }
 
   saveSessions(sessions: Session[]) {
-    this.writeJson(STORAGE_KEYS.SESSIONS, sessions);
+    this.writeJson(
+      STORAGE_KEYS.SESSIONS,
+      sessions.map((s) => ({
+        ...s,
+        metricIds: ensureAttendanceFirst(s.metricIds?.length ? s.metricIds : [ATTENDANCE_METRIC_ID]),
+      })),
+    );
     this.notify();
   }
 
   addSession(session: Omit<Session, 'id'>): Session {
     const sessions = this.getSessions();
+    const metricIds = ensureAttendanceFirst(
+      session.metricIds?.length
+        ? session.metricIds
+        : defaultMetricIdsForSessionType(session.type),
+    );
     const newSession: Session = {
       ...session,
+      metricIds,
       id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     };
     sessions.unshift(newSession);
@@ -327,7 +361,7 @@ export class LocalJsonAdapter implements StorageRepository {
 
   exportFullBackupJSON(): string {
     const backup = {
-      version: '2.0',
+      version: '2.1',
       exportedAt: new Date().toISOString(),
       ...this.getSnapshot(),
     };

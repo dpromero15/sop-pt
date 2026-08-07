@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { Session, SessionType, Player, MetricDefinition, MetricEntry } from '../types';
 import { StorageService } from '../services/storage';
+import { SessionMetricPlanner } from './logger/SessionMetricPlanner';
+import { defaultMetricIdsForSessionType } from '../utils/sessionMetrics';
 
 interface SessionsViewProps {
   sessions: Session[];
@@ -22,6 +24,7 @@ interface SessionsViewProps {
   onRefreshData: () => void;
   isAddModalOpen: boolean;
   onCloseAddModal: () => void;
+  onOpenAddModal: () => void;
   onOpenQuickInsertForSession: (sessionId: string) => void;
 }
 
@@ -32,6 +35,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   onRefreshData,
   isAddModalOpen,
   onCloseAddModal,
+  onOpenAddModal,
   onOpenQuickInsertForSession
 }) => {
   const [selectedSession, setSelectedSession] = useState<Session | null>(sessions[0] || null);
@@ -45,6 +49,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   const [formLocation, setFormLocation] = useState('Central Turf Field');
   const [formOpponent, setFormOpponent] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formMetricIds, setFormMetricIds] = useState<string[]>(() =>
+    defaultMetricIdsForSessionType('practice'),
+  );
 
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,7 +64,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       type: formType,
       location: formLocation,
       opponent: formType === 'match' ? formOpponent : undefined,
-      notes: formNotes
+      notes: formNotes,
+      metricIds: formMetricIds,
     });
 
     onCloseAddModal();
@@ -67,6 +75,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     // Reset Form
     setFormTitle('');
     setFormNotes('');
+    setFormMetricIds(defaultMetricIdsForSessionType('practice'));
   };
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
@@ -110,8 +119,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
           <button
             onClick={() => {
-              setFormTitle('Thursday Tactical & Fitness Practice');
-              onCloseAddModal(); // toggles open if managed externally
+              setFormTitle('');
+              setFormMetricIds(defaultMetricIdsForSessionType(formType));
+              onOpenAddModal();
             }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-extrabold text-xs sm:text-sm transition-all active:scale-95 shrink-0 shadow-lg shadow-purple-500/20"
           >
@@ -217,6 +227,18 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                       {selectedSession.location || 'Home Field'}
                     </span>
                   </div>
+                  <div className="mt-3">
+                    <SessionMetricPlanner
+                      metrics={metrics}
+                      metricIds={selectedSession.metricIds}
+                      sessionType={selectedSession.type}
+                      onChange={(metricIds) => {
+                        StorageService.updateSession({ ...selectedSession, metricIds });
+                        onRefreshData();
+                        setSelectedSession({ ...selectedSession, metricIds });
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <button
@@ -319,7 +341,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   <label className="block text-slate-400 font-semibold mb-1">Session Type</label>
                   <select
                     value={formType}
-                    onChange={(e) => setFormType(e.target.value as SessionType)}
+                    onChange={(e) => {
+                      const next = e.target.value as SessionType;
+                      setFormType(next);
+                      setFormMetricIds(defaultMetricIdsForSessionType(next));
+                    }}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-purple-500"
                   >
                     <option value="practice">Practice Session</option>
@@ -375,6 +401,13 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   />
                 </div>
               )}
+
+              <SessionMetricPlanner
+                metrics={metrics}
+                metricIds={formMetricIds}
+                sessionType={formType}
+                onChange={setFormMetricIds}
+              />
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button
