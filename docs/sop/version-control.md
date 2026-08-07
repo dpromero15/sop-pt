@@ -19,6 +19,7 @@ Rules:
 - Bump the root SPA version for user-facing app changes.
 - Bump `services/api/package.json` only when the API contract or service behavior changes.
 - Keep `README.md` **Version:** in sync with the root `package.json`.
+- Keep root [`VERSION.md`](../../VERSION.md) in sync with both on **every** bump (authoritative quick reference for agents).
 - If proposed work needs a **different** semver than the open release line and Ready-to-ship (or unreleased) work exists, **ship the current PR first** — do not mix next-version features onto the current branch (see working-files / github-prs skills).
 
 ## Branches
@@ -43,6 +44,14 @@ Conventions:
 - Use `epic` for grouping epics; stories/bugs get `enhancement`, `bug`, or `documentation`.
 - Plan MINOR/MAJOR work with OKRs under `docs/okrs/` before opening the backlog.
 
+## Version tracking file
+
+Root [`VERSION.md`](../../VERSION.md) is the quick “what version are we on / shipping” reference.
+
+- Must match root `package.json` `version` and `README.md` **Version:** at all times.
+- Include current release branch name and last shipped version (short metadata only — not a changelog).
+- Update it on every semver bump alongside package.json and README.
+
 ## Cross-session working ledger
 
 Root [`WORKING.md`](../../WORKING.md) is the handoff file across agent chats for the active release:
@@ -61,17 +70,19 @@ Follow [`.cursor/skills/github-prs/SKILL.md`](../../.cursor/skills/github-prs/SK
 - Read `WORKING.md` Ready to ship before `gh pr create`.
 - Close completed issues **only** via PR merge keywords (`Closes #N`).
 - Never `gh issue close` for work finished in a PR.
-- Run QA (`npm run lint`, `npm test`, smoke) and get **explicit human approval** before opening the PR.
+- **Hard gate:** run QA (`npm run lint`, `npm test`, smoke), sync `VERSION.md` / package.json / README, then get **explicit human approval** before opening the PR. Implementation done ≠ open PR.
 - Release PRs include Summary, Test plan, and **Closes** for every finished issue.
 
 ### Release PR checklist
 
 1. Version bumped in root `package.json` (and API package if needed).
 2. `README.md` version line updated.
-3. Docs/OKRs updated when the cycle introduced planned work.
-4. `npm run lint` and `npm test` pass.
-5. PR title like `Release vX.Y.Z — short reason`.
-6. PR body has **Closes** for every finished issue (bugs included).
+3. `VERSION.md` updated to match.
+4. Docs/OKRs updated when the cycle introduced planned work.
+5. `npm run lint` and `npm test` pass.
+6. PR title like `Release vX.Y.Z — short reason`.
+7. PR body has **Closes** for every finished issue (bugs included).
+8. Human explicitly approved opening the PR.
 
 ## Commit messages
 

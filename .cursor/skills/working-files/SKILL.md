@@ -32,9 +32,9 @@ One release line at a time. Before implementing anything new, classify the work 
 
 1. Tell the user the work needs a version bump / new release line (cite current vs proposed version).
 2. If **Ready to ship** is non-empty (or the branch has unreleased release work), **recommend closing out**: QA → human-approved PR for the current line (see [github-prs](../github-prs/SKILL.md)) **before** continuing.
-3. Only after that PR is approved/merged (or the human explicitly parks/discards current work) may you retarget `WORKING.md`, bump version/branch/label, and start the new work.
+3. Only after that PR is approved/merged (or the human explicitly parks/discards current work) may you retarget `WORKING.md` / `VERSION.md`, bump version/branch/label, and start the new work.
 
-Do not mix two semver targets on one release branch. Do not silently bump `package.json` mid-cycle to absorb unrelated next-version features.
+Do not mix two semver targets on one release branch. Do not silently bump `package.json` mid-cycle to absorb unrelated next-version features. When the release line changes, update **`VERSION.md` + `package.json` + README Version:** together.
 
 ## When to update (required)
 
@@ -81,8 +81,8 @@ Closes #M
 
 ## Starting a session
 
-1. Read `WORKING.md`.
-2. Confirm branch matches the ledger (`git branch --show-current` vs **Branch** field) and `package.json` version.
+1. Read `WORKING.md` and `VERSION.md`.
+2. Confirm branch matches the ledger (`git branch --show-current` vs **Branch** field) and that `VERSION.md` / `package.json` / README agree.
 3. If the user names an issue, `gh issue view <N>` and check its version label vs **Release**.
 4. Run the **Version boundary** check. If the work needs a bump and Ready-to-ship (or open release work) exists → recommend ship PR first; do not implement yet.
 5. Prefer picking up **In progress** or implementing **Still open** on the *same* version over redoing Ready-to-ship items.

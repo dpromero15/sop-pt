@@ -1,11 +1,12 @@
 ---
-description: Semver, release branches, labels, and PR closing conventions
+description: Semver, VERSION.md, release branches, labels, and PR closing conventions
 alwaysApply: true
 ---
 
 # Version control
 
 Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md).
+Version file: [VERSION.md](VERSION.md).
 Working ledger: [WORKING.md](WORKING.md) · [working-files skill](.cursor/skills/working-files/SKILL.md).
 PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
 
@@ -14,7 +15,7 @@ PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
 - **MAJOR** — breaking contracts / rewrite
 - **MINOR** — backward-compatible features (`release/vX.Y.0`)
 - **PATCH** — bugs/docs/polish (`release/vX.Y.Z`)
-- Keep root `package.json` and README **Version:** in sync
+- Keep **all three** in sync on every bump: `VERSION.md`, root `package.json`, README **Version:**
 - Bump `services/api` version only when API behavior/contract changes
 - One release line at a time — if new work needs the **next** version and Ready-to-ship exists, recommend PR first (working-files / github-prs skills)
 
@@ -34,4 +35,4 @@ PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
 
 - Close finished issues **only** with PR body `Closes #N` (never `gh issue close` for PR work)
 - Release PRs: Summary, Test plan, and a complete **Closes** section
-- Do not open the PR until QA + explicit human approval
+- Do **not** open a PR until QA + `VERSION.md` sync + **explicit human approval** (implementation done ≠ open PR)
