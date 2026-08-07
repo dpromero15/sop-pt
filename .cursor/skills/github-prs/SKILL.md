@@ -2,9 +2,12 @@
 name: github-prs
 description: >-
   GitHub pull request conventions for this repo, including linking and
-  auto-closing issues. Use when creating a PR with gh pr create, shipping a
-  release, or finishing a backlog of GitHub issues. Never use gh issue close
-  for completed work — close issues by PR strictly.
+  auto-closing issues, batching Ready-to-ship work from WORKING.md, version
+  boundaries (ship before bumping), QA, and human approval before create. Use
+  when creating a PR with gh pr create, shipping a release, finishing a backlog
+  of GitHub issues, or when new work needs a different semver than the open
+  release line. Never use gh issue close for completed work — close issues by
+  PR strictly.
 ---
 
 # GitHub PRs and issue closing
@@ -17,6 +20,39 @@ Completed issues must be closed **by the pull request**, not separately.
 - **Always** put GitHub closing keywords in the PR body so **merge** closes the issues.
 - If the Closes section is missing, fix it on the **open** PR with `gh pr edit` before merge. Do not batch-close with the CLI after the fact.
 
+## Batch shipping from WORKING.md
+
+Cross-session context lives in repo-root [`WORKING.md`](../../../WORKING.md). Full maintenance rules: [working-files skill](../working-files/SKILL.md).
+
+When opening a release / feature PR:
+
+1. **Read `WORKING.md` first** (Ready to ship + Suggested PR Closes).
+2. Treat every **Ready to ship** issue as in-scope for this PR unless the human explicitly drops some.
+3. You may also `gh issue list` / check labels, but **do not omit** a Ready-to-ship issue without asking.
+4. After merge (or when asked to clean up), update `WORKING.md`: remove shipped rows, refresh Suggested PR Closes / header.
+
+This is how multiple enhancements from different chats ship in one PR without lost context.
+
+## Version boundary → recommend PR first
+
+If the user wants to start work that **does not fit** the active release version (see working-files **Version boundary**):
+
+1. **Stop** — do not implement the new-version work on the current release branch.
+2. **Recommend** shipping the current line first when Ready to ship (or unreleased work) exists: run this skill’s pre-PR gate, then open the release PR after human approval.
+3. After merge (or explicit human decision to park current work), retarget version / branch / `WORKING.md`, then start the new work on the new line.
+
+Same-version features batch into one PR via Ready to ship. Next MINOR/MAJOR (or a MINOR while a PATCH line is open) waits until the current PR ships.
+
+## Pre-PR gate (required)
+
+Do **not** run `gh pr create` (or push solely to open a PR) until:
+
+1. **QA** — run `npm run lint` and `npm test`; smoke the acceptance criteria for Ready-to-ship items; note results briefly for the human.
+2. **WORKING.md sync** — Ready to ship + Suggested PR Closes match what you will close.
+3. **Version sync** — root `package.json` + README **Version:** match the release being shipped (`WORKING.md` **Release** / branch `release/vX.Y.Z`).
+4. **Human approval** — stop and ask the human to approve opening the PR. Do not create the PR on “work looks done” alone.
+5. Only after **explicit** approval: push if needed, then `gh pr create` with Summary / Test plan / **Closes**.
+
 ## Required: close linked issues from the PR
 
 When a PR completes one or more GitHub issues, the PR body **must** include closing keywords.
@@ -25,10 +61,11 @@ Use one of: `Closes`, `Fixes`, or `Resolves` (case-insensitive).
 
 ### Checklist before `gh pr create`
 
-1. List issues this PR finishes (`gh issue list`, labels, or conversation context).
-2. Add a **Closes** section to the PR body with every finished issue number.
-3. Do not create the PR until the Closes section is complete.
-4. Do not close those issues yourself after opening or merging the PR.
+1. Read `WORKING.md` Ready to ship (primary list).
+2. Confirm with human if anything should be excluded; add any extra issues they want included.
+3. Add a **Closes** section with every finished issue number.
+4. Do not create the PR until the Closes section is complete.
+5. Do not close those issues yourself after opening or merging the PR.
 
 ### PR body template
 
@@ -45,12 +82,7 @@ Closes #13
 Closes #14
 ```
 
-For many issues, list them explicitly (preferred) or group:
-
-```markdown
-## Closes
-Closes #2, closes #3, closes #4
-```
+Prefer one `Closes #N` per line (matches WORKING.md Suggested PR Closes).
 
 Epics and child stories that are fully done in the same PR should all be listed.
 
@@ -67,9 +99,18 @@ EOF
 
 Verify with `gh pr view <pr-number> --json body -q .body` that every finished issue appears under **Closes**.
 
+## After merge
+
+1. Update `WORKING.md`: clear shipped **Ready to ship** entries; fix **Still open** / header if needed.
+2. Never batch-close issues with `gh issue close`.
+3. Only then start work that required the next version bump.
+
 ## Do not
 
 - Run `gh issue close` for work finished by a PR
 - Ship a release/feature PR that implements backlog issues without a **Closes** section
+- Open a PR without reading `WORKING.md` when Ready-to-ship entries exist
+- Open a PR without QA + explicit human approval
+- Start next-version feature work on the current release branch while Ready-to-ship work is still unshipped — recommend PR first
 - Assume labels alone will close issues
-- Close issues that are only partially done — leave those open or note follow-ups in the PR
+- Close issues that are only partially done — leave those open or note follow-ups in the PR / WORKING.md **In progress**

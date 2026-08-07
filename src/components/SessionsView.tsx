@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Calendar, 
   Plus, 
@@ -53,6 +53,14 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
     defaultMetricIdsForSessionType('practice'),
   );
 
+  useEffect(() => {
+    if (!selectedSession) return;
+    const fresh = sessions.find((s) => s.id === selectedSession.id);
+    if (fresh && fresh !== selectedSession) {
+      setSelectedSession(fresh);
+    }
+  }, [sessions, selectedSession]);
+
   const handleCreateSession = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) return;
@@ -62,6 +70,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       date: formDate,
       time: formTime,
       type: formType,
+      status: 'open',
       location: formLocation,
       opponent: formType === 'match' ? formOpponent : undefined,
       notes: formNotes,
@@ -173,15 +182,24 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                      session.type === 'match'
-                        ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                        : session.type === 'fitness_test'
-                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                        : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                    }`}>
-                      {session.type.replace('_', ' ')}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                        session.type === 'match'
+                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
+                          : session.type === 'fitness_test'
+                          ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                          : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
+                      }`}>
+                        {session.type.replace('_', ' ')}
+                      </span>
+                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                        session.status === 'open'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-slate-500/15 text-slate-400 border-slate-600/40'
+                      }`}>
+                        {session.status}
+                      </span>
+                    </div>
                     <h3 className="font-bold text-white text-sm mt-1.5 line-clamp-1">
                       {session.title}
                     </h3>
@@ -218,6 +236,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   </span>
                   <h3 className="text-xl font-extrabold text-white">{selectedSession.title}</h3>
                   <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                    <span className={`font-bold uppercase tracking-wider ${
+                      selectedSession.status === 'open' ? 'text-emerald-400' : 'text-slate-500'
+                    }`}>
+                      {selectedSession.status}
+                    </span>
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-slate-400" />
                       {selectedSession.date} {selectedSession.time}
@@ -246,7 +269,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Insert Data For Session</span>
+                  <span>
+                    {selectedSession.status === 'closed'
+                      ? 'Reopen & Insert Data'
+                      : 'Insert Data For Session'}
+                  </span>
                 </button>
               </div>
 

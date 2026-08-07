@@ -69,6 +69,7 @@ describe('LocalJsonAdapter', () => {
     });
     expect(session.metricIds[0]).toBe('m_attendance');
     expect(session.metricIds).toEqual(['m_attendance']);
+    expect(session.status).toBe('open');
   });
 
   it('seeds match default game pack when metricIds omitted', () => {
@@ -87,7 +88,7 @@ describe('LocalJsonAdapter', () => {
     ]);
   });
 
-  it('migrates legacy sessions missing metricIds', () => {
+  it('migrates legacy sessions missing metricIds and status', () => {
     store.setItem(
       STORAGE_KEYS.SESSIONS,
       JSON.stringify([
@@ -115,6 +116,18 @@ describe('LocalJsonAdapter', () => {
     const sessions = adapter.getSessions();
     expect(sessions[0].metricIds[0]).toBe('m_attendance');
     expect(sessions[0].metricIds).toContain('m_juggling');
+    expect(sessions[0].status).toBe('open');
+  });
+
+  it('persists closed session status', () => {
+    const session = adapter.addSession({
+      title: 'To Close',
+      date: '2026-08-12',
+      type: 'practice',
+      metricIds: [],
+    });
+    adapter.updateSession({ ...session, status: 'closed' });
+    expect(adapter.getSessions().find((s) => s.id === session.id)?.status).toBe('closed');
   });
 
   it('export/import includes team', () => {

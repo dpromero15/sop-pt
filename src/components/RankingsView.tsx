@@ -1,27 +1,27 @@
-import React, { useState } from 'react';
-import { 
-  Trophy, 
-  Sliders, 
-  Search, 
-  Filter, 
-  TrendingUp, 
-  TrendingDown, 
-  ChevronRight, 
-  Sparkles, 
-  Download, 
-  CheckCircle2, 
-  Zap, 
-  Award,
-  ArrowUpDown
+import React, { useMemo, useState } from 'react';
+import {
+  Trophy,
+  Sliders,
+  Search,
+  ChevronRight,
+  Download,
 } from 'lucide-react';
-import { 
-  Player, 
-  MetricDefinition, 
-  LabelDefinition, 
-  ScoringFormulaConfig, 
-  PlayerRanking 
+import {
+  Player,
+  MetricDefinition,
+  LabelDefinition,
+  ScoringFormulaConfig,
+  PlayerRanking,
 } from '../types';
 import { formatMetricValue } from '../utils/scoring';
+import {
+  categoryScoreTagLabel,
+  compareRankings,
+  metricsForCategory,
+  RankingsMetricSelection,
+  RankingsSortMode,
+  selectionAfterCategoryChange,
+} from '../utils/rankingsFilter';
 
 interface RankingsViewProps {
   rankings: PlayerRanking[];
@@ -40,44 +40,69 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   formula,
   onOpenFormulaConfig,
   onSelectPlayer,
-  onOpenQuickInsert
 }) => {
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
-  const [selectedMetricId, setSelectedMetricId] = useState<string | 'none'>('none');
+  const [selectedMetricId, setSelectedMetricId] =
+    useState<RankingsMetricSelection>('none');
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'total' | 'label' | 'metric'>('total');
+  const [sortBy, setSortBy] = useState<RankingsSortMode>('total');
 
-  // Filtered & Sorted Rankings
-  const filteredRankings = rankings.filter(r => {
-    const matchesSearch = r.player.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.player.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.player.jerseyNumber.toString() === searchQuery;
-    return matchesSearch;
+  const scopedMetrics = useMemo(
+    () => metricsForCategory(metrics, selectedLabelId),
+    [metrics, selectedLabelId],
+  );
+
+  const activeLabel = labels.find((l) => l.id === selectedLabelId);
+  const activeMetric = metrics.find((m) => m.id === selectedMetricId);
+
+  const filteredRankings = rankings.filter((r) => {
+    const q = searchQuery.toLowerCase();
+    return (
+      r.player.name.toLowerCase().includes(q) ||
+      r.player.position.toLowerCase().includes(q) ||
+      r.player.jerseyNumber.toString() === searchQuery
+    );
   });
 
-  // Sort by specific label score or metric if requested
-  const sortedRankings = [...filteredRankings].sort((a, b) => {
-    if (sortBy === 'label' && selectedLabelId !== 'all') {
-      const scoreA = a.labelScores[selectedLabelId]?.score ?? 0;
-      const scoreB = b.labelScores[selectedLabelId]?.score ?? 0;
-      return scoreB - scoreA;
-    }
-    if (sortBy === 'metric' && selectedMetricId !== 'none') {
-      const metric = metrics.find(m => m.id === selectedMetricId);
-      const valA = a.labelScores[metric?.labelId ?? '']?.metrics.find(m => m.metricId === selectedMetricId)?.latestValue ?? -999;
-      const valB = b.labelScores[metric?.labelId ?? '']?.metrics.find(m => m.metricId === selectedMetricId)?.latestValue ?? -999;
-      if (metric && !metric.higherIsBetter) {
-        return valA - valB; // Lower is better
-      }
-      return valB - valA;
-    }
-    return b.totalScore - a.totalScore;
-  });
+  const sortedRankings = [...filteredRankings].sort((a, b) =>
+    compareRankings(
+      a,
+      b,
+      sortBy,
+      selectedLabelId,
+      selectedMetricId,
+      metrics,
+    ),
+  );
 
-  const activeLabel = labels.find(l => l.id === selectedLabelId);
-  const activeMetric = metrics.find(m => m.id === selectedMetricId);
+  const selectCategory = (labelId: string | 'all') => {
+    const next = selectionAfterCategoryChange(
+      labelId,
+      selectedMetricId,
+      metrics,
+    );
+    setSelectedLabelId(labelId);
+    setSelectedMetricId(next.selectedMetricId);
+    setSortBy(next.sortBy);
+  };
 
-  // CSV Export
+  const selectOverallOrCategoryScore = () => {
+    setSelectedMetricId('none');
+    setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
+  };
+
+  const selectMetricTag = (metricId: string) => {
+    setSelectedMetricId(metricId);
+    setSortBy('metric');
+  };
+
+  const primaryScoreLabel =
+    sortBy === 'metric' && activeMetric
+      ? activeMetric.name
+      : sortBy === 'label' && activeLabel
+        ? categoryScoreTagLabel(activeLabel)
+        : 'Total Score';
+
   const handleExportCSV = () => {
     let csv = 'Rank,Player Name,Jersey,Position,Total Score,Attendance Rate\n';
     sortedRankings.forEach((r, idx) => {
@@ -90,6 +115,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     a.download = `Thunder_FC_Leaderboard_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
   };
+
+  const isOverallMode =
+    selectedLabelId === 'all' && selectedMetricId === 'none';
 
   return (
     <div className="space-y-6 pb-24">
@@ -128,102 +156,123 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         </div>
 
-        {/* Active Formula Weights Pills */}
         <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Active Weights:</span>
-          {formula.weights.filter(w => w.enabled && w.weightPercent > 0).map(w => {
-            const labelDef = labels.find(l => l.id === w.labelId);
-            if (!labelDef) return null;
-            return (
-              <span 
-                key={w.labelId}
-                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-medium ${labelDef.badgeBg}`}
-              >
-                <span>{labelDef.name}</span>
-                <span className="font-bold">{w.weightPercent}%</span>
-              </span>
-            );
-          })}
+          {formula.weights
+            .filter((w) => w.enabled && w.weightPercent > 0)
+            .map((w) => {
+              const labelDef = labels.find((l) => l.id === w.labelId);
+              if (!labelDef) return null;
+              return (
+                <span
+                  key={w.labelId}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-medium ${labelDef.badgeBg}`}
+                >
+                  <span>{labelDef.name}</span>
+                  <span className="font-bold">{w.weightPercent}%</span>
+                </span>
+              );
+            })}
         </div>
       </div>
 
-      {/* Filter Toolbar & Metric Switches */}
+      {/* Filter Toolbar */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-4 backdrop-blur-sm">
-        {/* Search & Main Filter */}
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <div className="relative flex-1 w-full">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search player name, position, jersey #..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          {/* Metric Selector Dropdown */}
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <select
-              value={selectedMetricId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedMetricId(val);
-                if (val !== 'none') {
-                  setSortBy('metric');
-                } else {
-                  setSortBy('total');
-                }
-              }}
-              className="w-full sm:w-auto bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 font-medium"
-            >
-              <option value="none">Overall Total Score Ranking</option>
-              {metrics.map(m => (
-                <option key={m.id} value={m.id}>
-                  Specific Metric: {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="relative w-full">
+          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search player name, position, jersey #..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+          />
         </div>
 
         {/* Category Label Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-          <button
-            onClick={() => {
-              setSelectedLabelId('all');
-              setSelectedMetricId('none');
-              setSortBy('total');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-              selectedLabelId === 'all' && selectedMetricId === 'none'
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
-                : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
-            }`}
-          >
-            All Categories
-          </button>
+        <div>
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+            Category
+          </p>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              onClick={() => selectCategory('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedLabelId === 'all'
+                  ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+                  : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              All Categories
+            </button>
 
-          {labels.map(lbl => {
-            const isSelected = selectedLabelId === lbl.id;
-            return (
-              <button
-                key={lbl.id}
-                onClick={() => {
-                  setSelectedLabelId(lbl.id);
-                  setSelectedMetricId('none');
-                  setSortBy('label');
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
-                  isSelected
-                    ? 'bg-slate-200 text-slate-900 font-bold shadow-sm'
-                    : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                {lbl.name}
-              </button>
-            );
-          })}
+            {labels.map((lbl) => {
+              const isSelected = selectedLabelId === lbl.id;
+              return (
+                <button
+                  type="button"
+                  key={lbl.id}
+                  onClick={() => selectCategory(lbl.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                    isSelected
+                      ? 'bg-slate-200 text-slate-900 font-bold shadow-sm'
+                      : 'bg-slate-800/80 text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {lbl.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Metric tags scoped by category */}
+        <div>
+          <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
+            Rank by
+          </p>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+            <button
+              type="button"
+              onClick={selectOverallOrCategoryScore}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                selectedMetricId === 'none'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+              }`}
+            >
+              {selectedLabelId === 'all'
+                ? 'Overall Total'
+                : activeLabel
+                  ? categoryScoreTagLabel(activeLabel)
+                  : 'Category score'}
+            </button>
+
+            {scopedMetrics.map((m) => {
+              const isSelected = selectedMetricId === m.id;
+              return (
+                <button
+                  type="button"
+                  key={m.id}
+                  onClick={() => selectMetricTag(m.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border ${
+                    isSelected
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
+                  }`}
+                >
+                  {m.name}
+                </button>
+              );
+            })}
+
+            {scopedMetrics.length === 0 && selectedLabelId !== 'all' && (
+              <span className="text-xs text-slate-500 px-1">
+                No metrics in this category yet
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -239,36 +288,64 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         ) : (
           sortedRankings.map((item, idx) => {
-            const isTop1 = idx === 0 && selectedLabelId === 'all' && selectedMetricId === 'none';
-            const isTop2 = idx === 1 && selectedLabelId === 'all' && selectedMetricId === 'none';
-            const isTop3 = idx === 2 && selectedLabelId === 'all' && selectedMetricId === 'none';
+            const isTop1 = idx === 0 && isOverallMode;
+            const isTop2 = idx === 1 && isOverallMode;
+            const isTop3 = idx === 2 && isOverallMode;
 
             let rankBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
-            if (isTop1) rankBadgeStyle = 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold';
-            if (isTop2) rankBadgeStyle = 'bg-slate-300/20 text-slate-200 border-slate-300/40 font-bold';
-            if (isTop3) rankBadgeStyle = 'bg-amber-700/20 text-amber-400 border-amber-700/40 font-bold';
+            if (isTop1)
+              rankBadgeStyle =
+                'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold';
+            if (isTop2)
+              rankBadgeStyle =
+                'bg-slate-300/20 text-slate-200 border-slate-300/40 font-bold';
+            if (isTop3)
+              rankBadgeStyle =
+                'bg-amber-700/20 text-amber-400 border-amber-700/40 font-bold';
 
-            // Active Metric value display if filtered by specific metric
             let specificMetricValue: string | null = null;
             if (activeMetric) {
               const labelScore = item.labelScores[activeMetric.labelId];
-              const metricDetail = labelScore?.metrics.find(m => m.metricId === activeMetric.id);
+              const metricDetail = labelScore?.metrics.find(
+                (m) => m.metricId === activeMetric.id,
+              );
               if (metricDetail) {
-                specificMetricValue = formatMetricValue(metricDetail.latestValue, activeMetric);
+                specificMetricValue = formatMetricValue(
+                  metricDetail.latestValue,
+                  activeMetric,
+                );
               }
             }
+
+            const categoryScore =
+              selectedLabelId !== 'all'
+                ? (item.labelScores[selectedLabelId]?.score ?? null)
+                : null;
+
+            const primaryDisplay =
+              sortBy === 'metric' && specificMetricValue
+                ? specificMetricValue
+                : sortBy === 'label' && categoryScore !== null
+                  ? String(categoryScore)
+                  : String(item.totalScore);
+
+            const primaryIsNumericScore =
+              sortBy !== 'metric' || !specificMetricValue;
 
             return (
               <div
                 key={item.player.id}
                 onClick={() => onSelectPlayer(item.player)}
                 className={`group bg-slate-900/90 hover:bg-slate-800/90 border transition-all duration-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99] shadow-md ${
-                  isTop1 ? 'border-amber-500/30 bg-gradient-to-r from-amber-950/20 to-slate-900' : 'border-slate-800 hover:border-slate-700'
+                  isTop1
+                    ? 'border-amber-500/30 bg-gradient-to-r from-amber-950/20 to-slate-900'
+                    : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
-                {/* Left Side: Rank, Avatar, Name, Position */}
                 <div className="flex items-center gap-4">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm border shrink-0 ${rankBadgeStyle}`}>
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm border shrink-0 ${rankBadgeStyle}`}
+                  >
                     {isTop1 ? (
                       <Trophy className="w-5 h-5 text-amber-400" />
                     ) : (
@@ -278,7 +355,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
                   <div className="relative">
                     <img
-                      src={item.player.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128'}
+                      src={
+                        item.player.avatarUrl ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128'
+                      }
                       alt={item.player.name}
                       className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-800 group-hover:ring-emerald-500/50 transition-all"
                     />
@@ -298,7 +378,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                      <span>Att: <strong className="text-emerald-400 font-semibold">{item.attendanceRate}%</strong></span>
+                      <span>
+                        Att:{' '}
+                        <strong className="text-emerald-400 font-semibold">
+                          {item.attendanceRate}%
+                        </strong>
+                      </span>
                       <span>Foot: {item.player.preferredFoot}</span>
                       {item.player.status === 'injured' && (
                         <span className="px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-400 text-[10px] font-semibold">
@@ -309,26 +394,46 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   </div>
                 </div>
 
-                {/* Middle: Label Score Badges or Specific Metric Display */}
                 <div className="flex-1 max-w-xl">
-                  {activeMetric && specificMetricValue ? (
+                  {sortBy === 'metric' && activeMetric ? (
                     <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
-                      <span className="text-xs text-slate-400 font-medium">{activeMetric.name}:</span>
-                      <span className="text-base font-extrabold text-emerald-400">{specificMetricValue}</span>
+                      <span className="text-xs text-slate-400 font-medium">
+                        {activeMetric.name}:
+                      </span>
+                      <span className="text-base font-extrabold text-emerald-400">
+                        {specificMetricValue ?? '—'}
+                      </span>
+                    </div>
+                  ) : sortBy === 'label' && activeLabel ? (
+                    <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between">
+                      <span className="text-xs text-slate-400 font-medium">
+                        {categoryScoreTagLabel(activeLabel)}:
+                      </span>
+                      <span className="text-base font-extrabold text-emerald-400">
+                        {categoryScore ?? '—'}
+                      </span>
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      {labels.map(lbl => {
+                      {labels.map((lbl) => {
                         const lScore = item.labelScores[lbl.id]?.score ?? 70;
                         return (
-                          <div 
+                          <div
                             key={lbl.id}
                             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/60 border border-slate-800 text-xs"
                           >
-                            <span className="text-slate-400 text-[11px]">{lbl.name}:</span>
-                            <span className={`font-extrabold ${
-                              lScore >= 85 ? 'text-emerald-400' : lScore >= 70 ? 'text-blue-400' : 'text-amber-400'
-                            }`}>
+                            <span className="text-slate-400 text-[11px]">
+                              {lbl.name}:
+                            </span>
+                            <span
+                              className={`font-extrabold ${
+                                lScore >= 85
+                                  ? 'text-emerald-400'
+                                  : lScore >= 70
+                                    ? 'text-blue-400'
+                                    : 'text-amber-400'
+                              }`}
+                            >
                               {lScore}
                             </span>
                           </div>
@@ -338,19 +443,30 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   )}
                 </div>
 
-                {/* Right Side: Total Score Ring & Action */}
                 <div className="flex items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800">
                   <div className="text-left md:text-right">
                     <div className="text-[10px] uppercase tracking-wider font-bold text-slate-400">
-                      Total Score
+                      {primaryScoreLabel}
                     </div>
                     <div className="flex items-baseline gap-1">
-                      <span className={`text-2xl font-black tracking-tight ${
-                        item.totalScore >= 88 ? 'text-emerald-400' : item.totalScore >= 75 ? 'text-blue-400' : 'text-amber-400'
-                      }`}>
-                        {item.totalScore}
+                      <span
+                        className={`text-2xl font-black tracking-tight ${
+                          !primaryIsNumericScore
+                            ? 'text-emerald-400'
+                            : Number(primaryDisplay) >= 88
+                              ? 'text-emerald-400'
+                              : Number(primaryDisplay) >= 75
+                                ? 'text-blue-400'
+                                : 'text-amber-400'
+                        }`}
+                      >
+                        {primaryDisplay}
                       </span>
-                      <span className="text-xs text-slate-500 font-bold">/100</span>
+                      {sortBy !== 'metric' && (
+                        <span className="text-xs text-slate-500 font-bold">
+                          /100
+                        </span>
+                      )}
                     </div>
                   </div>
 

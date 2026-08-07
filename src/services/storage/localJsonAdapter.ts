@@ -1,6 +1,7 @@
 import type {
   Player,
   Session,
+  SessionStatus,
   MetricEntry,
   MetricDefinition,
   LabelDefinition,
@@ -22,6 +23,8 @@ import {
   defaultMetricIdsForSessionType,
   ensureAttendanceFirst,
   migrateSessionsMetricIds,
+  normalizeSessionStatus,
+  type LegacySession,
 } from '../../utils/sessionMetrics';
 
 export const STORAGE_KEYS = {
@@ -138,19 +141,20 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getSessions(): Session[] {
-    const raw = this.readJson<Array<Session | (Omit<Session, 'metricIds'> & { metricIds?: string[] })>>(
-      STORAGE_KEYS.SESSIONS,
-      INITIAL_SESSIONS,
-    );
+    const raw = this.readJson<LegacySession[]>(STORAGE_KEYS.SESSIONS, INITIAL_SESSIONS);
     const entries = this.readJson(STORAGE_KEYS.ENTRIES, INITIAL_ENTRIES);
     const migrated = migrateSessionsMetricIds(raw, entries);
-    const needsWrite = raw.some(
-      (s, i) =>
+    const needsWrite = raw.some((s, i) => {
+      const next = migrated[i];
+      return (
         !('metricIds' in s) ||
         !s.metricIds ||
         s.metricIds.length === 0 ||
-        JSON.stringify(s.metricIds) !== JSON.stringify(migrated[i].metricIds),
-    );
+        !('status' in s) ||
+        normalizeSessionStatus(s.status) !== next.status ||
+        JSON.stringify(s.metricIds) !== JSON.stringify(next.metricIds)
+      );
+    });
     if (needsWrite) {
       this.writeJson(STORAGE_KEYS.SESSIONS, migrated);
     }
@@ -162,13 +166,14 @@ export class LocalJsonAdapter implements StorageRepository {
       STORAGE_KEYS.SESSIONS,
       sessions.map((s) => ({
         ...s,
+        status: normalizeSessionStatus(s.status),
         metricIds: ensureAttendanceFirst(s.metricIds?.length ? s.metricIds : [ATTENDANCE_METRIC_ID]),
       })),
     );
     this.notify();
   }
 
-  addSession(session: Omit<Session, 'id'>): Session {
+  addSession(session: Omit<Session, 'id' | 'status'> & { status?: SessionStatus }): Session {
     const sessions = this.getSessions();
     const metricIds = ensureAttendanceFirst(
       session.metricIds?.length
@@ -177,6 +182,7 @@ export class LocalJsonAdapter implements StorageRepository {
     );
     const newSession: Session = {
       ...session,
+      status: normalizeSessionStatus(session.status),
       metricIds,
       id: `sess_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     };

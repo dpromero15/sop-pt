@@ -19,6 +19,7 @@ Rules:
 - Bump the root SPA version for user-facing app changes.
 - Bump `services/api/package.json` only when the API contract or service behavior changes.
 - Keep `README.md` **Version:** in sync with the root `package.json`.
+- If proposed work needs a **different** semver than the open release line and Ready-to-ship (or unreleased) work exists, **ship the current PR first** — do not mix next-version features onto the current branch (see working-files / github-prs skills).
 
 ## Branches
 
@@ -42,12 +43,25 @@ Conventions:
 - Use `epic` for grouping epics; stories/bugs get `enhancement`, `bug`, or `documentation`.
 - Plan MINOR/MAJOR work with OKRs under `docs/okrs/` before opening the backlog.
 
+## Cross-session working ledger
+
+Root [`WORKING.md`](../../WORKING.md) is the handoff file across agent chats for the active release:
+
+- Move finished issues to **Ready to ship** before ending a coding session.
+- Release PRs batch every Ready-to-ship issue into one **Closes** section (see skills below).
+- After merge, clear shipped rows and retarget the ledger if the release line changes.
+- **Version boundary:** same-version work batches on the open line; work that needs the next MINOR/MAJOR (or a feature while a PATCH line is open) waits until the current Ready-to-ship PR ships.
+
+Skills: [`.cursor/skills/working-files/SKILL.md`](../../.cursor/skills/working-files/SKILL.md), [`.cursor/skills/github-prs/SKILL.md`](../../.cursor/skills/github-prs/SKILL.md).
+
 ## Pull requests and closing issues
 
 Follow [`.cursor/skills/github-prs/SKILL.md`](../../.cursor/skills/github-prs/SKILL.md):
 
+- Read `WORKING.md` Ready to ship before `gh pr create`.
 - Close completed issues **only** via PR merge keywords (`Closes #N`).
 - Never `gh issue close` for work finished in a PR.
+- Run QA (`npm run lint`, `npm test`, smoke) and get **explicit human approval** before opening the PR.
 - Release PRs include Summary, Test plan, and **Closes** for every finished issue.
 
 ### Release PR checklist

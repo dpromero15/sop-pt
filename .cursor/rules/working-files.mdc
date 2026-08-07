@@ -1,0 +1,14 @@
+---
+description: Cross-session WORKING.md ledger, version boundary, PR batching
+alwaysApply: true
+---
+
+# Working ledger
+
+Outstanding / ready-to-ship work for the active release lives in [WORKING.md](WORKING.md).
+
+- **Start** release or issue work → read `WORKING.md` (and the [working-files skill](.cursor/skills/working-files/SKILL.md)).
+- **Version check** → if the new work needs a different semver than the open release line and Ready-to-ship (or unreleased work) exists, **recommend shipping a PR first**; do not mix versions on one branch.
+- **Finish** an issue or end a coding chat → update `WORKING.md` (Ready to ship / In progress / notes). Do not rely on chat history alone.
+- **Open a PR** → follow [github-prs skill](.cursor/skills/github-prs/SKILL.md): use Ready-to-ship for `Closes`, QA, then ask for human approval.
+- Never `gh issue close` for PR-bound work — close via PR `Closes #N` only.
