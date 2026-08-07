@@ -46,7 +46,7 @@ export interface StorageRepository {
 
   getSessions(): Session[];
   saveSessions(sessions: Session[]): void;
-  addSession(session: Omit<Session, 'id'>): Session;
+  addSession(session: Omit<Session, 'id' | 'status'> & { status?: Session['status'] }): Session;
   updateSession(updated: Session): void;
   deleteSession(id: string): void;
 

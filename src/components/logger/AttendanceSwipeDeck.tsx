@@ -10,6 +10,11 @@ interface AttendanceSwipeDeckProps {
   onMarkRemainingPresent: (remainingPlayerIds: string[]) => void;
   /** Reset the swipe queue when session (or other plan) changes — not on every players array refresh. */
   resetKey: string;
+  /**
+   * Optional subset to swipe (e.g. unmarked players on re-entry).
+   * Applied only when resetKey / roster membership changes — keep stable across marks.
+   */
+  initialQueueIds?: string[];
 }
 
 type UndoItem = { playerId: string; previous: AttendanceStatus | undefined; next: AttendanceStatus };
@@ -25,14 +30,25 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   onSetStatus,
   onMarkRemainingPresent,
   resetKey,
+  initialQueueIds,
 }) => {
-  const [queue, setQueue] = useState<string[]>(() => players.map((p) => p.id));
+  const seedQueue = () => {
+    if (initialQueueIds && initialQueueIds.length > 0) {
+      const allowed = new Set(players.map((p) => p.id));
+      return initialQueueIds.filter((id) => allowed.has(id));
+    }
+    return players.map((p) => p.id);
+  };
+
+  const [queue, setQueue] = useState<string[]>(seedQueue);
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const modeRef = useRef<DragMode>('idle');
   const longPressTimer = useRef<number | null>(null);
+  const initialQueueRef = useRef(initialQueueIds);
+  initialQueueRef.current = initialQueueIds;
   const activePlayerId = queue[0];
   const activePlayer = players.find((p) => p.id === activePlayerId);
 
@@ -43,10 +59,16 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   );
 
   useEffect(() => {
-    setQueue(players.map((p) => p.id));
+    const allowed = new Set(players.map((p) => p.id));
+    const seed = initialQueueRef.current;
+    setQueue(
+      seed && seed.length > 0
+        ? seed.filter((id) => allowed.has(id))
+        : players.map((p) => p.id),
+    );
     setUndoStack([]);
     setOffset({ x: 0, y: 0 });
-    // players is read when rosterKey changes (session or membership), not on every refresh.
+    // players / initialQueueIds are read when rosterKey changes (session or membership), not on every refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: depend on rosterKey only
   }, [rosterKey]);
 

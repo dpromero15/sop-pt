@@ -80,12 +80,16 @@ export interface Player {
 
 export type SessionType = 'practice' | 'match' | 'fitness_test';
 
+/** Open sessions can be resumed in Quick Insert; closed are history-only until reopened. */
+export type SessionStatus = 'open' | 'closed';
+
 export interface Session {
   id: string;
   date: string; // YYYY-MM-DD
   time?: string;
   title: string;
   type: SessionType;
+  status: SessionStatus;
   location?: string;
   opponent?: string; // for matches
   score?: string; // e.g. "3 - 1"

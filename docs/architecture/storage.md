@@ -26,8 +26,10 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 
 ### Session fields
 
-`id`, `date`, `time?`, `title`, `type`, `location?`, `opponent?`, `score?`, `notes?`, `metricIds`
+`id`, `date`, `time?`, `title`, `type`, `status`, `location?`, `opponent?`, `score?`, `notes?`, `metricIds`
 
+- **`status`:** `open` | `closed`. New sessions default to `open`. Quick Insert only resumes open sessions. Completing a session in the logger sets `closed`. Closed sessions remain in Sessions history; **Reopen & Insert** sets them back to `open`.
+- **Migration:** legacy sessions without `status` are treated as `open` so coaches can finish in-progress work.
 - **`metricIds`:** ordered list of metric definition ids that apply to this session.
 - Attendance metric id is always first and cannot be removed in the UI.
 - On create, seed `metricIds = [attendanceMetricId]`. Match sessions may additionally suggest a default game pack (`m_goals`, `m_assists`, `m_tackles`).

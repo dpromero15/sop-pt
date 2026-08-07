@@ -1,8 +1,19 @@
-import type { AttendanceStatus, MetricEntry, Session, SessionType } from '../types';
+import type {
+  AttendanceStatus,
+  MetricEntry,
+  Session,
+  SessionStatus,
+  SessionType,
+} from '../types';
 
 export const ATTENDANCE_METRIC_ID = 'm_attendance';
 
 export const MATCH_DEFAULT_METRIC_IDS = ['m_goals', 'm_assists', 'm_tackles'] as const;
+
+export type LegacySession = Omit<Session, 'metricIds' | 'status'> & {
+  metricIds?: string[];
+  status?: SessionStatus;
+};
 
 export function ensureAttendanceFirst(metricIds: string[]): string[] {
   const rest = metricIds.filter((id) => id !== ATTENDANCE_METRIC_ID);
@@ -16,14 +27,39 @@ export function defaultMetricIdsForSessionType(type: SessionType): string[] {
   return [ATTENDANCE_METRIC_ID];
 }
 
-/** Migrate legacy sessions missing metricIds using entries for that session. */
-export function migrateSessionMetricIds(
-  session: Session | (Omit<Session, 'metricIds'> & { metricIds?: string[] }),
-  entries: MetricEntry[],
-): Session {
+/** Legacy sessions without status are treated as open so coaches can finish them. */
+export function normalizeSessionStatus(status?: SessionStatus | string): SessionStatus {
+  return status === 'closed' ? 'closed' : 'open';
+}
+
+export function isSessionOpen(session: Pick<Session, 'status'>): boolean {
+  return session.status === 'open';
+}
+
+export function filterOpenSessions(sessions: Session[]): Session[] {
+  return sessions.filter(isSessionOpen);
+}
+
+/** Local calendar date as YYYY-MM-DD (not UTC). */
+export function localDateString(date: Date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/** Default Quick Insert title for a brand-new open session. */
+export function newQuickSessionTitle(date: Date = new Date()): string {
+  return `New session - ${localDateString(date)}`;
+}
+
+/** Migrate legacy sessions missing metricIds / status using entries for that session. */
+export function migrateSessionMetricIds(session: LegacySession, entries: MetricEntry[]): Session {
+  const status = normalizeSessionStatus(session.status);
   if (session.metricIds && session.metricIds.length > 0) {
     return {
       ...session,
+      status,
       metricIds: ensureAttendanceFirst(session.metricIds),
     };
   }
@@ -38,12 +74,13 @@ export function migrateSessionMetricIds(
 
   return {
     ...session,
+    status,
     metricIds: ensureAttendanceFirst(fromEntries),
   };
 }
 
 export function migrateSessionsMetricIds(
-  sessions: Array<Session | (Omit<Session, 'metricIds'> & { metricIds?: string[] })>,
+  sessions: LegacySession[],
   entries: MetricEntry[],
 ): Session[] {
   return sessions.map((s) => migrateSessionMetricIds(s, entries));
@@ -92,4 +129,49 @@ export function toggleLateStatus(status: AttendanceStatus): AttendanceStatus {
 /** Players who can be scored for session metrics. */
 export function isScoreEligible(status: AttendanceStatus): boolean {
   return status === 'present' || status === 'late';
+}
+
+/** Player ids that already have an attendance entry for the session (entry presence, not map defaults). */
+export function playerIdsWithAttendance(
+  entries: MetricEntry[],
+  sessionId: string,
+): Set<string> {
+  return new Set(
+    entries
+      .filter((e) => e.sessionId === sessionId && e.metricId === ATTENDANCE_METRIC_ID)
+      .map((e) => e.playerId),
+  );
+}
+
+/** True when every active player has a stored attendance entry. */
+export function isAttendanceComplete(
+  activePlayerIds: readonly string[],
+  markedPlayerIds: ReadonlySet<string>,
+): boolean {
+  return (
+    activePlayerIds.length > 0 && activePlayerIds.every((id) => markedPlayerIds.has(id))
+  );
+}
+
+/** Active players still missing an attendance entry. */
+export function unmarkedPlayerIds(
+  activePlayerIds: readonly string[],
+  markedPlayerIds: ReadonlySet<string>,
+): string[] {
+  return activePlayerIds.filter((id) => !markedPlayerIds.has(id));
+}
+
+export function countAttendanceByStatus(
+  statuses: Iterable<AttendanceStatus>,
+): Record<AttendanceStatus, number> {
+  const counts: Record<AttendanceStatus, number> = {
+    present: 0,
+    late: 0,
+    absent: 0,
+    excused: 0,
+  };
+  for (const status of statuses) {
+    counts[status] += 1;
+  }
+  return counts;
 }

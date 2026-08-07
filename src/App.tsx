@@ -112,10 +112,7 @@ export default function App() {
             sessions={sessions}
             metrics={metrics}
             initialSessionId={loggerSessionId}
-            onOpenCreateSession={() => {
-              setCurrentTab('sessions');
-              setIsAddSessionOpen(true);
-            }}
+            onConsumedInitialSession={() => setLoggerSessionId(null)}
             onRefreshData={refreshData}
           />
         )}
@@ -142,6 +139,11 @@ export default function App() {
             onCloseAddModal={() => setIsAddSessionOpen(false)}
             onOpenAddModal={() => setIsAddSessionOpen(true)}
             onOpenQuickInsertForSession={(sId) => {
+              const session = StorageService.getSessions().find((s) => s.id === sId);
+              if (session?.status === 'closed') {
+                StorageService.updateSession({ ...session, status: 'open' });
+                refreshData();
+              }
               setLoggerSessionId(sId);
               handleSelectTab('quick-insert');
             }}

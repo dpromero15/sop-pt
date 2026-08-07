@@ -5,7 +5,9 @@ alwaysApply: true
 
 # Version control
 
-Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md). PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
+Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md).
+Working ledger: [WORKING.md](WORKING.md) · [working-files skill](.cursor/skills/working-files/SKILL.md).
+PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
 
 ## Semver
 
@@ -14,6 +16,7 @@ Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md). PR closing
 - **PATCH** — bugs/docs/polish (`release/vX.Y.Z`)
 - Keep root `package.json` and README **Version:** in sync
 - Bump `services/api` version only when API behavior/contract changes
+- One release line at a time — if new work needs the **next** version and Ready-to-ship exists, recommend PR first (working-files / github-prs skills)
 
 ## Branches & labels
 
@@ -21,7 +24,14 @@ Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md). PR closing
 - Label issues/PRs with `vX.Y.Z`
 - Merge to `main` via PR only; no force-push to shared branches
 
+## Cross-session work
+
+- Keep [WORKING.md](WORKING.md) updated when finishing issues so the next chat can batch a release PR
+- Ready-to-ship issues become the PR **Closes** list (see github-prs skill)
+- Do not start next-version features on the current line while Ready-to-ship is unshipped — ship first
+
 ## Issues & PRs
 
 - Close finished issues **only** with PR body `Closes #N` (never `gh issue close` for PR work)
 - Release PRs: Summary, Test plan, and a complete **Closes** section
+- Do not open the PR until QA + explicit human approval
