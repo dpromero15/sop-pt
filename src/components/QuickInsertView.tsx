@@ -276,6 +276,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
             attendanceMap={attendanceMap}
             onSetStatus={persistAttendance}
             onMarkRemainingPresent={markRemainingPresent}
+            resetKey={selectedSessionId}
           />
           <button
             type="button"

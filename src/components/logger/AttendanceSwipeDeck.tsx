@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, RotateCcw, UserCheck, X, Ban, Clock } from 'lucide-react';
 import type { AttendanceStatus, Player } from '../../types';
 import { toggleLateStatus } from '../../utils/sessionMetrics';
@@ -8,6 +8,8 @@ interface AttendanceSwipeDeckProps {
   attendanceMap: Record<string, AttendanceStatus>;
   onSetStatus: (playerId: string, status: AttendanceStatus) => void;
   onMarkRemainingPresent: (remainingPlayerIds: string[]) => void;
+  /** Reset the swipe queue when session (or other plan) changes — not on every players array refresh. */
+  resetKey: string;
 }
 
 type UndoItem = { playerId: string; previous: AttendanceStatus | undefined; next: AttendanceStatus };
@@ -22,6 +24,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   attendanceMap,
   onSetStatus,
   onMarkRemainingPresent,
+  resetKey,
 }) => {
   const [queue, setQueue] = useState<string[]>(() => players.map((p) => p.id));
   const [undoStack, setUndoStack] = useState<UndoItem[]>([]);
@@ -33,10 +36,19 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   const activePlayerId = queue[0];
   const activePlayer = players.find((p) => p.id === activePlayerId);
 
+  // Stable roster fingerprint — ignore new array identity from storage refresh after each swipe.
+  const rosterKey = useMemo(
+    () => `${resetKey}:${players.map((p) => p.id).join(',')}`,
+    [resetKey, players],
+  );
+
   useEffect(() => {
     setQueue(players.map((p) => p.id));
     setUndoStack([]);
-  }, [players]);
+    setOffset({ x: 0, y: 0 });
+    // players is read when rosterKey changes (session or membership), not on every refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: depend on rosterKey only
+  }, [rosterKey]);
 
   const clearLongPress = () => {
     if (longPressTimer.current != null) {
