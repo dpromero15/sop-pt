@@ -24,25 +24,51 @@ export function defaultAggregationMode(
   return 'latest';
 }
 
-/** Ensure aggregationMode is set (mutates a shallow copy). */
+type MetricMigrationInput = MetricDefinition & {
+  aggregationMode?: MetricAggregationMode;
+  includeInAdjustedTotal?: boolean;
+  treatNoScoreAsZero?: boolean;
+};
+
+/** Ensure aggregationMode and Adjusted flags are set (returns a shallow copy when needed). */
 export function normalizeMetricDefinition(
-  metric: MetricDefinition & { aggregationMode?: MetricAggregationMode },
+  metric: MetricMigrationInput,
 ): MetricDefinition {
-  if (metric.aggregationMode) return metric as MetricDefinition;
+  const aggregationMode =
+    metric.aggregationMode ?? defaultAggregationMode(metric);
+  const includeInAdjustedTotal = metric.includeInAdjustedTotal ?? true;
+  const treatNoScoreAsZero = metric.treatNoScoreAsZero ?? true;
+
+  if (
+    metric.aggregationMode === aggregationMode &&
+    metric.includeInAdjustedTotal === includeInAdjustedTotal &&
+    metric.treatNoScoreAsZero === treatNoScoreAsZero
+  ) {
+    return metric as MetricDefinition;
+  }
+
   return {
     ...metric,
-    aggregationMode: defaultAggregationMode(metric),
+    aggregationMode,
+    includeInAdjustedTotal,
+    treatNoScoreAsZero,
   };
 }
 
 export function migrateMetricsAggregation(
-  metrics: Array<MetricDefinition & { aggregationMode?: MetricAggregationMode }>,
+  metrics: MetricMigrationInput[],
 ): { metrics: MetricDefinition[]; changed: boolean } {
   let changed = false;
   const next = metrics.map((m) => {
-    if (m.aggregationMode) return m as MetricDefinition;
-    changed = true;
-    return normalizeMetricDefinition(m);
+    const normalized = normalizeMetricDefinition(m);
+    if (
+      normalized.aggregationMode !== m.aggregationMode ||
+      normalized.includeInAdjustedTotal !== m.includeInAdjustedTotal ||
+      normalized.treatNoScoreAsZero !== m.treatNoScoreAsZero
+    ) {
+      changed = true;
+    }
+    return normalized;
   });
   return { metrics: next, changed };
 }

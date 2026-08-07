@@ -75,6 +75,31 @@ describe('migrateMetricsAggregation', () => {
     expect(changed).toBe(true);
     expect(metrics[0].aggregationMode).toBe('best');
   });
+
+  it('defaults Adjusted flags to true when missing', () => {
+    const legacy = { ...dash } as MetricDefinition & {
+      includeInAdjustedTotal?: boolean;
+      treatNoScoreAsZero?: boolean;
+    };
+    delete legacy.includeInAdjustedTotal;
+    delete legacy.treatNoScoreAsZero;
+    const { metrics, changed } = migrateMetricsAggregation([legacy]);
+    expect(changed).toBe(true);
+    expect(metrics[0].includeInAdjustedTotal).toBe(true);
+    expect(metrics[0].treatNoScoreAsZero).toBe(true);
+  });
+
+  it('preserves explicit false Adjusted flags', () => {
+    const custom: MetricDefinition = {
+      ...dash,
+      includeInAdjustedTotal: false,
+      treatNoScoreAsZero: false,
+    };
+    const { metrics, changed } = migrateMetricsAggregation([custom]);
+    expect(changed).toBe(false);
+    expect(metrics[0].includeInAdjustedTotal).toBe(false);
+    expect(metrics[0].treatNoScoreAsZero).toBe(false);
+  });
 });
 
 describe('aggregateMetricValue', () => {

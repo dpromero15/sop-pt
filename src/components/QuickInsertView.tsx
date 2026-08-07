@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Plus,
   Play,
+  Trash2,
 } from 'lucide-react';
 import type {
   AttendanceStatus,
@@ -34,10 +35,18 @@ import { SessionMetricPlanner } from './logger/SessionMetricPlanner';
 import { AttendanceSwipeDeck } from './logger/AttendanceSwipeDeck';
 import { AttendanceMaintenanceList } from './logger/AttendanceMaintenanceList';
 import { PlayerScoreCard } from './logger/PlayerScoreCard';
+import { DenseScoreEditor } from './logger/DenseScoreEditor';
 
 type WorkflowStep = 'plan' | 'attendance' | 'score' | 'summary';
 type AttendanceViewMode = 'swipe' | 'review';
 type Phase = 'gate' | 'logger';
+type ScoreUiMode = 'dense' | 'cards';
+
+function sessionHasNonAttendanceScores(sessionId: string): boolean {
+  return StorageService.getEntries().some(
+    (e) => e.sessionId === sessionId && e.metricId !== ATTENDANCE_METRIC_ID,
+  );
+}
 
 interface QuickInsertViewProps {
   players: Player[];
@@ -65,6 +74,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const [markedPlayerIds, setMarkedPlayerIds] = useState<Set<string>>(() => new Set());
   const [swipeSeedIds, setSwipeSeedIds] = useState<string[]>([]);
   const [attendanceView, setAttendanceView] = useState<AttendanceViewMode>('swipe');
+  const [scoreUiMode, setScoreUiMode] = useState<ScoreUiMode>('cards');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const openSessions = useMemo(() => filterOpenSessions(sessions), [sessions]);
@@ -90,22 +100,68 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     setPhase('logger');
   };
 
+  const reloadAttendanceFromStorage = (sessionId: string) => {
+    const allEntries = StorageService.getEntries();
+    const sessionEntries = allEntries.filter((e) => e.sessionId === sessionId);
+    const marked = playerIdsWithAttendance(sessionEntries, sessionId);
+    const map: Record<string, AttendanceStatus> = {};
+    activePlayerIds.forEach((id) => {
+      map[id] = 'present';
+    });
+    sessionEntries.forEach((entry) => {
+      if (entry.metricId === ATTENDANCE_METRIC_ID) {
+        map[entry.playerId] = attendanceValueToStatus(entry.value);
+      }
+    });
+    setAttendanceMap(map);
+    setMarkedPlayerIds(marked);
+  };
+
+  const refreshAfterDenseEdit = () => {
+    if (selectedSessionId) reloadAttendanceFromStorage(selectedSessionId);
+    onRefreshData();
+  };
+
   const createQuickSession = () => {
     const today = localDateString();
     const newSession = StorageService.addSession({
       title: newQuickSessionTitle(),
       date: today,
-      type: 'practice',
+      type: 'session',
       status: 'open',
       metricIds: [],
     });
     onRefreshData();
+    setScoreUiMode('cards');
     enterLogger(newSession.id, 'plan');
     setToastMessage('Started new session');
   };
 
   const resumeSession = (sessionId: string) => {
-    enterLogger(sessionId, 'attendance');
+    const hasScores = sessionHasNonAttendanceScores(sessionId);
+    if (hasScores) {
+      setScoreUiMode('dense');
+      enterLogger(sessionId, 'score');
+    } else {
+      setScoreUiMode('cards');
+      enterLogger(sessionId, 'attendance');
+    }
+  };
+
+  const deleteOpenSession = (sessionId: string, title: string) => {
+    if (
+      !confirm(
+        `Delete "${title}"?\n\nThis open session and all of its logged attendance/scores will be permanently removed.`,
+      )
+    ) {
+      return;
+    }
+    StorageService.deleteSession(sessionId);
+    onRefreshData();
+    if (selectedSessionId === sessionId) {
+      returnToGate();
+    }
+    setToastMessage('Session deleted');
   };
 
   const returnToGate = () => {
@@ -114,6 +170,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     setStep('plan');
     setScoringMetricId('');
     setScoreQueue([]);
+    setScoreUiMode('cards');
   };
 
   const completeSession = () => {
@@ -129,7 +186,14 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     if (!initialSessionId) return;
     const target = sessions.find((s) => s.id === initialSessionId);
     if (!target || target.status !== 'open') return;
-    enterLogger(initialSessionId, 'attendance');
+    const hasScores = sessionHasNonAttendanceScores(initialSessionId);
+    if (hasScores) {
+      setScoreUiMode('dense');
+      enterLogger(initialSessionId, 'score');
+    } else {
+      setScoreUiMode('cards');
+      enterLogger(initialSessionId, 'attendance');
+    }
     onConsumedInitialSession?.();
     // intentionally only react to handoff id
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -236,6 +300,8 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     markRemaining(remainingPlayerIds, 'present');
     setToastMessage('Marked remaining present');
     setAttendanceView('review');
+    const hasScores = sessionHasNonAttendanceScores(selectedSessionId);
+    setScoreUiMode(hasScores ? 'dense' : 'cards');
     setStep('score');
   };
 
@@ -245,6 +311,8 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
       setToastMessage(`Marked ${remainingUnmarked.length} remaining out`);
       setAttendanceView('review');
     }
+    const hasScores = sessionHasNonAttendanceScores(selectedSessionId);
+    setScoreUiMode(hasScores ? 'dense' : 'cards');
     setStep('score');
   };
 
@@ -315,22 +383,35 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               </h3>
               <ul className="space-y-2">
                 {openSessions.map((s) => (
-                  <li key={s.id}>
+                  <li
+                    key={s.id}
+                    className="flex items-stretch gap-2"
+                  >
                     <button
                       type="button"
                       onClick={() => resumeSession(s.id)}
-                      className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-left hover:border-emerald-500/40"
+                      className="flex min-w-0 flex-1 items-center justify-between rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-left hover:border-emerald-500/40"
                     >
-                      <div>
-                        <p className="font-medium text-slate-100">{s.title}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-100">{s.title}</p>
                         <p className="text-xs text-slate-500">
                           {s.date}
-                          {s.time ? ` · ${s.time}` : ''} · {s.type.replace('_', ' ')}
+                          {s.time ? ` · ${s.time}` : ''} ·{' '}
+                          {s.type === 'match' ? 'Match' : 'Session'}
                         </p>
                       </div>
-                      <span className="flex items-center gap-1 text-sm font-medium text-emerald-400">
+                      <span className="ml-2 flex shrink-0 items-center gap-1 text-sm font-medium text-emerald-400">
                         <Play className="h-4 w-4" /> Continue
                       </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteOpenSession(s.id, s.title)}
+                      className="flex shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-950/60 px-3 text-slate-400 hover:border-rose-500/40 hover:text-rose-400"
+                      aria-label={`Delete ${s.title}`}
+                      title="Delete open session"
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   </li>
                 ))}
@@ -496,92 +577,157 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
 
       {selectedSession && step === 'score' && (
         <div className="space-y-4">
-          {!scoringMetricId || !currentScoreMetric || !currentScorePlayer ? (
-            <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
-              <p className="text-sm text-slate-400">
-                {eligiblePlayers.length} eligible players (present + late). Absent and excused are
-                hidden.
-              </p>
-              {scoreMetrics.length === 0 && (
-                <p className="text-sm text-amber-300">
-                  No scoring metrics on this session. Add some in Plan.
-                </p>
-              )}
-              {scoreMetrics.map((m) => {
-                const cov = coverageForMetric(m.id);
-                return (
+          {(() => {
+            const sessionHasScores = sessionHasNonAttendanceScores(selectedSessionId);
+            const showDense =
+              scoreUiMode === 'dense' && sessionHasScores && !scoringMetricId;
+
+            if (showDense) {
+              const sessionEntries = StorageService.getEntries().filter(
+                (e) => e.sessionId === selectedSessionId,
+              );
+              const planMetrics = ensureAttendanceFirst(selectedSession.metricIds)
+                .map((id) => metrics.find((m) => m.id === id))
+                .filter((m): m is MetricDefinition => Boolean(m));
+
+              return (
+                <>
+                  <DenseScoreEditor
+                    sessionId={selectedSessionId}
+                    players={activePlayers}
+                    metrics={planMetrics}
+                    entries={sessionEntries}
+                    attendanceMap={attendanceMap}
+                    includeAttendanceColumn
+                    onRefreshData={refreshAfterDenseEdit}
+                  />
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScoreUiMode('cards');
+                        setScoringMetricId('');
+                        setScoreQueue([]);
+                      }}
+                      className="flex-1 rounded-xl border border-slate-700 py-3 text-sm text-slate-300 hover:bg-slate-900"
+                    >
+                      Card scoring
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStep('summary')}
+                      className="flex-1 rounded-xl border border-slate-700 py-3 text-sm text-slate-300 hover:bg-slate-900"
+                    >
+                      View summary
+                    </button>
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <>
+                {sessionHasScores && !scoringMetricId && (
                   <button
-                    key={m.id}
                     type="button"
-                    onClick={() => startScoringMetric(m.id)}
-                    className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-left hover:border-emerald-500/40"
+                    onClick={() => setScoreUiMode('dense')}
+                    className="w-full rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2.5 text-sm font-medium text-emerald-300 hover:bg-emerald-500/15"
                   >
-                    <div>
-                      <p className="font-medium text-slate-100">{m.name}</p>
-                      <p className="text-xs text-slate-500">
-                        {cov.scored}/{cov.total} scored · {m.type}
-                      </p>
-                    </div>
-                    <ChevronRight className="h-5 w-5 text-slate-500" />
+                    Dense editor (adjust scores)
                   </button>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setStep('summary')}
-                className="w-full rounded-xl border border-slate-700 py-3 text-sm text-slate-300"
-              >
-                View summary
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setScoringMetricId('');
-                  setScoreQueue([]);
-                }}
-                className="text-sm text-slate-400 hover:text-slate-200"
-              >
-                ← All metrics
-              </button>
-              <PlayerScoreCard
-                player={currentScorePlayer}
-                metric={currentScoreMetric}
-                initialValue={existingScoreValue(currentScorePlayer.id, currentScoreMetric.id)}
-                remaining={scoreQueue.length}
-                total={eligiblePlayers.length || 1}
-                onSave={(value, rawValue) => {
-                  StorageService.addOrUpdateEntry({
-                    sessionId: selectedSessionId,
-                    playerId: currentScorePlayer.id,
-                    metricId: currentScoreMetric.id,
-                    value,
-                    rawValue,
-                  });
-                  onRefreshData();
-                  setScoreQueue((q) => {
-                    const next = q.slice(1);
-                    if (next.length === 0) {
-                      setToastMessage(`${currentScoreMetric.name} complete`);
-                      setScoringMetricId('');
-                    } else {
-                      setToastMessage(`Saved ${currentScorePlayer.name}`);
-                    }
-                    return next;
-                  });
-                }}
-                onSkip={() =>
-                  setScoreQueue((q) => {
-                    const next = q.slice(1);
-                    if (next.length === 0) setScoringMetricId('');
-                    return next;
-                  })
-                }
-              />
-            </div>
-          )}
+                )}
+                {!scoringMetricId || !currentScoreMetric || !currentScorePlayer ? (
+                  <div className="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
+                    <p className="text-sm text-slate-400">
+                      {eligiblePlayers.length} eligible players (present + late). Absent and excused are
+                      hidden.
+                    </p>
+                    {scoreMetrics.length === 0 && (
+                      <p className="text-sm text-amber-300">
+                        No scoring metrics on this session. Add some in Plan.
+                      </p>
+                    )}
+                    {scoreMetrics.map((m) => {
+                      const cov = coverageForMetric(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => startScoringMetric(m.id)}
+                          className="flex w-full items-center justify-between rounded-xl border border-slate-700 bg-slate-950/60 px-4 py-3 text-left hover:border-emerald-500/40"
+                        >
+                          <div>
+                            <p className="font-medium text-slate-100">{m.name}</p>
+                            <p className="text-xs text-slate-500">
+                              {cov.scored}/{cov.total} scored · {m.type}
+                            </p>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-slate-500" />
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setStep('summary')}
+                      className="w-full rounded-xl border border-slate-700 py-3 text-sm text-slate-300"
+                    >
+                      View summary
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScoringMetricId('');
+                        setScoreQueue([]);
+                      }}
+                      className="text-sm text-slate-400 hover:text-slate-200"
+                    >
+                      ← All metrics
+                    </button>
+                    <PlayerScoreCard
+                      player={currentScorePlayer}
+                      metric={currentScoreMetric}
+                      initialValue={existingScoreValue(currentScorePlayer.id, currentScoreMetric.id)}
+                      remaining={scoreQueue.length}
+                      total={eligiblePlayers.length || 1}
+                      onSave={(value, rawValue) => {
+                        StorageService.addOrUpdateEntry({
+                          sessionId: selectedSessionId,
+                          playerId: currentScorePlayer.id,
+                          metricId: currentScoreMetric.id,
+                          value,
+                          rawValue,
+                        });
+                        onRefreshData();
+                        setScoreQueue((q) => {
+                          const next = q.slice(1);
+                          if (next.length === 0) {
+                            setToastMessage(`${currentScoreMetric.name} complete`);
+                            setScoringMetricId('');
+                            if (sessionHasNonAttendanceScores(selectedSessionId)) {
+                              setScoreUiMode('dense');
+                            }
+                          } else {
+                            setToastMessage(`Saved ${currentScorePlayer.name}`);
+                          }
+                          return next;
+                        });
+                      }}
+                      onSkip={() =>
+                        setScoreQueue((q) => {
+                          const next = q.slice(1);
+                          if (next.length === 0) setScoringMetricId('');
+                          return next;
+                        })
+                      }
+                    />
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 

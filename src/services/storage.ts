@@ -51,6 +51,10 @@ export async function hydrateCloudToLocal(): Promise<TeamSnapshot> {
   if (snapshot.calculatedFields) {
     localAdapter.saveCalculatedFields(snapshot.calculatedFields);
   }
+  if (snapshot.coaches) localAdapter.saveCoaches(snapshot.coaches);
+  if (snapshot.coachBallots) localAdapter.saveCoachBallots(snapshot.coachBallots);
+  if (snapshot.adjustedBumps) localAdapter.saveAdjustedBumps(snapshot.adjustedBumps);
+  if (snapshot.bumpBudget) localAdapter.saveBumpBudget(snapshot.bumpBudget);
   return snapshot;
 }
 

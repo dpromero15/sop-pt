@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   Users, 
-  Plus, 
   Search, 
   Edit3, 
   Trash2, 
   ChevronRight, 
-  Shield, 
-  Award, 
   X, 
   UserPlus, 
-  Check 
+  Download,
+  Upload,
 } from 'lucide-react';
 import { Player, PlayerPosition, LabelDefinition, MetricDefinition } from '../types';
 import { StorageService } from '../services/storage';
 import { calculatePlayerRankings } from '../utils/scoring';
+import {
+  buildPlayerCsvTemplate,
+  downloadCsv,
+  parseAndValidatePlayerCsv,
+} from '../utils/playerCsv';
 
 interface PlayersViewProps {
   players: Player[];
@@ -47,6 +50,13 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formAge, setFormAge] = useState<number>(15);
   const [formAvatar, setFormAvatar] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 4000);
+  };
 
   // Handle open edit
   const handleStartEdit = (player: Player, e: React.MouseEvent) => {
@@ -105,6 +115,68 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     }
   };
 
+  const handleExportCsvTemplate = () => {
+    downloadCsv('player_roster_template.csv', buildPlayerCsvTemplate());
+    showToast('✓ CSV template downloaded');
+  };
+
+  const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const existing = new Set<number>(players.map((p) => p.jerseyNumber));
+      const { ok, errors, skipped } = parseAndValidatePlayerCsv(text, existing);
+
+      ok.forEach((row) => {
+        StorageService.addPlayer(row);
+        existing.add(row.jerseyNumber);
+      });
+
+      onRefreshData();
+
+      const summary = [
+        `Imported ${ok.length} player${ok.length === 1 ? '' : 's'}`,
+        skipped > 0 ? `skipped ${skipped}` : null,
+      ]
+        .filter(Boolean)
+        .join(', ');
+
+      if (errors.length > 0) {
+        alert(
+          `${summary}.\n\n${errors.slice(0, 8).join('\n')}${
+            errors.length > 8 ? `\n…and ${errors.length - 8} more` : ''
+          }`,
+        );
+      }
+      showToast(`✓ ${summary}`);
+    };
+    reader.readAsText(file);
+  };
+
+  const handleClearAllPlayers = () => {
+    if (
+      !confirm(
+        'Permanently clear the entire squad roster? This cannot be undone (export a backup first if needed).',
+      )
+    ) {
+      return;
+    }
+    if (
+      !confirm(
+        `Type confirm: delete all ${players.length} player${players.length === 1 ? '' : 's'} from this team?`,
+      )
+    ) {
+      return;
+    }
+    StorageService.clearAllPlayers();
+    onRefreshData();
+    showToast('✓ Roster cleared');
+  };
+
   // Filter logic
   const filteredPlayers = players.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -126,6 +198,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
   return (
     <div className="space-y-6 pb-28">
+      {toastMsg && (
+        <div className="fixed top-16 right-4 z-50 bg-emerald-500 text-slate-950 font-extrabold px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 border border-emerald-300 animate-bounce">
+          <span>{toastMsg}</span>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
@@ -142,18 +220,51 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={() => {
-              setEditingPlayer(null);
-              setFormName('');
-              setFormJersey(Math.max(1, players.length + 1));
-              setFormNotes('');
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shrink-0 shadow-lg shadow-emerald-500/20"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>Register New Player</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleExportCsvTemplate}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+            >
+              <Download className="w-4 h-4 text-emerald-400" />
+              <span>Export template</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => csvInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+            >
+              <Upload className="w-4 h-4 text-blue-400" />
+              <span>Import CSV</span>
+            </button>
+            <input
+              ref={csvInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={handleImportCsv}
+            />
+            <button
+              type="button"
+              onClick={handleClearAllPlayers}
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+            >
+              <Trash2 className="w-4 h-4" />
+              <span>Clear all</span>
+            </button>
+            <button
+              onClick={() => {
+                setEditingPlayer(null);
+                setFormName('');
+                setFormJersey(Math.max(1, players.length + 1));
+                setFormNotes('');
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Register New Player</span>
+            </button>
+          </div>
         </div>
       </div>
 

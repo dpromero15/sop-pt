@@ -100,6 +100,9 @@ function ranking(
     adjustedTotalScore: adjustedTotal,
     overallRank: total === null ? null : 1,
     adjustedRank: adjustedTotal === null ? null : 1,
+    coachesTotalSum: null,
+    coachesRank: null,
+    adjustedBump: 0,
     labelScores: withAdjusted,
     rank: 1,
     attendanceRate: 100,
@@ -409,6 +412,48 @@ describe('isUnscoredForRankMode', () => {
     expect(
       isUnscoredForRankMode(scored, 'metric', 'speed', 'm_40m', metrics),
     ).toBe(false);
+  });
+
+  it('treats missing coaches totals as unscored', () => {
+    expect(
+      isUnscoredForRankMode(scored, 'total', 'all', 'none', metrics, 'coaches'),
+    ).toBe(true);
+    const withCoaches = {
+      ...scored,
+      coachesTotalSum: 5,
+      coachesRank: 1,
+    };
+    expect(
+      isUnscoredForRankMode(
+        withCoaches,
+        'total',
+        'all',
+        'none',
+        metrics,
+        'coaches',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe('compareRankings coaches mode', () => {
+  it('sorts lower coaches sum first', () => {
+    const a = {
+      ...ranking('a', 90, {}),
+      coachesTotalSum: 4,
+      coachesRank: 1,
+    };
+    const b = {
+      ...ranking('b', 95, {}),
+      coachesTotalSum: 8,
+      coachesRank: 2,
+    };
+    expect(
+      compareRankings(a, b, 'total', 'all', 'none', metrics, [], 'coaches'),
+    ).toBeLessThan(0);
+    expect(
+      compareRankings(b, a, 'total', 'all', 'none', metrics, [], 'coaches'),
+    ).toBeGreaterThan(0);
   });
 });
 

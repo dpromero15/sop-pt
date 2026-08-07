@@ -7,6 +7,9 @@ import type {
   LabelDefinition,
   ScoringFormulaConfig,
   CalculatedFieldDefinition,
+  Coach,
+  CoachBallot,
+  AdjustedBumpConfig,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -33,6 +36,10 @@ export interface TeamSnapshot {
   labels: LabelDefinition[];
   formula: ScoringFormulaConfig;
   calculatedFields: CalculatedFieldDefinition[];
+  coaches: Coach[];
+  coachBallots: CoachBallot[];
+  adjustedBumps: Record<string, number>;
+  bumpBudget: AdjustedBumpConfig;
 }
 
 export interface StorageRepository {
@@ -69,6 +76,8 @@ export interface StorageRepository {
   getLabels(): LabelDefinition[];
   saveLabels(labels: LabelDefinition[]): void;
   addLabel(label: Omit<LabelDefinition, 'id'>): LabelDefinition;
+  updateLabel(updated: LabelDefinition): void;
+  deleteLabel(id: string): void;
 
   getFormula(): ScoringFormulaConfig;
   saveFormula(formula: ScoringFormulaConfig): void;
@@ -76,6 +85,26 @@ export interface StorageRepository {
   getCalculatedFields(): CalculatedFieldDefinition[];
   saveCalculatedFields(fields: CalculatedFieldDefinition[]): void;
   updateCalculatedField(updated: CalculatedFieldDefinition): void;
+
+  getCoaches(): Coach[];
+  saveCoaches(coaches: Coach[]): void;
+  addCoach(coach: Omit<Coach, 'id'>): Coach;
+  deleteCoach(id: string): void;
+
+  getCoachBallots(): CoachBallot[];
+  saveCoachBallots(ballots: CoachBallot[]): void;
+  saveCoachBallot(ballot: CoachBallot): void;
+
+  getAdjustedBumps(): Record<string, number>;
+  saveAdjustedBumps(bumps: Record<string, number>): void;
+  applyBump(playerId: string, delta: 1 | -1): boolean;
+
+  getBumpBudget(): AdjustedBumpConfig;
+  saveBumpBudget(budget: AdjustedBumpConfig): void;
+
+  clearNonSystemLabels(): void;
+  clearNonSystemMetrics(): void;
+  clearAllPlayers(): void;
 
   resetToSampleData(): void;
   exportFullBackupJSON(): string;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { TabRoute, Navigation } from './components/Navigation';
 import { RankingsView } from './components/RankingsView';
 import { QuickInsertView } from './components/QuickInsertView';
@@ -9,6 +9,8 @@ import { PlayerProfileModal } from './components/PlayerProfileModal';
 import { ScoringConfigModal } from './components/ScoringConfigModal';
 import { StorageService, subscribeToStorage } from './services/storage';
 import { calculatePlayerRankings } from './utils/scoring';
+import { attachCoachesTotals } from './utils/coachesRating';
+import { applyAdjustedBumps } from './utils/adjustedBumps';
 import { Player } from './types';
 
 export default function App() {
@@ -32,6 +34,16 @@ export default function App() {
   const [calculatedFields, setCalculatedFields] = useState(() =>
     StorageService.getCalculatedFields(),
   );
+  const [coaches, setCoaches] = useState(() => StorageService.getCoaches());
+  const [coachBallots, setCoachBallots] = useState(() =>
+    StorageService.getCoachBallots(),
+  );
+  const [adjustedBumps, setAdjustedBumps] = useState(() =>
+    StorageService.getAdjustedBumps(),
+  );
+  const [bumpBudget, setBumpBudget] = useState(() =>
+    StorageService.getBumpBudget(),
+  );
 
   // Modal States
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -50,6 +62,10 @@ export default function App() {
     setLabels(StorageService.getLabels());
     setFormula(StorageService.getFormula());
     setCalculatedFields(StorageService.getCalculatedFields());
+    setCoaches(StorageService.getCoaches());
+    setCoachBallots(StorageService.getCoachBallots());
+    setAdjustedBumps(StorageService.getAdjustedBumps());
+    setBumpBudget(StorageService.getBumpBudget());
   };
 
   useEffect(() => {
@@ -74,15 +90,32 @@ export default function App() {
     window.location.hash = tab;
   };
 
-  // Compute live rankings for views
-  const rankings = calculatePlayerRankings(
+  const rankings = useMemo(() => {
+    const base = calculatePlayerRankings(
+      players,
+      entries,
+      metrics,
+      labels,
+      formula,
+      calculatedFields,
+    );
+    const withCoaches = attachCoachesTotals(base, players, coachBallots);
+    return applyAdjustedBumps(withCoaches, adjustedBumps);
+  }, [
     players,
     entries,
     metrics,
     labels,
     formula,
     calculatedFields,
-  );
+    coachBallots,
+    adjustedBumps,
+  ]);
+
+  const handleApplyBump = (playerId: string, delta: 1 | -1) => {
+    StorageService.applyBump(playerId, delta);
+    refreshData();
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
@@ -113,6 +146,9 @@ export default function App() {
             calculatedFields={calculatedFields}
             formula={formula}
             hasLoggedData={entries.length > 0}
+            bumpBudget={bumpBudget}
+            adjustedBumps={adjustedBumps}
+            onApplyBump={handleApplyBump}
             onOpenFormulaConfig={() => setIsFormulaModalOpen(true)}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onOpenQuickInsert={() => handleSelectTab('quick-insert')}
@@ -169,6 +205,10 @@ export default function App() {
             metrics={metrics}
             formula={formula}
             calculatedFields={calculatedFields}
+            coaches={coaches}
+            coachBallots={coachBallots}
+            players={players}
+            bumpBudget={bumpBudget}
             onRefreshData={refreshData}
           />
         )}

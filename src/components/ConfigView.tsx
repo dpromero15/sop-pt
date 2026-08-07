@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Sliders, 
   Tag, 
@@ -6,11 +6,12 @@ import {
   RotateCcw, 
   Download, 
   Upload, 
-  Sparkles, 
   Layers,
   Pencil,
   Calculator,
   Award,
+  Trash2,
+  Lock,
 } from 'lucide-react';
 import { 
   LabelDefinition, 
@@ -19,10 +20,15 @@ import {
   MetricType,
   MetricAggregationMode,
   CalculatedFieldDefinition,
+  Coach,
+  CoachBallot,
+  Player,
+  AdjustedBumpConfig,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { TeamManagementView } from './TeamManagementView';
 import { AdminToolsView } from './AdminToolsView';
+import { CoachesRatingView } from './CoachesRatingView';
 import { defaultAggregationMode } from '../utils/metricAggregation';
 
 interface ConfigViewProps {
@@ -30,6 +36,10 @@ interface ConfigViewProps {
   metrics: MetricDefinition[];
   formula: ScoringFormulaConfig;
   calculatedFields: CalculatedFieldDefinition[];
+  coaches: Coach[];
+  coachBallots: CoachBallot[];
+  players: Player[];
+  bumpBudget: AdjustedBumpConfig;
   onRefreshData: () => void;
 }
 
@@ -44,6 +54,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   metrics,
   formula,
   calculatedFields,
+  coaches,
+  coachBallots,
+  players,
+  bumpBudget,
   onRefreshData
 }) => {
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
@@ -60,8 +74,31 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     return map;
   });
 
-  // Modal / Form state for Adding Custom Label
+  // Keep weightsMap in sync when labels change (add/remove/clear)
+  useEffect(() => {
+    setWeightsMap((prev) => {
+      const next: Record<string, { weightPercent: number; enabled: boolean }> = {};
+      const formulaById = new Map<string, { weightPercent: number; enabled: boolean }>(
+        formula.weights.map((w) => [
+          w.labelId,
+          { weightPercent: w.weightPercent, enabled: w.enabled },
+        ]),
+      );
+      labels.forEach((l) => {
+        const fromFormula = formulaById.get(l.id);
+        next[l.id] =
+          prev[l.id] ??
+          (fromFormula
+            ? { weightPercent: fromFormula.weightPercent, enabled: fromFormula.enabled }
+            : { weightPercent: 10, enabled: true });
+      });
+      return next;
+    });
+  }, [labels, formula.weights]);
+
+  // Modal / Form state for Adding / Editing Custom Label
   const [isAddLabelOpen, setIsAddLabelOpen] = useState(false);
+  const [editingLabel, setEditingLabel] = useState<LabelDefinition | null>(null);
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelDesc, setNewLabelDesc] = useState('');
   const [newLabelColor, setNewLabelColor] = useState('emerald');
@@ -79,13 +116,30 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [metricMin, setMetricMin] = useState('');
   const [metricMax, setMetricMax] = useState('');
   const [metricDesc, setMetricDesc] = useState('');
+  const [metricIncludeInAdjusted, setMetricIncludeInAdjusted] = useState(true);
+  const [metricTreatNoScoreAsZero, setMetricTreatNoScoreAsZero] = useState(true);
 
   // Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [plusBudgetDraft, setPlusBudgetDraft] = useState(String(bumpBudget.plusBudget));
+  const [minusBudgetDraft, setMinusBudgetDraft] = useState(String(bumpBudget.minusBudget));
+
+  useEffect(() => {
+    setPlusBudgetDraft(String(bumpBudget.plusBudget));
+    setMinusBudgetDraft(String(bumpBudget.minusBudget));
+  }, [bumpBudget.plusBudget, bumpBudget.minusBudget]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const handleSaveBumpBudget = () => {
+    const plus = Math.max(0, Math.floor(Number(plusBudgetDraft) || 0));
+    const minus = Math.max(0, Math.floor(Number(minusBudgetDraft) || 0));
+    StorageService.saveBumpBudget({ plusBudget: plus, minusBudget: minus });
+    onRefreshData();
+    showToast('✓ Adjusted bump budget saved');
   };
 
   const resetMetricForm = () => {
@@ -99,6 +153,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setMetricMin('');
     setMetricMax('');
     setMetricDesc('');
+    setMetricIncludeInAdjusted(true);
+    setMetricTreatNoScoreAsZero(true);
   };
 
   const openAddMetric = () => {
@@ -123,8 +179,13 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       m.maxExpectedValue !== undefined ? String(m.maxExpectedValue) : '',
     );
     setMetricDesc(m.description || '');
+    setMetricIncludeInAdjusted(m.includeInAdjustedTotal !== false);
+    setMetricTreatNoScoreAsZero(m.treatNoScoreAsZero !== false);
     setIsMetricModalOpen(true);
   };
+
+  const isWeightLocked = (lbl: LabelDefinition) =>
+    Boolean(lbl.system) || lbl.id === 'attendance';
 
   // Handle weight change
   const handleWeightChange = (labelId: string, val: number) => {
@@ -185,15 +246,50 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       updated['fitness'] = { weightPercent: 25, enabled: true };
     }
 
+    // Keep system-locked categories (e.g. Attendance) at their current weights.
+    labels.forEach((l) => {
+      if (isWeightLocked(l) && weightsMap[l.id]) {
+        updated[l.id] = { ...weightsMap[l.id] };
+      }
+    });
+
     setWeightsMap(updated);
   };
 
-  // Add Label
-  const handleAddLabel = (e: React.FormEvent) => {
+  const openEditLabel = (lbl: LabelDefinition) => {
+    setEditingLabel(lbl);
+    setNewLabelName(lbl.name);
+    setNewLabelDesc(lbl.description);
+    setNewLabelColor(lbl.color);
+    setIsAddLabelOpen(true);
+  };
+
+  const closeLabelModal = () => {
+    setIsAddLabelOpen(false);
+    setEditingLabel(null);
+    setNewLabelName('');
+    setNewLabelDesc('');
+    setNewLabelColor('emerald');
+  };
+
+  // Add / update Label
+  const handleSaveLabel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabelName.trim()) return;
 
-    StorageService.addLabel({
+    if (editingLabel) {
+      StorageService.updateLabel({
+        ...editingLabel,
+        name: newLabelName.trim(),
+        description: newLabelDesc.trim() || editingLabel.description,
+      });
+      closeLabelModal();
+      onRefreshData();
+      showToast('✓ Category label updated!');
+      return;
+    }
+
+    const created = StorageService.addLabel({
       name: newLabelName,
       description: newLabelDesc || 'Custom category label',
       color: newLabelColor,
@@ -201,11 +297,69 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       badgeText: `text-${newLabelColor}-300`
     });
 
-    setNewLabelName('');
-    setNewLabelDesc('');
-    setIsAddLabelOpen(false);
+    setWeightsMap((prev) => ({
+      ...prev,
+      [created.id]: prev[created.id] ?? { weightPercent: 10, enabled: true },
+    }));
+
+    closeLabelModal();
     onRefreshData();
     showToast('✓ New category label added!');
+  };
+
+  const handleDeleteLabel = (lbl: LabelDefinition) => {
+    if (lbl.system) return;
+    if (!confirm(`Remove category label "${lbl.name}"? Metrics using it must be reassigned first.`)) {
+      return;
+    }
+    try {
+      StorageService.deleteLabel(lbl.id);
+      setWeightsMap((prev) => {
+        const next = { ...prev };
+        delete next[lbl.id];
+        return next;
+      });
+      onRefreshData();
+      showToast('✓ Category label removed!');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not delete label.');
+    }
+  };
+
+  const handleClearNonSystemLabels = () => {
+    if (
+      !confirm(
+        'Clear all non-system category labels? System labels (e.g. Attendance) are kept. Formula weights for removed labels will be stripped.',
+      )
+    ) {
+      return;
+    }
+    StorageService.clearNonSystemLabels();
+    const remaining = StorageService.getLabels();
+    const formulaNow = StorageService.getFormula();
+    const map: Record<string, { weightPercent: number; enabled: boolean }> = {};
+    remaining.forEach((l) => {
+      const w = formulaNow.weights.find((fw) => fw.labelId === l.id);
+      map[l.id] = w
+        ? { weightPercent: w.weightPercent, enabled: w.enabled }
+        : { weightPercent: 10, enabled: true };
+    });
+    setWeightsMap(map);
+    onRefreshData();
+    showToast('✓ Non-system labels cleared!');
+  };
+
+  const handleClearNonSystemMetrics = () => {
+    if (
+      !confirm(
+        'Clear all non-attendance metrics? Session attendance is kept; calculated fields and session metric plans will be scrubbed.',
+      )
+    ) {
+      return;
+    }
+    StorageService.clearNonSystemMetrics();
+    onRefreshData();
+    showToast('✓ Non-system metrics cleared!');
   };
 
   // Add / update Metric Definition
@@ -213,6 +367,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     e.preventDefault();
     if (!metricName.trim()) return;
 
+    const isAttendanceMetric =
+      metricType === 'attendance' || editingMetricId === 'm_attendance';
     const payload: Omit<MetricDefinition, 'id'> = {
       name: metricName.trim(),
       labelId: metricLabelId,
@@ -223,6 +379,12 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       description: metricDesc.trim() || undefined,
       minExpectedValue: metricMin !== '' ? Number(metricMin) : undefined,
       maxExpectedValue: metricMax !== '' ? Number(metricMax) : undefined,
+      ...(isAttendanceMetric
+        ? {}
+        : {
+            includeInAdjustedTotal: metricIncludeInAdjusted,
+            treatNoScoreAsZero: metricTreatNoScoreAsZero,
+          }),
     };
 
     if (editingMetricId) {
@@ -307,6 +469,64 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       <TeamManagementView onRefreshData={onRefreshData} />
       <AdminToolsView onRefreshData={onRefreshData} />
 
+      <CoachesRatingView
+        coaches={coaches}
+        ballots={coachBallots}
+        players={players}
+        onRefreshData={onRefreshData}
+      />
+
+      {/* Adjusted ±1 bump budget */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div className="pb-3 border-b border-slate-800">
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <Award className="w-4 h-4 text-cyan-400" />
+            <span>Adjusted ±1 Bump Budget</span>
+          </h3>
+          <p className="text-xs text-slate-400 mt-1">
+            Team-level budgets for Rankings → Adjusted Rank only. Sum of positive
+            bumps cannot exceed plus budget; abs sum of negatives cannot exceed
+            minus budget.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+              Plus budget
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={plusBudgetDraft}
+              onChange={(e) => setPlusBudgetDraft(e.target.value)}
+              className="w-28 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+              Minus budget
+            </label>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={minusBudgetDraft}
+              onChange={(e) => setMinusBudgetDraft(e.target.value)}
+              className="w-28 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={handleSaveBumpBudget}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold"
+          >
+            <Check className="w-3.5 h-3.5" />
+            Save budget
+          </button>
+        </div>
+      </div>
+
       {/* Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
@@ -376,6 +596,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {labels.map(lbl => {
             const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
+            const locked = isWeightLocked(lbl);
             return (
               <div
                 key={lbl.id}
@@ -388,10 +609,17 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     <input
                       type="checkbox"
                       checked={item.enabled}
-                      onChange={() => handleToggleLabelEnabled(lbl.id)}
-                      className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 bg-slate-900 border-slate-700"
+                      onChange={() => !locked && handleToggleLabelEnabled(lbl.id)}
+                      disabled={locked}
+                      className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 bg-slate-900 border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     <span className="font-bold text-sm text-white">{lbl.name}</span>
+                    {locked && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">
+                        <Lock className="w-2.5 h-2.5" />
+                        System
+                      </span>
+                    )}
                   </div>
 
                   <span className="text-sm font-extrabold text-rose-400">
@@ -408,8 +636,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     max={50}
                     step={5}
                     value={item.weightPercent}
-                    onChange={(e) => handleWeightChange(lbl.id, parseInt(e.target.value))}
-                    className="w-full accent-rose-500 cursor-pointer"
+                    onChange={(e) =>
+                      !locked && handleWeightChange(lbl.id, parseInt(e.target.value))
+                    }
+                    disabled={locked}
+                    className="w-full accent-rose-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 )}
               </div>
@@ -422,33 +653,79 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Category Labels Manager */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Tag className="w-4 h-4 text-emerald-400" />
               <span>Category Labels ({labels.length})</span>
             </h3>
 
-            <button
-              onClick={() => setIsAddLabelOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 font-semibold text-xs transition-all active:scale-95"
-            >
-              + Add Label
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleClearNonSystemLabels}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 font-semibold text-xs transition-all active:scale-95"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingLabel(null);
+                  setNewLabelName('');
+                  setNewLabelDesc('');
+                  setNewLabelColor('emerald');
+                  setIsAddLabelOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 font-semibold text-xs transition-all active:scale-95"
+              >
+                + Add Label
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
             {labels.map(lbl => (
               <div
                 key={lbl.id}
-                className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs"
+                className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-2 text-xs"
               >
-                <div>
-                  <span className="font-bold text-white">{lbl.name}</span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white">{lbl.name}</span>
+                    {lbl.system && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                        <Lock className="w-2.5 h-2.5" />
+                        System
+                      </span>
+                    )}
+                  </div>
                   <p className="text-slate-400 text-[11px] mt-0.5">{lbl.description}</p>
                 </div>
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${lbl.badgeBg}`}>
-                  {lbl.color}
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${lbl.badgeBg}`}>
+                    {lbl.color}
+                  </span>
+                  {!lbl.system && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => openEditLabel(lbl)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                        title="Edit label"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteLabel(lbl)}
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                        title="Remove label"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -456,18 +733,28 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
         {/* Metric Definitions Manager */}
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Layers className="w-4 h-4 text-blue-400" />
               <span>Measured Metrics ({metrics.length})</span>
             </h3>
 
-            <button
-              onClick={openAddMetric}
-              className="px-3 py-1.5 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 font-semibold text-xs transition-all active:scale-95"
-            >
-              + Add Metric
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleClearNonSystemMetrics}
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 font-semibold text-xs transition-all active:scale-95"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={openAddMetric}
+                className="px-3 py-1.5 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 font-semibold text-xs transition-all active:scale-95"
+              >
+                + Add Metric
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
@@ -595,12 +882,14 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL: ADD LABEL */}
+      {/* MODAL: ADD / EDIT LABEL */}
       {isAddLabelOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-white">
-            <h3 className="text-lg font-bold">Add Custom Category Label</h3>
-            <form onSubmit={handleAddLabel} className="space-y-3 text-xs sm:text-sm">
+            <h3 className="text-lg font-bold">
+              {editingLabel ? 'Edit Category Label' : 'Add Custom Category Label'}
+            </h3>
+            <form onSubmit={handleSaveLabel} className="space-y-3 text-xs sm:text-sm">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Label Name *</label>
                 <input
@@ -627,7 +916,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddLabelOpen(false)}
+                  onClick={closeLabelModal}
                   className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold"
                 >
                   Cancel
@@ -636,7 +925,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold"
                 >
-                  Save Label
+                  {editingLabel ? 'Save Changes' : 'Save Label'}
                 </button>
               </div>
             </form>
@@ -770,6 +1059,44 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   placeholder="Optional notes for coaches"
                 />
               </div>
+
+              {metricType !== 'attendance' && editingMetricId !== 'm_attendance' && (
+                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950/50 p-3">
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={metricIncludeInAdjusted}
+                      onChange={(e) => setMetricIncludeInAdjusted(e.target.checked)}
+                      className="mt-0.5 w-4 h-4 rounded text-blue-500 focus:ring-blue-500 bg-slate-900 border-slate-700"
+                    />
+                    <span>
+                      <span className="block font-semibold text-slate-200">
+                        Include in Adjusted total
+                      </span>
+                      <span className="block text-[11px] text-slate-500">
+                        When off, this metric does not gap-penalize unscored players in Adjusted Rank
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={metricTreatNoScoreAsZero}
+                      onChange={(e) => setMetricTreatNoScoreAsZero(e.target.checked)}
+                      disabled={!metricIncludeInAdjusted}
+                      className="mt-0.5 w-4 h-4 rounded text-blue-500 focus:ring-blue-500 bg-slate-900 border-slate-700 disabled:opacity-50"
+                    />
+                    <span>
+                      <span className="block font-semibold text-slate-200">
+                        Treat no score as 0
+                      </span>
+                      <span className="block text-[11px] text-slate-500">
+                        Only applies when included in Adjusted — missing entries count as 0
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              )}
 
               <div className="pt-2 flex justify-end gap-2">
                 <button

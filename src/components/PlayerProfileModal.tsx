@@ -55,18 +55,15 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const rankings = calculatePlayerRankings(allPlayers, allEntries, metrics, labels, formula);
   const playerRanking = rankings.find(r => r.player.id === player.id);
 
-  // Radar Chart Data preparation — only plot categories with real logs
-  const radarData = labels
-    .map((lbl) => {
-      const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
-      if (lScore === null) return null;
-      return {
-        category: lbl.name,
-        score: lScore,
-        fullMark: 100,
-      };
-    })
-    .filter((d): d is { category: string; score: number; fullMark: number } => d !== null);
+  // Radar: unscored categories plot at a low hidden placeholder (shape only — not a real score).
+  const radarData = labels.map((lbl) => {
+    const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
+    return {
+      category: lbl.name,
+      score: lScore ?? 20,
+      fullMark: 100,
+    };
+  });
 
   // Recent Metric Entries for history list
   const playerEntries = allEntries
@@ -196,7 +193,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
               <div className="h-64 w-full">
                 {radarData.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-xs text-slate-500 text-center px-4">
-                    No category scores yet — log metrics to build the radar.
+                    No category labels configured.
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
