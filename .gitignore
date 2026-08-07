@@ -5,3 +5,4 @@ services/api/dist
 .env.local
 .env
 *.log
+.vite
