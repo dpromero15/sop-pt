@@ -1,14 +1,14 @@
 import React from 'react';
-import { 
-  Trophy, 
-  Zap, 
-  Users, 
-  Calendar, 
-  Sliders, 
-  Shield, 
-  Plus, 
-  Sparkles 
+import {
+  Trophy,
+  Zap,
+  Users,
+  Calendar,
+  Sliders,
+  Shield,
+  Plus,
 } from 'lucide-react';
+import type { Team } from '../types';
 
 export type TabRoute = 'rankings' | 'quick-insert' | 'players' | 'sessions' | 'config';
 
@@ -19,6 +19,7 @@ interface NavigationProps {
   onOpenQuickSession: () => void;
   playerCount: number;
   sessionCount: number;
+  team: Team;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -27,52 +28,51 @@ export const Navigation: React.FC<NavigationProps> = ({
   onOpenQuickAddPlayer,
   onOpenQuickSession,
   playerCount,
-  sessionCount
+  sessionCount,
+  team,
 }) => {
   const tabs = [
     {
       id: 'rankings' as TabRoute,
       label: 'Rankings',
       icon: Trophy,
-      badge: null,
-      color: 'text-amber-500'
+      badge: null as string | number | null,
+      color: 'text-amber-500',
     },
     {
       id: 'quick-insert' as TabRoute,
       label: 'Quick Insert',
       icon: Zap,
-      badge: 'LIVE',
-      color: 'text-emerald-500'
+      badge: 'LIVE' as string | number | null,
+      color: 'text-emerald-500',
     },
     {
       id: 'players' as TabRoute,
       label: 'Players',
       icon: Users,
-      badge: playerCount,
-      color: 'text-blue-500'
+      badge: playerCount as string | number | null,
+      color: 'text-blue-500',
     },
     {
       id: 'sessions' as TabRoute,
       label: 'Sessions',
       icon: Calendar,
-      badge: sessionCount,
-      color: 'text-purple-500'
+      badge: sessionCount as string | number | null,
+      color: 'text-purple-500',
     },
     {
       id: 'config' as TabRoute,
       label: 'Formula',
       icon: Sliders,
-      badge: null,
-      color: 'text-rose-500'
-    }
+      badge: null as string | number | null,
+      color: 'text-rose-500',
+    },
   ];
 
   return (
     <>
-      {/* iOS Top Bar */}
       <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 text-white px-4 py-3 sm:px-6">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          {/* Brand & Team Info */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center">
               <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
@@ -82,19 +82,18 @@ export const Navigation: React.FC<NavigationProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="font-bold text-base tracking-tight text-white leading-none">
-                  Thunder FC
+                  {team.name}
                 </h1>
                 <span className="text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  U-16 Squad
+                  {team.ageGroup} Squad
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 font-medium">
-                Season 2026 • Performance Tracker
+                Season {team.season} • Performance Tracker
               </p>
             </div>
           </div>
 
-          {/* iOS Quick Actions */}
           <div className="flex items-center gap-2">
             <button
               onClick={onOpenQuickSession}
@@ -114,7 +113,6 @@ export const Navigation: React.FC<NavigationProps> = ({
         </div>
       </header>
 
-      {/* Floating Bottom Navigation Bar (iOS Tab Bar Aesthetic) */}
       <nav className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg bg-slate-900/95 backdrop-blur-xl border border-slate-800/90 shadow-2xl rounded-2xl p-1.5">
         <div className="grid grid-cols-5 gap-1">
           {tabs.map((tab) => {
@@ -136,18 +134,22 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <div className="relative">
                   <Icon className={`w-5 h-5 ${isActive ? tab.color : 'text-slate-400'}`} />
                   {tab.badge !== null && (
-                    <span className={`absolute -top-1.5 -right-2 px-1 py-0.2 text-[9px] font-bold rounded-full border ${
-                      typeof tab.badge === 'string'
-                        ? 'bg-emerald-500 text-slate-950 border-emerald-400'
-                        : 'bg-slate-700 text-slate-300 border-slate-600'
-                    }`}>
+                    <span
+                      className={`absolute -top-1.5 -right-2 px-1 py-0.2 text-[9px] font-bold rounded-full border ${
+                        typeof tab.badge === 'string'
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400'
+                          : 'bg-slate-700 text-slate-300 border-slate-600'
+                      }`}
+                    >
                       {tab.badge}
                     </span>
                   )}
                 </div>
-                <span className={`text-[10px] mt-1 tracking-tight truncate max-w-full ${
-                  isActive ? 'text-white font-medium' : 'text-slate-400 font-normal'
-                }`}>
+                <span
+                  className={`text-[10px] mt-1 tracking-tight truncate max-w-full ${
+                    isActive ? 'text-white font-medium' : 'text-slate-400 font-normal'
+                  }`}
+                >
                   {tab.label}
                 </span>
               </button>

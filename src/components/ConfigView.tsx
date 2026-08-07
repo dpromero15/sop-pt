@@ -20,6 +20,8 @@ import {
   MetricType 
 } from '../types';
 import { StorageService } from '../services/storage';
+import { TeamManagementView } from './TeamManagementView';
+import { AdminToolsView } from './AdminToolsView';
 
 interface ConfigViewProps {
   labels: LabelDefinition[];
@@ -226,6 +228,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
           <span>{toastMsg}</span>
         </div>
       )}
+
+      <TeamManagementView onRefreshData={onRefreshData} />
+      <AdminToolsView onRefreshData={onRefreshData} />
 
       {/* Header Banner */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">

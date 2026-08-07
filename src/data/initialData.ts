@@ -4,8 +4,26 @@ import {
   Player, 
   Session, 
   MetricEntry, 
-  ScoringFormulaConfig 
+  ScoringFormulaConfig,
+  Team,
 } from '../types';
+
+export const DEFAULT_TEAM: Team = {
+  id: 'team_thunder_fc_u16',
+  name: 'Thunder FC',
+  shortName: 'TFC',
+  season: '2026',
+  ageGroup: 'U-16',
+  clubName: 'Thunder Football Club',
+  homeVenue: 'Thunder Field',
+  primaryColor: '#10b981',
+  secondaryColor: '#0f172a',
+  coachName: 'Coach Rivera',
+  contactEmail: 'coach@thunderfc.example',
+  timezone: 'America/Denver',
+  notes: 'Sample squad for local development.',
+  updatedAt: new Date().toISOString(),
+};
 
 export const DEFAULT_LABELS: LabelDefinition[] = [
   {

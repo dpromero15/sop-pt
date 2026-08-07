@@ -22,6 +22,7 @@ export default function App() {
   });
 
   // App Data State
+  const [team, setTeam] = useState(() => StorageService.getTeam());
   const [players, setPlayers] = useState(() => StorageService.getPlayers());
   const [sessions, setSessions] = useState(() => StorageService.getSessions());
   const [entries, setEntries] = useState(() => StorageService.getEntries());
@@ -37,6 +38,7 @@ export default function App() {
 
   // Sync state on storage updates
   const refreshData = () => {
+    setTeam(StorageService.getTeam());
     setPlayers(StorageService.getPlayers());
     setSessions(StorageService.getSessions());
     setEntries(StorageService.getEntries());
@@ -86,6 +88,7 @@ export default function App() {
         }}
         playerCount={players.length}
         sessionCount={sessions.length}
+        team={team}
       />
 
       {/* Main Screen Router View Container */}

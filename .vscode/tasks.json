@@ -29,6 +29,31 @@
         "kind": "build",
         "isDefault": false
       }
+    },
+    {
+      "label": "run api (local)",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/run-api-local.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "api",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "listening on"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": false
+      }
     }
   ]
 }

@@ -1,6 +1,8 @@
 # Soccer Team Manager
 
-Soccer team management app for registering players, quick session data insertion, metric labels, and configurable scoring rankings.
+Soccer team management app for registering players, quick session data insertion, metric labels, configurable scoring rankings, editable team profile, and durable storage (local JSON blobs with optional Cloud Run + Firestore).
+
+**Version:** 2.0.0
 
 ## Run locally
 
@@ -8,8 +10,23 @@ Soccer team management app for registering players, quick session data insertion
 
 1. Install dependencies:
    `npm install`
-2. Run the app:
+2. Copy env template (optional for cloud):
+   `cp .env.example .env.local`
+3. Run the app:
    `npm run dev`
+
+### Tasks
+
+- **run web (local)** — Vite SPA (`scripts/run-web-local.sh`)
+- **run api (local)** — Cloud Run API (`scripts/run-api-local.sh`)
+
+### API
+
+```bash
+cd services/api && npm install && npm run dev
+```
+
+See [docs/](docs/README.md) for OKRs, architecture, and API contracts.
 
 ## Scripts
 

@@ -1,3 +1,21 @@
+export interface Team {
+  id: string;
+  name: string;
+  shortName: string;
+  season: string;
+  ageGroup: string;
+  clubName: string;
+  homeVenue: string;
+  primaryColor: string;
+  secondaryColor: string;
+  logoUrl?: string;
+  coachName?: string;
+  contactEmail?: string;
+  timezone: string;
+  notes?: string;
+  updatedAt: string;
+}
+
 export type MetricCategory = 
   | 'attendance'
   | 'speed'
