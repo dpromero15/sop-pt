@@ -1,0 +1,27 @@
+---
+description: Semver, release branches, labels, and PR closing conventions
+alwaysApply: true
+---
+
+# Version control
+
+Full SOP: [docs/sop/version-control.md](docs/sop/version-control.md). PR closing: [github-prs skill](.cursor/skills/github-prs/SKILL.md).
+
+## Semver
+
+- **MAJOR** — breaking contracts / rewrite
+- **MINOR** — backward-compatible features (`release/vX.Y.0`)
+- **PATCH** — bugs/docs/polish (`release/vX.Y.Z`)
+- Keep root `package.json` and README **Version:** in sync
+- Bump `services/api` version only when API behavior/contract changes
+
+## Branches & labels
+
+- Work on `release/vX.Y.Z` matching the version being shipped
+- Label issues/PRs with `vX.Y.Z`
+- Merge to `main` via PR only; no force-push to shared branches
+
+## Issues & PRs
+
+- Close finished issues **only** with PR body `Closes #N` (never `gh issue close` for PR work)
+- Release PRs: Summary, Test plan, and a complete **Closes** section
