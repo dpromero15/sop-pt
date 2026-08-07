@@ -6,6 +6,7 @@ import {
   MetricEntry, 
   ScoringFormulaConfig,
   Team,
+  CalculatedFieldDefinition,
 } from '../types';
 
 export const DEFAULT_TEAM: Team = {
@@ -108,6 +109,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'attendance',
     unit: 'status',
     higherIsBetter: true,
+    aggregationMode: 'latest',
     description: 'Present (100%), Late (50%), Absent (0%), Excused (Exempt)'
   },
   {
@@ -117,6 +119,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
+    aggregationMode: 'best',
     minExpectedValue: 4.8,
     maxExpectedValue: 7.0,
     description: 'Timed 40m sprint from static start. Lower time is better.'
@@ -128,6 +131,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
+    aggregationMode: 'best',
     minExpectedValue: 4.2,
     maxExpectedValue: 6.5,
     description: 'Pro agility shuttle run time.'
@@ -139,6 +143,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'count',
     unit: 'reps',
     higherIsBetter: true,
+    aggregationMode: 'best',
     minExpectedValue: 10,
     maxExpectedValue: 200,
     description: 'Maximum consecutive juggles using feet and thighs without dropping.'
@@ -150,6 +155,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'percentage',
     unit: '%',
     higherIsBetter: true,
+    aggregationMode: 'latest',
     minExpectedValue: 50,
     maxExpectedValue: 98,
     description: 'Percentage of successful passes under drill or match pressure.'
@@ -161,6 +167,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'count',
     unit: 'goals',
     higherIsBetter: true,
+    aggregationMode: 'sum',
     minExpectedValue: 0,
     maxExpectedValue: 5,
     description: 'Match or scrimmage goals scored.'
@@ -172,6 +179,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'count',
     unit: 'assists',
     higherIsBetter: true,
+    aggregationMode: 'sum',
     minExpectedValue: 0,
     maxExpectedValue: 5,
     description: 'Direct assists leading to goals.'
@@ -183,6 +191,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'count',
     unit: 'tackles',
     higherIsBetter: true,
+    aggregationMode: 'sum',
     minExpectedValue: 0,
     maxExpectedValue: 12,
     description: 'Successful ground tackles and ball recoveries.'
@@ -194,6 +203,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'count',
     unit: 'level',
     higherIsBetter: true,
+    aggregationMode: 'best',
     minExpectedValue: 6,
     maxExpectedValue: 15,
     description: 'Multi-stage fitness test shuttle level completed.'
@@ -205,10 +215,42 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     type: 'rating_10',
     unit: '/10',
     higherIsBetter: true,
+    aggregationMode: 'latest',
     minExpectedValue: 1,
     maxExpectedValue: 10,
     description: 'Coach rating (1-10) for effort, listening, and sportsmanship.'
   }
+];
+
+/** Optional derived stats — disabled by default; only computed when enabled. */
+export const DEFAULT_CALCULATED_FIELDS: CalculatedFieldDefinition[] = [
+  {
+    id: 'cf_40m_avg',
+    name: '40m Average',
+    kind: 'average',
+    baseMetricId: 'm_40m_dash',
+    enabled: false,
+    higherIsBetter: false,
+    unit: 's',
+  },
+  {
+    id: 'cf_40m_percentile',
+    name: '40m Percentile',
+    kind: 'percentile',
+    baseMetricId: 'm_40m_dash',
+    enabled: false,
+    higherIsBetter: true,
+    unit: '%',
+  },
+  {
+    id: 'cf_goals_per_match',
+    name: 'Goals per Match',
+    kind: 'per_session',
+    baseMetricId: 'm_goals',
+    enabled: false,
+    higherIsBetter: true,
+    unit: 'goals/match',
+  },
 ];
 
 export const INITIAL_PLAYERS: Player[] = [

@@ -137,4 +137,32 @@ describe('LocalJsonAdapter', () => {
     expect(other.importFullBackupJSON(json)).toBe(true);
     expect(other.getTeam().name).toBe('Export FC');
   });
+
+  it('migrates metrics missing aggregationMode', () => {
+    store.setItem(
+      STORAGE_KEYS.METRICS,
+      JSON.stringify([
+        {
+          id: 'm_40m_dash',
+          name: '40 Meter Dash',
+          labelId: 'speed',
+          type: 'time_seconds',
+          unit: 's',
+          higherIsBetter: false,
+        },
+      ]),
+    );
+    const metrics = adapter.getMetrics();
+    expect(metrics[0].aggregationMode).toBe('best');
+  });
+
+  it('loads calculated fields catalog', () => {
+    const fields = adapter.getCalculatedFields();
+    expect(fields.some((f) => f.id === 'cf_40m_avg')).toBe(true);
+    expect(fields.every((f) => f.enabled === false)).toBe(true);
+    adapter.updateCalculatedField({ ...fields[0], enabled: true });
+    expect(
+      adapter.getCalculatedFields().find((f) => f.id === fields[0].id)?.enabled,
+    ).toBe(true);
+  });
 });

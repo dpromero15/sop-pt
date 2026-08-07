@@ -76,6 +76,10 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const activePlayerIds = useMemo(() => activePlayers.map((p) => p.id), [activePlayers]);
   const rosterFingerprint = useMemo(() => activePlayerIds.join(','), [activePlayerIds]);
   const attendanceComplete = isAttendanceComplete(activePlayerIds, markedPlayerIds);
+  const remainingUnmarked = useMemo(
+    () => unmarkedPlayerIds(activePlayerIds, markedPlayerIds),
+    [activePlayerIds, markedPlayerIds],
+  );
 
   const enterLogger = (sessionId: string, startStep: WorkflowStep = 'plan') => {
     setSelectedSessionId(sessionId);
@@ -202,20 +206,21 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     onRefreshData();
   };
 
-  const markRemainingPresent = (remainingPlayerIds: string[]) => {
+  const markRemaining = (remainingPlayerIds: string[], status: AttendanceStatus) => {
+    if (remainingPlayerIds.length === 0) return;
     remainingPlayerIds.forEach((playerId) => {
       StorageService.addOrUpdateEntry({
         sessionId: selectedSessionId,
         playerId,
         metricId: ATTENDANCE_METRIC_ID,
-        value: 100,
-        rawValue: 'Present',
+        value: attendanceStatusToValue(status),
+        rawValue: attendanceStatusLabel(status),
       });
     });
     setAttendanceMap((prev) => {
       const next = { ...prev };
       remainingPlayerIds.forEach((id) => {
-        next[id] = 'present';
+        next[id] = status;
       });
       return next;
     });
@@ -225,8 +230,21 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
       return next;
     });
     onRefreshData();
+  };
+
+  const markRemainingPresent = (remainingPlayerIds: string[]) => {
+    markRemaining(remainingPlayerIds, 'present');
     setToastMessage('Marked remaining present');
     setAttendanceView('review');
+    setStep('score');
+  };
+
+  const continueToScoring = () => {
+    if (remainingUnmarked.length > 0) {
+      markRemaining(remainingUnmarked, 'absent');
+      setToastMessage(`Marked ${remainingUnmarked.length} remaining out`);
+      setAttendanceView('review');
+    }
     setStep('score');
   };
 
@@ -465,10 +483,13 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
           )}
           <button
             type="button"
-            onClick={() => setStep('score')}
+            onClick={continueToScoring}
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 py-3 font-medium text-slate-200 hover:bg-slate-900"
           >
-            Continue to scoring <ChevronRight className="h-5 w-5" />
+            {attendanceComplete
+              ? 'Continue to scoring'
+              : `Continue to scoring · rest out (${remainingUnmarked.length})`}{' '}
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
       )}

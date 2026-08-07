@@ -2,38 +2,48 @@ import React, { useState } from 'react';
 import { 
   Sliders, 
   Tag, 
-  Plus, 
   Check, 
   RotateCcw, 
   Download, 
   Upload, 
-  Trash2, 
   Sparkles, 
-  Info,
   Layers,
-  Award
+  Pencil,
+  Calculator,
+  Award,
 } from 'lucide-react';
 import { 
   LabelDefinition, 
   MetricDefinition, 
   ScoringFormulaConfig, 
-  MetricType 
+  MetricType,
+  MetricAggregationMode,
+  CalculatedFieldDefinition,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { TeamManagementView } from './TeamManagementView';
 import { AdminToolsView } from './AdminToolsView';
+import { defaultAggregationMode } from '../utils/metricAggregation';
 
 interface ConfigViewProps {
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
   formula: ScoringFormulaConfig;
+  calculatedFields: CalculatedFieldDefinition[];
   onRefreshData: () => void;
 }
+
+const AGGREGATION_OPTIONS: { value: MetricAggregationMode; label: string }[] = [
+  { value: 'sum', label: 'Season total (add all entries)' },
+  { value: 'best', label: 'All-time best (min or max by direction)' },
+  { value: 'latest', label: 'Latest entry only' },
+];
 
 export const ConfigView: React.FC<ConfigViewProps> = ({
   labels,
   metrics,
   formula,
+  calculatedFields,
   onRefreshData
 }) => {
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
@@ -56,13 +66,18 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [newLabelDesc, setNewLabelDesc] = useState('');
   const [newLabelColor, setNewLabelColor] = useState('emerald');
 
-  // Modal / Form state for Adding Custom Metric Definition
-  const [isAddMetricOpen, setIsAddMetricOpen] = useState(false);
+  // Modal / Form state for Adding / Editing Metric Definition
+  const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
+  const [editingMetricId, setEditingMetricId] = useState<string | null>(null);
   const [metricName, setMetricName] = useState('');
   const [metricLabelId, setMetricLabelId] = useState(labels[0]?.id || 'speed');
   const [metricType, setMetricType] = useState<MetricType>('count');
   const [metricUnit, setMetricUnit] = useState('reps');
   const [metricHigherIsBetter, setMetricHigherIsBetter] = useState(true);
+  const [metricAggregation, setMetricAggregation] =
+    useState<MetricAggregationMode>('latest');
+  const [metricMin, setMetricMin] = useState('');
+  const [metricMax, setMetricMax] = useState('');
   const [metricDesc, setMetricDesc] = useState('');
 
   // Toast
@@ -71,6 +86,44 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
+  };
+
+  const resetMetricForm = () => {
+    setEditingMetricId(null);
+    setMetricName('');
+    setMetricLabelId(labels[0]?.id || 'speed');
+    setMetricType('count');
+    setMetricUnit('reps');
+    setMetricHigherIsBetter(true);
+    setMetricAggregation('best');
+    setMetricMin('');
+    setMetricMax('');
+    setMetricDesc('');
+  };
+
+  const openAddMetric = () => {
+    resetMetricForm();
+    setIsMetricModalOpen(true);
+  };
+
+  const openEditMetric = (m: MetricDefinition) => {
+    setEditingMetricId(m.id);
+    setMetricName(m.name);
+    setMetricLabelId(m.labelId);
+    setMetricType(m.type);
+    setMetricUnit(m.unit);
+    setMetricHigherIsBetter(m.higherIsBetter);
+    setMetricAggregation(
+      m.aggregationMode ?? defaultAggregationMode(m),
+    );
+    setMetricMin(
+      m.minExpectedValue !== undefined ? String(m.minExpectedValue) : '',
+    );
+    setMetricMax(
+      m.maxExpectedValue !== undefined ? String(m.maxExpectedValue) : '',
+    );
+    setMetricDesc(m.description || '');
+    setIsMetricModalOpen(true);
   };
 
   // Handle weight change
@@ -155,25 +208,47 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     showToast('✓ New category label added!');
   };
 
-  // Add Metric Definition
-  const handleAddMetric = (e: React.FormEvent) => {
+  // Add / update Metric Definition
+  const handleSaveMetric = (e: React.FormEvent) => {
     e.preventDefault();
     if (!metricName.trim()) return;
 
-    StorageService.addMetric({
-      name: metricName,
+    const payload: Omit<MetricDefinition, 'id'> = {
+      name: metricName.trim(),
       labelId: metricLabelId,
       type: metricType,
-      unit: metricUnit,
+      unit: metricUnit.trim() || 'units',
       higherIsBetter: metricHigherIsBetter,
-      description: metricDesc
-    });
+      aggregationMode: metricAggregation,
+      description: metricDesc.trim() || undefined,
+      minExpectedValue: metricMin !== '' ? Number(metricMin) : undefined,
+      maxExpectedValue: metricMax !== '' ? Number(metricMax) : undefined,
+    };
 
-    setMetricName('');
-    setMetricDesc('');
-    setIsAddMetricOpen(false);
+    if (editingMetricId) {
+      StorageService.updateMetric({ id: editingMetricId, ...payload });
+      showToast('✓ Metric definition updated!');
+    } else {
+      StorageService.addMetric(payload);
+      showToast('✓ New custom metric registered!');
+    }
+
+    resetMetricForm();
+    setIsMetricModalOpen(false);
     onRefreshData();
-    showToast('✓ New custom metric registered!');
+  };
+
+  const handleToggleCalculatedField = (field: CalculatedFieldDefinition) => {
+    StorageService.updateCalculatedField({
+      ...field,
+      enabled: !field.enabled,
+    });
+    onRefreshData();
+    showToast(
+      field.enabled
+        ? `✓ ${field.name} disabled`
+        : `✓ ${field.name} enabled for rankings`,
+    );
   };
 
   // Export / Reset
@@ -388,35 +463,98 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             </h3>
 
             <button
-              onClick={() => setIsAddMetricOpen(true)}
+              onClick={openAddMetric}
               className="px-3 py-1.5 rounded-xl bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 font-semibold text-xs transition-all active:scale-95"
             >
               + Add Metric
             </button>
           </div>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {metrics.map(m => {
               const labelDef = labels.find(l => l.id === m.labelId);
+              const mode = m.aggregationMode ?? defaultAggregationMode(m);
               return (
                 <div
                   key={m.id}
-                  className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between text-xs"
+                  className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-2 text-xs"
                 >
-                  <div>
+                  <div className="min-w-0">
                     <span className="font-bold text-white">{m.name}</span>
                     <span className="text-slate-400 text-[11px] ml-2">({m.unit})</span>
                     <p className="text-slate-400 text-[10px] mt-0.5">
                       Label: <strong className="text-blue-300">{labelDef?.name || m.labelId}</strong>
+                      {' · '}
+                      {m.higherIsBetter ? 'Higher better' : 'Lower better'}
+                      {' · '}
+                      <span className="text-amber-300/90">{mode}</span>
                     </p>
                   </div>
-                  <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">
-                    {m.type}
-                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[10px] font-bold">
+                      {m.type}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openEditMetric(m)}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      title="Edit metric"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
           </div>
+        </div>
+      </div>
+
+      {/* SECTION 2b: CALCULATED FIELDS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div>
+          <h3 className="text-base font-bold text-white flex items-center gap-2">
+            <Calculator className="w-4 h-4 text-cyan-400" />
+            <span>Calculated Fields</span>
+          </h3>
+          <p className="text-slate-400 text-xs mt-1">
+            Pre-built derived stats (average, per-match rate, percentile). Enable only what you need — disabled fields are not computed.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          {calculatedFields.map((field) => {
+            const base = metrics.find((m) => m.id === field.baseMetricId);
+            return (
+              <div
+                key={field.id}
+                className={`bg-slate-950 border rounded-xl p-3 flex items-center justify-between gap-3 text-xs ${
+                  field.enabled ? 'border-cyan-500/30' : 'border-slate-800/80'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-white">{field.name}</span>
+                  <p className="text-slate-400 text-[10px] mt-0.5">
+                    {field.kind} · base:{' '}
+                    <strong className="text-cyan-300">
+                      {base?.name || field.baseMetricId}
+                    </strong>
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                  <span className="text-slate-400 text-[10px] font-semibold uppercase">
+                    {field.enabled ? 'On' : 'Off'}
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={field.enabled}
+                    onChange={() => handleToggleCalculatedField(field)}
+                    className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-slate-900 border-slate-700"
+                  />
+                </label>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -506,12 +644,14 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         </div>
       )}
 
-      {/* MODAL: ADD METRIC */}
-      {isAddMetricOpen && (
+      {/* MODAL: ADD / EDIT METRIC */}
+      {isMetricModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-white">
-            <h3 className="text-lg font-bold">Register Custom Measured Metric</h3>
-            <form onSubmit={handleAddMetric} className="space-y-3 text-xs sm:text-sm">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-white max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-bold">
+              {editingMetricId ? 'Edit Measured Metric' : 'Register Custom Measured Metric'}
+            </h3>
+            <form onSubmit={handleSaveMetric} className="space-y-3 text-xs sm:text-sm">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Metric Name *</label>
                 <input
@@ -544,11 +684,13 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     value={metricType}
                     onChange={(e) => setMetricType(e.target.value as MetricType)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    disabled={editingMetricId === 'm_attendance'}
                   >
                     <option value="time_seconds">Time (seconds)</option>
                     <option value="count">Count (reps/goals)</option>
                     <option value="percentage">Percentage (%)</option>
                     <option value="rating_10">Rating (1-10)</option>
+                    <option value="attendance">Attendance</option>
                   </select>
                 </div>
 
@@ -576,10 +718,66 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 </select>
               </div>
 
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">How to use (aggregation)</label>
+                <select
+                  value={metricAggregation}
+                  onChange={(e) =>
+                    setMetricAggregation(e.target.value as MetricAggregationMode)
+                  }
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                >
+                  {AGGREGATION_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Min expected</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={metricMin}
+                    onChange={(e) => setMetricMin(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    placeholder="optional"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">Max expected</label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={metricMax}
+                    onChange={(e) => setMetricMax(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    placeholder="optional"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Description</label>
+                <input
+                  type="text"
+                  value={metricDesc}
+                  onChange={(e) => setMetricDesc(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Optional notes for coaches"
+                />
+              </div>
+
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsAddMetricOpen(false)}
+                  onClick={() => {
+                    setIsMetricModalOpen(false);
+                    resetMetricForm();
+                  }}
                   className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-semibold"
                 >
                   Cancel
@@ -588,7 +786,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   type="submit"
                   className="px-4 py-2 rounded-xl bg-blue-500 text-white font-extrabold"
                 >
-                  Save Metric
+                  {editingMetricId ? 'Save Changes' : 'Save Metric'}
                 </button>
               </div>
             </form>

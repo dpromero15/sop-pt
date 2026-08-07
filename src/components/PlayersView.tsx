@@ -197,7 +197,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlayers.map(player => {
           const rInfo = rankingMap.get(player.id);
-          const totalScore = rInfo?.totalScore ?? 70;
+          const totalScore = rInfo?.totalScore ?? null;
 
           return (
             <div
@@ -229,11 +229,20 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Score</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Overall</span>
                     <span className={`text-xl font-black ${
-                      totalScore >= 85 ? 'text-emerald-400' : totalScore >= 70 ? 'text-blue-400' : 'text-amber-400'
+                      totalScore === null
+                        ? 'text-slate-500'
+                        : totalScore >= 85
+                          ? 'text-emerald-400'
+                          : totalScore >= 70
+                            ? 'text-blue-400'
+                            : 'text-amber-400'
                     }`}>
-                      {totalScore}
+                      {totalScore ?? 'Unscored'}
+                    </span>
+                    <span className="text-[10px] text-slate-500 block mt-0.5">
+                      Wtd {rInfo?.weightedTotalScore ?? '—'}
                     </span>
                   </div>
                 </div>
@@ -248,7 +257,13 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
               {/* Card Footer Actions */}
               <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
                 <span className="text-slate-400">
-                  Att Rate: <strong className="text-emerald-400 font-bold">{rInfo?.attendanceRate ?? 100}%</strong>
+                  Att Rate:{' '}
+                  <strong className="text-emerald-400 font-bold">
+                    {rInfo?.attendanceRate !== null &&
+                    rInfo?.attendanceRate !== undefined
+                      ? `${rInfo.attendanceRate}%`
+                      : '—'}
+                  </strong>
                 </span>
 
                 <div className="flex items-center gap-2">

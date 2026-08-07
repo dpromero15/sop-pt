@@ -39,6 +39,9 @@ export interface LabelDefinition {
 
 export type MetricType = 'time_seconds' | 'count' | 'percentage' | 'rating_10' | 'attendance';
 
+/** How session entries roll up for rankings / label scoring. */
+export type MetricAggregationMode = 'sum' | 'best' | 'latest';
+
 export interface MetricDefinition {
   id: string;
   name: string; // e.g. "40m Sprint Dash", "Juggling Count", "Attendance Status"
@@ -46,9 +49,24 @@ export interface MetricDefinition {
   type: MetricType;
   unit: string; // "s", "reps", "goals", "%", "/10"
   higherIsBetter: boolean; // e.g. Sprint time: false (lower seconds is better); Juggling: true
+  /** How logged entries aggregate for rankings (defaults applied on load if missing). */
+  aggregationMode: MetricAggregationMode;
   minExpectedValue?: number; // for normalization scaling
   maxExpectedValue?: number; // for normalization scaling
   description?: string;
+}
+
+/** Pre-built derived stats computed from a base measurable metric (not logged in sessions). */
+export type CalculatedFieldKind = 'average' | 'per_session' | 'percentile';
+
+export interface CalculatedFieldDefinition {
+  id: string;
+  name: string;
+  kind: CalculatedFieldKind;
+  baseMetricId: string;
+  enabled: boolean;
+  higherIsBetter: boolean;
+  unit: string;
 }
 
 export type PlayerPosition = 
@@ -124,12 +142,24 @@ export interface ScoringFormulaConfig {
 export interface PlayerLabelScore {
   labelId: string;
   labelName: string;
-  score: number; // 0 - 100 normalized
+  /**
+   * Overall category score: average of logged metrics only.
+   * Unscored / excused metrics are omitted (not counted against the player).
+   * Null when nothing has been scored in this label.
+   */
+  score: number | null;
+  /**
+   * Weighted category score: average over every metric in the label,
+   * treating missing / unscored / excused as 0.
+   * Null when the label has no metrics defined.
+   */
+  weightedScore: number | null;
   entryCount: number;
   metrics: {
     metricId: string;
     metricName: string;
-    latestValue: number;
+    /** Value after applying the metric's aggregationMode. */
+    aggregatedValue: number;
     unit: string;
     normalizedScore: number;
   }[];
@@ -137,9 +167,24 @@ export interface PlayerLabelScore {
 
 export interface PlayerRanking {
   player: Player;
-  totalScore: number; // 0 - 100
+  /**
+   * Overall total: formula weights applied only to labels with real scores.
+   * Unscored labels are omitted. Null when nothing scored in any weighted label.
+   */
+  totalScore: number | null;
+  /**
+   * Weighted total: formula weights applied to all enabled labels;
+   * unscored labels count as 0. Null when no enabled formula weights.
+   */
+  weightedTotalScore: number | null;
   labelScores: Record<string, PlayerLabelScore>; // labelId -> label score details
   rank: number;
-  attendanceRate: number; // 0 - 100%
+  /**
+   * Overall attendance rate from present/late/absent only.
+   * Excused is unscored and omitted. Null when no countable attendance.
+   */
+  attendanceRate: number | null;
   recentTrend: 'up' | 'down' | 'stable';
+  /** Enabled calculated field id → computed value (only when enabled). */
+  calculatedValues: Record<string, number>;
 }

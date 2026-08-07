@@ -2,7 +2,7 @@
 
 Soccer team management app for registering players, sideline session logging (swipe attendance + player-card scoring), metric labels, configurable scoring rankings, editable team profile, and durable storage (local JSON blobs with optional Cloud Run + Firestore).
 
-**Version:** 2.2.1
+**Version:** 2.3.0
 
 ## Run locally
 
