@@ -20,6 +20,8 @@ import {
   AdjustedBumpTransaction,
   Coach,
   CoachBallot,
+  PlayerPosition,
+  RankingBoundariesConfig,
 } from '../types';
 import { formatMetricValue } from '../utils/scoring';
 import {
@@ -40,6 +42,7 @@ import {
   coachBallotOrdinals,
   isCompleteBallot,
 } from '../utils/coachesRating';
+import { specialtyAdjustedRankings } from '../utils/eligibility';
 import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
@@ -54,6 +57,19 @@ import {
   selectionAfterCategoryChange,
   totalForMode,
 } from '../utils/rankingsFilter';
+
+const SPECIALTY_POSITIONS: PlayerPosition[] = [
+  'GK',
+  'CB',
+  'LB',
+  'RB',
+  'CDM',
+  'CM',
+  'CAM',
+  'LW',
+  'RW',
+  'ST',
+];
 
 interface RankingsViewProps {
   rankings: PlayerRanking[];
@@ -76,6 +92,7 @@ interface RankingsViewProps {
   onOpenFormulaConfig: () => void;
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
+  rankingBoundaries: RankingBoundariesConfig;
 }
 
 function coachDisplayName(coaches: Coach[], coachId: string): string {
@@ -263,6 +280,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   onOpenFormulaConfig,
   onSelectPlayer,
   onOpenQuickInsert,
+  rankingBoundaries,
 }) => {
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
   const [selectedMetricId, setSelectedMetricId] =
@@ -272,6 +290,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const [totalMode, setTotalMode] = useState<RankingsTotalMode>('overall');
   /** 'average' = all complete ballots; otherwise a coach id. */
   const [coachesScope, setCoachesScope] = useState<string>('average');
+  const [specialtyPosition, setSpecialtyPosition] =
+    useState<PlayerPosition | null>(null);
   const [emptyLine] = useState(
     () =>
       EMPTY_RANKINGS_LINES[
@@ -279,10 +299,40 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       ],
   );
 
+  const effectiveTotalMode: RankingsTotalMode = specialtyPosition
+    ? 'adjusted'
+    : totalMode;
+
+  const rankingSource = useMemo(() => {
+    if (specialtyPosition) {
+      return specialtyAdjustedRankings(rankings, specialtyPosition);
+    }
+    return rankings;
+  }, [rankings, specialtyPosition]);
+
   const rosterPlayers = useMemo(
     () => rankings.map((r) => r.player),
     [rankings],
   );
+
+  const activeCutLines = useMemo(() => {
+    if (specialtyPosition) {
+      const cut =
+        rankingBoundaries.specialtyCuts[specialtyPosition] ??
+        (specialtyPosition === 'GK' ? 4 : null);
+      return cut != null ? [cut] : [];
+    }
+    if (effectiveTotalMode !== 'adjusted') return [];
+    return [rankingBoundaries.primaryCut, rankingBoundaries.secondaryCut].sort(
+      (a, b) => a - b,
+    );
+  }, [
+    specialtyPosition,
+    effectiveTotalMode,
+    rankingBoundaries.primaryCut,
+    rankingBoundaries.secondaryCut,
+    rankingBoundaries.specialtyCuts,
+  ]);
 
   const activePlayerIds = useMemo(
     () => activePlayers(rosterPlayers).map((p) => p.id),
@@ -402,7 +452,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   }, [rankings, adjustedBumps]);
 
   const hasAnyBumps = bumpedPlayers.length > 0;
-  const filteredRankings = rankings.filter((r) => {
+  const filteredRankings = rankingSource.filter((r) => {
     const q = searchQuery.toLowerCase();
     return (
       r.player.name.toLowerCase().includes(q) ||
@@ -427,7 +477,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       selectedMetricId,
       metrics,
       calculatedFields,
-      totalMode,
+      effectiveTotalMode,
     );
   });
 
@@ -635,9 +685,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           >
             <button
               type="button"
-              onClick={() => setTotalMode('overall')}
+              onClick={() => {
+                setSpecialtyPosition(null);
+                setTotalMode('overall');
+              }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                totalMode === 'overall'
+                effectiveTotalMode === 'overall' && !specialtyPosition
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -647,26 +700,30 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             </button>
             <button
               type="button"
-              onClick={() => setTotalMode('adjusted')}
+              onClick={() => {
+                setSpecialtyPosition(null);
+                setTotalMode('adjusted');
+              }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                totalMode === 'adjusted'
+                effectiveTotalMode === 'adjusted' && !specialtyPosition
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Unscored values count as 0 — gaps lower standing; ±1 bumps apply"
+              title="Unscored values count as 0 — gaps lower standing; ±1 bumps apply; only eligible players ranked"
             >
               Adjusted Rank
             </button>
             <button
               type="button"
               onClick={() => {
+                setSpecialtyPosition(null);
                 setTotalMode('coaches');
                 setSelectedLabelId('all');
                 setSelectedMetricId('none');
                 setSortBy('total');
               }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                totalMode === 'coaches'
+                effectiveTotalMode === 'coaches'
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -675,15 +732,54 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               Coaches Rank
             </button>
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mr-0.5">
+              Specialty
+            </span>
+            <button
+              type="button"
+              onClick={() => setSpecialtyPosition(null)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                specialtyPosition === null
+                  ? 'bg-violet-500/20 text-violet-200 border-violet-500/40'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+            >
+              All
+            </button>
+            {SPECIALTY_POSITIONS.map((pos) => (
+              <button
+                key={pos}
+                type="button"
+                onClick={() => {
+                  setSpecialtyPosition(pos);
+                  setTotalMode('adjusted');
+                  setSelectedLabelId('all');
+                  setSelectedMetricId('none');
+                  setSortBy('total');
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  specialtyPosition === pos
+                    ? 'bg-violet-500/20 text-violet-200 border-violet-500/40'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                {pos}
+              </button>
+            ))}
+          </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
-            {totalMode === 'overall'
-              ? 'Pool place from scored metrics only (gaps omitted).'
-              : totalMode === 'adjusted'
-                ? 'Pool place from adjusted score (gaps count as 0). Use +1 / −1 on each row to nudge a player. Combines Statistical + Coaches context with bumps.'
-                : coachesScope === 'average'
-                  ? 'Competition rank from the average of complete coach ballots (lower average = better). Add ballots under Players → Coaches Rating.'
-                  : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot (1 = best).`}{' '}
-            {totalMode !== 'coaches' &&
+            {specialtyPosition
+              ? `Specialty ${specialtyPosition}: re-ranked among that position (eligible only).`
+              : effectiveTotalMode === 'overall'
+                ? 'Pool place from scored metrics only (gaps omitted).'
+                : effectiveTotalMode === 'adjusted'
+                  ? 'Eligible players only (missing blocks-play paperwork at bottom). Gaps count as 0; ±1 bumps apply. Cut lines mark squad boundaries.'
+                  : coachesScope === 'average'
+                    ? 'Competition rank from the average of complete coach ballots (lower average = better). Add ballots under Players → Coaches Rating.'
+                    : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot (1 = best).`}{' '}
+            {effectiveTotalMode !== 'coaches' &&
+              !specialtyPosition &&
               'Applies to every category and formula standing.'}
           </p>
           {totalMode === 'coaches' && (
@@ -733,7 +829,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               )}
             </div>
           )}
-          {totalMode === 'adjusted' && (
+          {effectiveTotalMode === 'adjusted' && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {coaches.length === 0 ? (
                 <p className="text-xs text-amber-400/90">
@@ -997,18 +1093,30 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   bumpCoachId,
                 )
               : bumpNet;
-            const unscored = individualCoachOrdinals
-              ? !individualCoachOrdinals.has(item.player.id)
-              : isUnscoredForRankMode(
-                  item,
-                  sortBy,
-                  selectedLabelId,
-                  selectedMetricId,
-                  metrics,
-                  totalMode,
-                );
+            const ineligible =
+              effectiveTotalMode === 'adjusted' && item.eligibleToPlay === false;
+            const prevIneligible =
+              idx > 0 &&
+              effectiveTotalMode === 'adjusted' &&
+              sortedRankings[idx - 1].eligibleToPlay === false;
+            const showIneligibleDivider =
+              ineligible && !prevIneligible && idx > 0;
+
+            const unscored =
+              !ineligible &&
+              (individualCoachOrdinals
+                ? !individualCoachOrdinals.has(item.player.id)
+                : isUnscoredForRankMode(
+                    item,
+                    sortBy,
+                    selectedLabelId,
+                    selectedMetricId,
+                    metrics,
+                    effectiveTotalMode,
+                  ));
             const prevUnscored =
               idx > 0 &&
+              !prevIneligible &&
               (individualCoachOrdinals
                 ? !individualCoachOrdinals.has(sortedRankings[idx - 1].player.id)
                 : isUnscoredForRankMode(
@@ -1017,9 +1125,25 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     selectedLabelId,
                     selectedMetricId,
                     metrics,
-                    totalMode,
+                    effectiveTotalMode,
                   ));
-            const showUnscoredDivider = unscored && !prevUnscored && idx > 0;
+            const showUnscoredDivider =
+              unscored && !prevUnscored && !ineligible && idx > 0;
+
+            const prevDisplayRank =
+              idx > 0 ? rankForMode(sortedRankings[idx - 1], effectiveTotalMode) : null;
+            const curDisplayRank = rankForMode(item, effectiveTotalMode);
+            const crossedCuts = activeCutLines.filter((cut) => {
+              if (effectiveTotalMode !== 'adjusted' || sortBy !== 'total') {
+                return false;
+              }
+              if (prevDisplayRank == null) return false;
+              const nextRank = curDisplayRank;
+              return (
+                prevDisplayRank <= cut &&
+                (nextRank == null || nextRank > cut || ineligible)
+              );
+            });
 
             const isTop1 = idx === 0 && isBoardMode && !unscored;
             const isTop2 = idx === 1 && isBoardMode && !unscored;
@@ -1063,7 +1187,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
             const categoryScore =
               selectedLabelId !== 'all'
-                ? labelScoreForMode(item, selectedLabelId, totalMode)
+                ? labelScoreForMode(item, selectedLabelId, effectiveTotalMode)
                 : null;
 
             const showingMeasuredValue =
@@ -1082,10 +1206,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       selectedLabelId,
                       selectedMetricId,
                       metrics,
-                      totalMode,
+                      effectiveTotalMode,
+                    ) &&
+                    !(
+                      effectiveTotalMode === 'adjusted' &&
+                      r.eligibleToPlay === false
                     ),
               ).length;
-            const listRank = unscored ? null : scoredAhead + 1;
+            const listRank = unscored || ineligible ? null : scoredAhead + 1;
             const individualOrdinal = individualCoachOrdinals?.get(
               item.player.id,
             );
@@ -1093,8 +1221,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             const displayRank =
               individualOrdinal != null
                 ? individualOrdinal
-                : sortBy === 'total' && !unscored
-                  ? rankForMode(item, totalMode)
+                : sortBy === 'total' && !unscored && !ineligible
+                  ? rankForMode(item, effectiveTotalMode)
                   : listRank;
 
             const standingScore =
@@ -1104,11 +1232,11 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   ? categoryScore
                   : sortBy === 'total' ||
                       (sortBy !== 'metric' && sortBy !== 'calculated')
-                    ? totalForMode(item, totalMode)
+                    ? totalForMode(item, effectiveTotalMode)
                     : null;
 
             const coachesAverageDetail =
-              totalMode === 'coaches' &&
+              effectiveTotalMode === 'coaches' &&
               coachesScope === 'average' &&
               item.coachesTotalSum != null &&
               completeBallotCount > 0
@@ -1121,27 +1249,60 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 sortBy === 'label' ||
                 (sortBy !== 'metric' && sortBy !== 'calculated'));
 
-            const primaryDisplay = unscored
-              ? 'Unscored'
-              : showingMeasuredValue
-                ? specificMetricValue!
-                : poolRankPrimary && displayRank !== null
-                  ? `#${displayRank}`
-                  : standingScore !== null
-                    ? String(standingScore)
-                    : 'Unscored';
+            const primaryDisplay = ineligible
+              ? 'Ineligible'
+              : unscored
+                ? 'Unscored'
+                : showingMeasuredValue
+                  ? specificMetricValue!
+                  : poolRankPrimary && displayRank !== null
+                    ? `#${displayRank}`
+                    : standingScore !== null
+                      ? String(standingScore)
+                      : 'Unscored';
 
             const primaryIsPoolRank =
-              !unscored && poolRankPrimary && displayRank !== null;
+              !unscored &&
+              !ineligible &&
+              poolRankPrimary &&
+              displayRank !== null;
 
             const primaryIsNumericScore =
               !unscored &&
+              !ineligible &&
               !showingMeasuredValue &&
               !primaryIsPoolRank &&
               primaryDisplay !== 'Unscored';
 
             return (
               <React.Fragment key={item.player.id}>
+              {crossedCuts.map((cut) => (
+                <div
+                  key={`cut-${cut}-${item.player.id}`}
+                  className="flex items-center gap-3 pt-2 pb-1"
+                  role="separator"
+                  aria-label={`Cut line at ${cut}`}
+                >
+                  <div className="h-px flex-1 bg-violet-500/40" />
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-violet-300 shrink-0">
+                    Cut @ {cut}
+                  </span>
+                  <div className="h-px flex-1 bg-violet-500/40" />
+                </div>
+              ))}
+              {showIneligibleDivider && (
+                <div
+                  className="flex items-center gap-3 pt-2 pb-1"
+                  role="separator"
+                  aria-label="Ineligible players"
+                >
+                  <div className="h-px flex-1 bg-rose-500/30" />
+                  <span className="text-[11px] uppercase tracking-wider font-semibold text-rose-300 shrink-0">
+                    Ineligible
+                  </span>
+                  <div className="h-px flex-1 bg-rose-500/30" />
+                </div>
+              )}
               {showUnscoredDivider && (
                 <div
                   className="flex items-center gap-3 pt-2 pb-1"
@@ -1160,18 +1321,24 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 className={`group relative z-0 hover:z-30 focus-within:z-30 bg-slate-900/90 hover:bg-slate-800/90 border transition-all duration-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99] shadow-md ${
                   isTop1
                     ? 'border-amber-500/30 bg-gradient-to-r from-amber-950/20 to-slate-900'
-                    : unscored
-                      ? 'border-slate-800/60 opacity-90'
-                      : 'border-slate-800 hover:border-slate-700'
+                    : ineligible
+                      ? 'border-rose-500/20 opacity-85'
+                      : unscored
+                        ? 'border-slate-800/60 opacity-90'
+                        : 'border-slate-800 hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center gap-4">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm border shrink-0 ${rankBadgeStyle}`}
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm border shrink-0 ${
+                      ineligible
+                        ? 'bg-rose-950/40 text-rose-400 border-rose-500/30'
+                        : rankBadgeStyle
+                    }`}
                   >
                     {isTop1 ? (
                       <Trophy className="w-5 h-5 text-amber-400" />
-                    ) : unscored ? (
+                    ) : unscored || ineligible ? (
                       <span className="text-slate-600">—</span>
                     ) : (
                       <span>#{displayRank}</span>
@@ -1290,7 +1457,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800">
-                  {totalMode === 'adjusted' && (
+                  {effectiveTotalMode === 'adjusted' && (
                     <div
                       className="flex flex-col items-stretch gap-1 shrink-0"
                       onClick={(e) => e.stopPropagation()}
@@ -1302,6 +1469,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                         <button
                           type="button"
                           disabled={
+                            ineligible ||
                             !bumpCoachId ||
                             !canApplyBump(
                               adjustedBumps,
@@ -1321,6 +1489,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                         <button
                           type="button"
                           disabled={
+                            ineligible ||
                             !bumpCoachId ||
                             !canApplyBump(
                               adjustedBumps,

@@ -128,6 +128,7 @@ describe('attachCoachesTotals', () => {
         coachesTotalSum: 99,
         coachesRank: 1,
         adjustedBump: 0,
+        eligibleToPlay: true,
         labelScores: {},
         rank: 1,
         attendanceRate: null,

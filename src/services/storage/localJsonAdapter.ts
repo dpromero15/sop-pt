@@ -12,6 +12,11 @@ import type {
   CoachBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
+  ComplianceRequirement,
+  PlayerComplianceState,
+  EquipmentGroup,
+  EquipmentItem,
+  RankingBoundariesConfig,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -26,6 +31,11 @@ import {
   DEFAULT_COACH_BALLOTS,
   DEFAULT_BUMP_BUDGET,
   DEFAULT_ADJUSTED_BUMPS,
+  DEFAULT_COMPLIANCE_REQUIREMENTS,
+  DEFAULT_PLAYER_COMPLIANCE,
+  DEFAULT_EQUIPMENT_GROUPS,
+  DEFAULT_EQUIPMENT_ITEMS,
+  DEFAULT_RANKING_BOUNDARIES,
 } from '../../data/initialData';
 import type { StorageRepository, TeamSnapshot } from './types';
 import {
@@ -57,6 +67,11 @@ export const STORAGE_KEYS = {
   COACH_BALLOTS: 'stm_coach_ballots_v1',
   ADJUSTED_BUMPS: 'stm_adjusted_bumps_v1',
   BUMP_BUDGET: 'stm_bump_budget_v1',
+  COMPLIANCE_REQUIREMENTS: 'stm_compliance_requirements_v1',
+  PLAYER_COMPLIANCE: 'stm_player_compliance_v1',
+  EQUIPMENT_GROUPS: 'stm_equipment_groups_v1',
+  EQUIPMENT_ITEMS: 'stm_equipment_items_v1',
+  RANKING_BOUNDARIES: 'stm_ranking_boundaries_v1',
 } as const;
 
 type StorageChangeListener = () => void;
@@ -164,6 +179,25 @@ export class LocalJsonAdapter implements StorageRepository {
     const next = txs.filter((tx) => tx.playerId !== id);
     if (next.length !== txs.length) {
       this.saveBumpTransactions(next);
+    }
+    const compliance = this.getPlayerCompliance();
+    if (compliance[id]) {
+      const { [id]: _removed, ...rest } = compliance;
+      this.savePlayerCompliance(rest);
+    }
+    const items = this.getEquipmentItems();
+    const freed = items.map((item) =>
+      item.assignedPlayerId === id
+        ? {
+            ...item,
+            status: 'available' as const,
+            assignedPlayerId: undefined,
+            assignedAt: undefined,
+          }
+        : item,
+    );
+    if (freed.some((item, i) => item !== items[i])) {
+      this.saveEquipmentItems(freed);
     }
   }
 
@@ -455,6 +489,18 @@ export class LocalJsonAdapter implements StorageRepository {
   clearAllPlayers() {
     this.savePlayers([]);
     this.saveAdjustedBumps({});
+    this.savePlayerCompliance({});
+    const items = this.getEquipmentItems().map((item) =>
+      item.status === 'assigned'
+        ? {
+            ...item,
+            status: 'available' as const,
+            assignedPlayerId: undefined,
+            assignedAt: undefined,
+          }
+        : item,
+    );
+    this.saveEquipmentItems(items);
   }
 
   getFormula(): ScoringFormulaConfig {
@@ -625,6 +671,246 @@ export class LocalJsonAdapter implements StorageRepository {
     this.notify();
   }
 
+  getComplianceRequirements(): ComplianceRequirement[] {
+    const hadKey =
+      this.store.getItem(STORAGE_KEYS.COMPLIANCE_REQUIREMENTS) != null;
+    const list = this.readJson(
+      STORAGE_KEYS.COMPLIANCE_REQUIREMENTS,
+      DEFAULT_COMPLIANCE_REQUIREMENTS,
+    );
+    // First seed: mark current roster complete for blocking items so Adjusted
+    // ranks do not empty out until coaches edit checklists.
+    if (!hadKey) {
+      const players = this.getPlayers();
+      const compliance = this.getPlayerCompliance();
+      if (players.length > 0 && Object.keys(compliance).length === 0) {
+        const seeded: PlayerComplianceState = {};
+        const now = new Date().toISOString();
+        for (const p of players) {
+          seeded[p.id] = {};
+          for (const req of list) {
+            if (!req.blocksPlay) continue;
+            seeded[p.id][req.id] = { complete: true, completedAt: now };
+          }
+        }
+        this.writeJson(STORAGE_KEYS.PLAYER_COMPLIANCE, seeded);
+      }
+    }
+    return [...list].sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  saveComplianceRequirements(requirements: ComplianceRequirement[]) {
+    this.writeJson(STORAGE_KEYS.COMPLIANCE_REQUIREMENTS, requirements);
+    this.notify();
+  }
+
+  addComplianceRequirement(
+    req: Omit<ComplianceRequirement, 'id'>,
+  ): ComplianceRequirement {
+    const list = this.getComplianceRequirements();
+    const idBase =
+      req.name.toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'req';
+    const newReq: ComplianceRequirement = {
+      ...req,
+      id: `req_${idBase}_${Date.now().toString(36)}`,
+    };
+    list.push(newReq);
+    this.saveComplianceRequirements(list);
+    return newReq;
+  }
+
+  updateComplianceRequirement(updated: ComplianceRequirement) {
+    this.saveComplianceRequirements(
+      this.getComplianceRequirements().map((r) =>
+        r.id === updated.id ? updated : r,
+      ),
+    );
+  }
+
+  deleteComplianceRequirement(id: string) {
+    this.saveComplianceRequirements(
+      this.getComplianceRequirements().filter((r) => r.id !== id),
+    );
+    const state = this.getPlayerCompliance();
+    let changed = false;
+    for (const playerId of Object.keys(state)) {
+      if (state[playerId]?.[id] !== undefined) {
+        delete state[playerId][id];
+        changed = true;
+      }
+    }
+    if (changed) this.savePlayerCompliance(state);
+  }
+
+  getPlayerCompliance(): PlayerComplianceState {
+    return this.readJson(
+      STORAGE_KEYS.PLAYER_COMPLIANCE,
+      DEFAULT_PLAYER_COMPLIANCE,
+    );
+  }
+
+  savePlayerCompliance(state: PlayerComplianceState) {
+    this.writeJson(STORAGE_KEYS.PLAYER_COMPLIANCE, state);
+    this.notify();
+  }
+
+  setPlayerRequirementComplete(
+    playerId: string,
+    requirementId: string,
+    complete: boolean,
+    note?: string,
+  ) {
+    const state = this.getPlayerCompliance();
+    const playerState = { ...(state[playerId] ?? {}) };
+    playerState[requirementId] = {
+      complete,
+      completedAt: complete ? new Date().toISOString() : undefined,
+      note: note ?? playerState[requirementId]?.note,
+    };
+    this.savePlayerCompliance({ ...state, [playerId]: playerState });
+  }
+
+  getEquipmentGroups(): EquipmentGroup[] {
+    return this.readJson(
+      STORAGE_KEYS.EQUIPMENT_GROUPS,
+      DEFAULT_EQUIPMENT_GROUPS,
+    );
+  }
+
+  saveEquipmentGroups(groups: EquipmentGroup[]) {
+    this.writeJson(STORAGE_KEYS.EQUIPMENT_GROUPS, groups);
+    this.notify();
+  }
+
+  addEquipmentGroup(group: Omit<EquipmentGroup, 'id'>): EquipmentGroup {
+    const groups = this.getEquipmentGroups();
+    const newGroup: EquipmentGroup = {
+      ...group,
+      id: `eqg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    };
+    groups.push(newGroup);
+    this.saveEquipmentGroups(groups);
+    return newGroup;
+  }
+
+  updateEquipmentGroup(updated: EquipmentGroup) {
+    this.saveEquipmentGroups(
+      this.getEquipmentGroups().map((g) =>
+        g.id === updated.id ? updated : g,
+      ),
+    );
+  }
+
+  deleteEquipmentGroup(id: string) {
+    this.saveEquipmentGroups(
+      this.getEquipmentGroups().filter((g) => g.id !== id),
+    );
+    this.saveEquipmentItems(
+      this.getEquipmentItems().filter((item) => item.groupId !== id),
+    );
+  }
+
+  getEquipmentItems(): EquipmentItem[] {
+    return this.readJson(STORAGE_KEYS.EQUIPMENT_ITEMS, DEFAULT_EQUIPMENT_ITEMS);
+  }
+
+  saveEquipmentItems(items: EquipmentItem[]) {
+    this.writeJson(STORAGE_KEYS.EQUIPMENT_ITEMS, items);
+    this.notify();
+  }
+
+  addEquipmentItem(
+    item: Omit<EquipmentItem, 'id' | 'status'> & {
+      status?: EquipmentItem['status'];
+    },
+  ): EquipmentItem {
+    const items = this.getEquipmentItems();
+    const newItem: EquipmentItem = {
+      ...item,
+      id: `eqi_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      status: item.status ?? 'available',
+    };
+    items.push(newItem);
+    this.saveEquipmentItems(items);
+    return newItem;
+  }
+
+  updateEquipmentItem(updated: EquipmentItem) {
+    this.saveEquipmentItems(
+      this.getEquipmentItems().map((item) =>
+        item.id === updated.id ? updated : item,
+      ),
+    );
+  }
+
+  deleteEquipmentItem(id: string) {
+    this.saveEquipmentItems(
+      this.getEquipmentItems().filter((item) => item.id !== id),
+    );
+  }
+
+  assignEquipmentItem(itemId: string, playerId: string): boolean {
+    const items = this.getEquipmentItems();
+    const item = items.find((i) => i.id === itemId);
+    if (!item || item.status === 'retired') return false;
+    if (item.status === 'assigned' && item.assignedPlayerId !== playerId) {
+      return false;
+    }
+    this.saveEquipmentItems(
+      items.map((i) =>
+        i.id === itemId
+          ? {
+              ...i,
+              status: 'assigned' as const,
+              assignedPlayerId: playerId,
+              assignedAt: new Date().toISOString(),
+            }
+          : i,
+      ),
+    );
+    return true;
+  }
+
+  returnEquipmentItem(itemId: string): boolean {
+    const items = this.getEquipmentItems();
+    const item = items.find((i) => i.id === itemId);
+    if (!item || item.status !== 'assigned') return false;
+    this.saveEquipmentItems(
+      items.map((i) =>
+        i.id === itemId
+          ? {
+              ...i,
+              status: 'available' as const,
+              assignedPlayerId: undefined,
+              assignedAt: undefined,
+            }
+          : i,
+      ),
+    );
+    return true;
+  }
+
+  getRankingBoundaries(): RankingBoundariesConfig {
+    const raw = this.readJson(
+      STORAGE_KEYS.RANKING_BOUNDARIES,
+      DEFAULT_RANKING_BOUNDARIES,
+    );
+    return {
+      primaryCut: Math.max(1, Math.floor(raw.primaryCut ?? 18)),
+      secondaryCut: Math.max(1, Math.floor(raw.secondaryCut ?? 36)),
+      specialtyCuts: { GK: 4, ...(raw.specialtyCuts ?? {}) },
+    };
+  }
+
+  saveRankingBoundaries(config: RankingBoundariesConfig) {
+    this.writeJson(STORAGE_KEYS.RANKING_BOUNDARIES, {
+      primaryCut: Math.max(1, Math.floor(config.primaryCut)),
+      secondaryCut: Math.max(1, Math.floor(config.secondaryCut)),
+      specialtyCuts: config.specialtyCuts ?? {},
+    });
+    this.notify();
+  }
+
   resetToSampleData() {
     this.saveTeam(DEFAULT_TEAM);
     this.savePlayers(INITIAL_PLAYERS);
@@ -638,6 +924,11 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveCoachBallots(DEFAULT_COACH_BALLOTS);
     this.saveBumpTransactions(DEFAULT_ADJUSTED_BUMPS);
     this.saveBumpBudget(DEFAULT_BUMP_BUDGET);
+    this.saveComplianceRequirements(DEFAULT_COMPLIANCE_REQUIREMENTS);
+    this.savePlayerCompliance(DEFAULT_PLAYER_COMPLIANCE);
+    this.saveEquipmentGroups(DEFAULT_EQUIPMENT_GROUPS);
+    this.saveEquipmentItems(DEFAULT_EQUIPMENT_ITEMS);
+    this.saveRankingBoundaries(DEFAULT_RANKING_BOUNDARIES);
   }
 
   getSnapshot(): TeamSnapshot {
@@ -655,12 +946,17 @@ export class LocalJsonAdapter implements StorageRepository {
       adjustedBumps: this.getAdjustedBumps(),
       bumpTransactions: this.getBumpTransactions(),
       bumpBudget: this.getBumpBudget(),
+      complianceRequirements: this.getComplianceRequirements(),
+      playerCompliance: this.getPlayerCompliance(),
+      equipmentGroups: this.getEquipmentGroups(),
+      equipmentItems: this.getEquipmentItems(),
+      rankingBoundaries: this.getRankingBoundaries(),
     };
   }
 
   exportFullBackupJSON(): string {
     const backup = {
-      version: '2.5',
+      version: '2.6',
       exportedAt: new Date().toISOString(),
       ...this.getSnapshot(),
     };
@@ -691,6 +987,21 @@ export class LocalJsonAdapter implements StorageRepository {
           this.saveAdjustedBumps(data.adjustedBumps);
         }
         if (data.bumpBudget) this.saveBumpBudget(data.bumpBudget);
+        if (data.complianceRequirements) {
+          this.saveComplianceRequirements(data.complianceRequirements);
+        }
+        if (data.playerCompliance) {
+          this.savePlayerCompliance(data.playerCompliance);
+        }
+        if (data.equipmentGroups) {
+          this.saveEquipmentGroups(data.equipmentGroups);
+        }
+        if (data.equipmentItems) {
+          this.saveEquipmentItems(data.equipmentItems);
+        }
+        if (data.rankingBoundaries) {
+          this.saveRankingBoundaries(data.rankingBoundaries);
+        }
         return true;
       }
       return false;
