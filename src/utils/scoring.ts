@@ -299,6 +299,7 @@ export function calculatePlayerRankings(
       coachesTotalSum: null,
       coachesRank: null,
       adjustedBump: 0,
+      eligibleToPlay: true,
       labelScores: labelScoresRecord,
       rank: 0,
       attendanceRate,

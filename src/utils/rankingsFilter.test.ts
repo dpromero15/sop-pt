@@ -104,6 +104,7 @@ function ranking(
     coachesTotalSum: null,
     coachesRank: null,
     adjustedBump: 0,
+    eligibleToPlay: true,
     labelScores: withAdjusted,
     rank: 1,
     attendanceRate: 100,
@@ -371,6 +372,7 @@ describe('compareRankings', () => {
     const higher = {
       ...ranking('higher', 82, {}, {}, 82),
       adjustedBump: 0,
+      eligibleToPlay: true,
     };
     // effective: lower=83, higher=82 → lower sorts first
     expect(

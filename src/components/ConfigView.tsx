@@ -21,10 +21,18 @@ import {
   MetricAggregationMode,
   CalculatedFieldDefinition,
   AdjustedBumpConfig,
+  ComplianceRequirement,
+  EquipmentGroup,
+  EquipmentItem,
+  RankingBoundariesConfig,
+  Player,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { TeamManagementView } from './TeamManagementView';
 import { AdminToolsView } from './AdminToolsView';
+import { ComplianceConfigPanel } from './ComplianceConfigPanel';
+import { EquipmentConfigPanel } from './EquipmentConfigPanel';
+import { RankingBoundariesPanel } from './RankingBoundariesPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
 
 interface ConfigViewProps {
@@ -33,6 +41,11 @@ interface ConfigViewProps {
   formula: ScoringFormulaConfig;
   calculatedFields: CalculatedFieldDefinition[];
   bumpBudget: AdjustedBumpConfig;
+  complianceRequirements: ComplianceRequirement[];
+  equipmentGroups: EquipmentGroup[];
+  equipmentItems: EquipmentItem[];
+  rankingBoundaries: RankingBoundariesConfig;
+  players: Player[];
   onRefreshData: () => void;
 }
 
@@ -48,6 +61,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   formula,
   calculatedFields,
   bumpBudget,
+  complianceRequirements,
+  equipmentGroups,
+  equipmentItems,
+  rankingBoundaries,
+  players,
   onRefreshData
 }) => {
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
@@ -458,6 +476,21 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
       <TeamManagementView onRefreshData={onRefreshData} />
       <AdminToolsView onRefreshData={onRefreshData} />
+
+      <ComplianceConfigPanel
+        requirements={complianceRequirements}
+        onRefreshData={onRefreshData}
+      />
+      <EquipmentConfigPanel
+        groups={equipmentGroups}
+        items={equipmentItems}
+        players={players}
+        onRefreshData={onRefreshData}
+      />
+      <RankingBoundariesPanel
+        boundaries={rankingBoundaries}
+        onRefreshData={onRefreshData}
+      />
 
       {/* Adjusted ±1 bump budget */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">

@@ -11,6 +11,11 @@ import type {
   CoachBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
+  ComplianceRequirement,
+  PlayerComplianceState,
+  EquipmentGroup,
+  EquipmentItem,
+  RankingBoundariesConfig,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -44,6 +49,11 @@ export interface TeamSnapshot {
   /** Source of truth for Adjusted ±1 bumps with coach attribution. */
   bumpTransactions?: AdjustedBumpTransaction[];
   bumpBudget: AdjustedBumpConfig;
+  complianceRequirements?: ComplianceRequirement[];
+  playerCompliance?: PlayerComplianceState;
+  equipmentGroups?: EquipmentGroup[];
+  equipmentItems?: EquipmentItem[];
+  rankingBoundaries?: RankingBoundariesConfig;
 }
 
 export interface StorageRepository {
@@ -108,6 +118,40 @@ export interface StorageRepository {
 
   getBumpBudget(): AdjustedBumpConfig;
   saveBumpBudget(budget: AdjustedBumpConfig): void;
+
+  getComplianceRequirements(): ComplianceRequirement[];
+  saveComplianceRequirements(requirements: ComplianceRequirement[]): void;
+  addComplianceRequirement(
+    req: Omit<ComplianceRequirement, 'id'>,
+  ): ComplianceRequirement;
+  updateComplianceRequirement(updated: ComplianceRequirement): void;
+  deleteComplianceRequirement(id: string): void;
+
+  getPlayerCompliance(): PlayerComplianceState;
+  savePlayerCompliance(state: PlayerComplianceState): void;
+  setPlayerRequirementComplete(
+    playerId: string,
+    requirementId: string,
+    complete: boolean,
+    note?: string,
+  ): void;
+
+  getEquipmentGroups(): EquipmentGroup[];
+  saveEquipmentGroups(groups: EquipmentGroup[]): void;
+  addEquipmentGroup(group: Omit<EquipmentGroup, 'id'>): EquipmentGroup;
+  updateEquipmentGroup(updated: EquipmentGroup): void;
+  deleteEquipmentGroup(id: string): void;
+
+  getEquipmentItems(): EquipmentItem[];
+  saveEquipmentItems(items: EquipmentItem[]): void;
+  addEquipmentItem(item: Omit<EquipmentItem, 'id' | 'status'> & { status?: EquipmentItem['status'] }): EquipmentItem;
+  updateEquipmentItem(updated: EquipmentItem): void;
+  deleteEquipmentItem(id: string): void;
+  assignEquipmentItem(itemId: string, playerId: string): boolean;
+  returnEquipmentItem(itemId: string): boolean;
+
+  getRankingBoundaries(): RankingBoundariesConfig;
+  saveRankingBoundaries(config: RankingBoundariesConfig): void;
 
   clearNonSystemLabels(): void;
   clearNonSystemMetrics(): void;

@@ -184,6 +184,13 @@ export function compareRankings(
   calculatedFields: CalculatedFieldDefinition[] = [],
   totalMode: RankingsTotalMode = 'overall',
 ): number {
+  // Adjusted / specialty: ineligible players always sort to the bottom.
+  if (totalMode === 'adjusted') {
+    const aInelig = a.eligibleToPlay === false;
+    const bInelig = b.eligibleToPlay === false;
+    if (aInelig !== bInelig) return aInelig ? 1 : -1;
+  }
+
   if (sortBy === 'label' && selectedLabelId !== 'all') {
     return compareOptionalRankValue(
       labelScoreForMode(a, selectedLabelId, totalMode),

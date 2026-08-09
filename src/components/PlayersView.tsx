@@ -18,9 +18,17 @@ import {
   MetricDefinition,
   Coach,
   CoachBallot,
+  ComplianceRequirement,
+  PlayerComplianceState,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { calculatePlayerRankings } from '../utils/scoring';
+import {
+  applyEligibilityToAdjustedRanks,
+  eligiblePlayerIdSet,
+  isEligibleToPlay,
+  missingBlockingRequirements,
+} from '../utils/eligibility';
 import {
   buildPlayerCsvTemplate,
   downloadCsv,
@@ -36,6 +44,8 @@ interface PlayersViewProps {
   metrics: MetricDefinition[];
   coaches: Coach[];
   coachBallots: CoachBallot[];
+  complianceRequirements: ComplianceRequirement[];
+  playerCompliance: PlayerComplianceState;
   onSelectPlayer: (player: Player) => void;
   onRefreshData: () => void;
   isAddModalOpen: boolean;
@@ -48,6 +58,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   metrics,
   coaches,
   coachBallots,
+  complianceRequirements,
+  playerCompliance,
   onSelectPlayer,
   onRefreshData,
   isAddModalOpen,
@@ -209,7 +221,14 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   // Calculate scores lookup map
   const entries = StorageService.getEntries();
   const formula = StorageService.getFormula();
-  const rankings = calculatePlayerRankings(players, entries, metrics, labels, formula);
+  const rankings = applyEligibilityToAdjustedRanks(
+    calculatePlayerRankings(players, entries, metrics, labels, formula),
+    eligiblePlayerIdSet(
+      players.map((p) => p.id),
+      complianceRequirements,
+      playerCompliance,
+    ),
+  );
   const rankingMap = new Map(rankings.map(r => [r.player.id, r]));
 
   return (
@@ -384,6 +403,16 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlayers.map(player => {
           const rInfo = rankingMap.get(player.id);
+          const eligible = isEligibleToPlay(
+            player.id,
+            complianceRequirements,
+            playerCompliance,
+          );
+          const missing = missingBlockingRequirements(
+            player.id,
+            complianceRequirements,
+            playerCompliance,
+          );
 
           return (
             <div
@@ -403,13 +432,21 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                       <h3 className="font-extrabold text-white text-base group-hover:text-blue-400 transition-colors">
                         {player.name}
                       </h3>
-                      <div className="flex items-center gap-1.5 mt-1">
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
                           #{player.jerseyNumber} • {player.position}
                         </span>
                         <span className="text-slate-400 text-xs font-medium">
                           {player.preferredFoot} Foot
                         </span>
+                        {!eligible && (
+                          <span
+                            className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[11px] font-bold border border-rose-500/30"
+                            title={missing.map((m) => m.name).join(', ')}
+                          >
+                            Ineligible
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -584,6 +621,46 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
+              {editingPlayer && complianceRequirements.length > 0 && (
+                <div className="space-y-2 border border-slate-800 rounded-xl p-3 bg-slate-950/50">
+                  <div className="text-slate-400 font-semibold">Compliance checklist</div>
+                  {complianceRequirements.map((req) => {
+                    const complete =
+                      playerCompliance[editingPlayer.id]?.[req.id]?.complete ===
+                      true;
+                    return (
+                      <label
+                        key={req.id}
+                        className="flex items-center justify-between gap-2 text-sm text-slate-200"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="min-w-0">
+                          {req.name}
+                          {req.blocksPlay && (
+                            <span className="ml-1.5 text-[10px] uppercase text-rose-300">
+                              blocks play
+                            </span>
+                          )}
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={complete}
+                          onChange={(e) => {
+                            StorageService.setPlayerRequirementComplete(
+                              editingPlayer.id,
+                              req.id,
+                              e.target.checked,
+                            );
+                            onRefreshData();
+                          }}
+                          className="rounded border-slate-600"
+                        />
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
 
               <div className="pt-2 flex items-center justify-end gap-2">
                 <button

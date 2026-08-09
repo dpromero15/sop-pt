@@ -11,6 +11,11 @@ import {
   CoachBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
+  ComplianceRequirement,
+  PlayerComplianceState,
+  EquipmentGroup,
+  EquipmentItem,
+  RankingBoundariesConfig,
 } from '../types';
 
 export const DEFAULT_TEAM: Team = {
@@ -429,6 +434,24 @@ export const INITIAL_PLAYERS: Player[] = [
   }
 ];
 
+/** Sample roster starts eligible (blocking paperwork marked complete). */
+export const DEFAULT_PLAYER_COMPLIANCE: PlayerComplianceState =
+  Object.fromEntries(
+    INITIAL_PLAYERS.map((p) => [
+      p.id,
+      {
+        req_sports_physical: {
+          complete: true,
+          completedAt: '2026-01-01T00:00:00.000Z',
+        },
+        req_school_agreement: {
+          complete: true,
+          completedAt: '2026-01-01T00:00:00.000Z',
+        },
+      },
+    ]),
+  );
+
 export const INITIAL_SESSIONS: Session[] = [
   {
     id: 'sess_1',
@@ -556,3 +579,40 @@ export const DEFAULT_BUMP_BUDGET: AdjustedBumpConfig = {
 
 /** Empty bump ledger (transactions). Legacy net maps are migrated on read. */
 export const DEFAULT_ADJUSTED_BUMPS: AdjustedBumpTransaction[] = [];
+
+export const DEFAULT_COMPLIANCE_REQUIREMENTS: ComplianceRequirement[] = [
+  {
+    id: 'req_sports_physical',
+    name: 'Sports Physical',
+    kind: 'paperwork',
+    blocksPlay: true,
+    description: 'Current sports physical on file',
+    sortOrder: 1,
+  },
+  {
+    id: 'req_school_agreement',
+    name: 'School Agreement',
+    kind: 'paperwork',
+    blocksPlay: true,
+    description: 'School athletic participation agreement',
+    sortOrder: 2,
+  },
+  {
+    id: 'req_season_fee',
+    name: 'Season Fee',
+    kind: 'fee',
+    blocksPlay: false,
+    description: 'Season registration fee paid',
+    sortOrder: 3,
+  },
+];
+
+export const DEFAULT_EQUIPMENT_GROUPS: EquipmentGroup[] = [];
+
+export const DEFAULT_EQUIPMENT_ITEMS: EquipmentItem[] = [];
+
+export const DEFAULT_RANKING_BOUNDARIES: RankingBoundariesConfig = {
+  primaryCut: 18,
+  secondaryCut: 36,
+  specialtyCuts: { GK: 4 },
+};

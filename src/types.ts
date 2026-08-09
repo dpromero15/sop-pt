@@ -102,6 +102,57 @@ export interface Player {
   notes?: string;
 }
 
+/** Configurable paperwork / fee / eligibility checklist item. */
+export type RequirementKind = 'paperwork' | 'fee' | 'eligibility' | 'other';
+
+export interface ComplianceRequirement {
+  id: string;
+  name: string;
+  kind: RequirementKind;
+  /** Incomplete + blocksPlay ⇒ ineligible for Adjusted / specialty ranks. */
+  blocksPlay: boolean;
+  description?: string;
+  sortOrder: number;
+}
+
+export interface ComplianceCompletion {
+  complete: boolean;
+  completedAt?: string;
+  note?: string;
+}
+
+/** playerId → requirementId → completion */
+export type PlayerComplianceState = Record<
+  string,
+  Record<string, ComplianceCompletion>
+>;
+
+/** Assignable equipment inventory. */
+export interface EquipmentGroup {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export type EquipmentItemStatus = 'available' | 'assigned' | 'retired';
+
+export interface EquipmentItem {
+  id: string;
+  groupId: string;
+  label: string;
+  status: EquipmentItemStatus;
+  assignedPlayerId?: string;
+  assignedAt?: string;
+  notes?: string;
+}
+
+/** Cut lines for Adjusted / specialty ranking lists. */
+export interface RankingBoundariesConfig {
+  primaryCut: number;
+  secondaryCut: number;
+  specialtyCuts: Partial<Record<PlayerPosition, number>>;
+}
+
 /** Training / testing / drill days are `session`; competitive games are `match`. */
 export type SessionType = 'session' | 'match';
 
@@ -246,6 +297,11 @@ export interface PlayerRanking {
   coachesRank: number | null;
   /** Net Adjusted ±1 bump for this player (0 when none). */
   adjustedBump: number;
+  /**
+   * False when any blocksPlay compliance requirement is incomplete.
+   * Adjusted / specialty competition ranks only include eligible players.
+   */
+  eligibleToPlay: boolean;
   labelScores: Record<string, PlayerLabelScore>; // labelId -> label score details
   /** @deprecated Prefer overallRank — kept as overall pool place for callers. */
   rank: number;

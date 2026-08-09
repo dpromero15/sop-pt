@@ -11,6 +11,10 @@ import { StorageService, subscribeToStorage } from './services/storage';
 import { calculatePlayerRankings } from './utils/scoring';
 import { attachCoachesTotals } from './utils/coachesRating';
 import { applyAdjustedBumps } from './utils/adjustedBumps';
+import {
+  applyEligibilityToAdjustedRanks,
+  eligiblePlayerIdSet,
+} from './utils/eligibility';
 import { Player } from './types';
 
 const BUMP_COACH_STORAGE_KEY = 'stm_active_bump_coach_v1';
@@ -49,6 +53,21 @@ export default function App() {
   const [bumpBudget, setBumpBudget] = useState(() =>
     StorageService.getBumpBudget(),
   );
+  const [complianceRequirements, setComplianceRequirements] = useState(() =>
+    StorageService.getComplianceRequirements(),
+  );
+  const [playerCompliance, setPlayerCompliance] = useState(() =>
+    StorageService.getPlayerCompliance(),
+  );
+  const [equipmentGroups, setEquipmentGroups] = useState(() =>
+    StorageService.getEquipmentGroups(),
+  );
+  const [equipmentItems, setEquipmentItems] = useState(() =>
+    StorageService.getEquipmentItems(),
+  );
+  const [rankingBoundaries, setRankingBoundaries] = useState(() =>
+    StorageService.getRankingBoundaries(),
+  );
   const [bumpCoachId, setBumpCoachId] = useState(() => {
     try {
       return localStorage.getItem(BUMP_COACH_STORAGE_KEY) ?? '';
@@ -79,6 +98,11 @@ export default function App() {
     setAdjustedBumps(StorageService.getAdjustedBumps());
     setBumpTransactions(StorageService.getBumpTransactions());
     setBumpBudget(StorageService.getBumpBudget());
+    setComplianceRequirements(StorageService.getComplianceRequirements());
+    setPlayerCompliance(StorageService.getPlayerCompliance());
+    setEquipmentGroups(StorageService.getEquipmentGroups());
+    setEquipmentItems(StorageService.getEquipmentItems());
+    setRankingBoundaries(StorageService.getRankingBoundaries());
   };
 
   useEffect(() => {
@@ -136,7 +160,13 @@ export default function App() {
       calculatedFields,
     );
     const withCoaches = attachCoachesTotals(base, players, coachBallots);
-    return applyAdjustedBumps(withCoaches, adjustedBumps);
+    const withBumps = applyAdjustedBumps(withCoaches, adjustedBumps);
+    const eligibleIds = eligiblePlayerIdSet(
+      players.map((p) => p.id),
+      complianceRequirements,
+      playerCompliance,
+    );
+    return applyEligibilityToAdjustedRanks(withBumps, eligibleIds);
   }, [
     players,
     entries,
@@ -146,6 +176,8 @@ export default function App() {
     calculatedFields,
     coachBallots,
     adjustedBumps,
+    complianceRequirements,
+    playerCompliance,
   ]);
 
   const handleApplyBump = (playerId: string, delta: 1 | -1) => {
@@ -206,6 +238,7 @@ export default function App() {
             onOpenFormulaConfig={() => setIsFormulaModalOpen(true)}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onOpenQuickInsert={() => handleSelectTab('quick-insert')}
+            rankingBoundaries={rankingBoundaries}
           />
         )}
 
@@ -227,6 +260,8 @@ export default function App() {
             metrics={metrics}
             coaches={coaches}
             coachBallots={coachBallots}
+            complianceRequirements={complianceRequirements}
+            playerCompliance={playerCompliance}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onRefreshData={refreshData}
             isAddModalOpen={isAddPlayerOpen}
@@ -262,6 +297,11 @@ export default function App() {
             formula={formula}
             calculatedFields={calculatedFields}
             bumpBudget={bumpBudget}
+            complianceRequirements={complianceRequirements}
+            equipmentGroups={equipmentGroups}
+            equipmentItems={equipmentItems}
+            rankingBoundaries={rankingBoundaries}
+            players={players}
             onRefreshData={refreshData}
           />
         )}

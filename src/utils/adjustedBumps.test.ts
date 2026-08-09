@@ -34,6 +34,7 @@ function ranking(
     coachesTotalSum: null,
     coachesRank: null,
     adjustedBump: 0,
+    eligibleToPlay: true,
     labelScores: {},
     rank: 1,
     attendanceRate: null,

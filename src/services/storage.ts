@@ -59,6 +59,21 @@ export async function hydrateCloudToLocal(): Promise<TeamSnapshot> {
     localAdapter.saveAdjustedBumps(snapshot.adjustedBumps);
   }
   if (snapshot.bumpBudget) localAdapter.saveBumpBudget(snapshot.bumpBudget);
+  if (snapshot.complianceRequirements) {
+    localAdapter.saveComplianceRequirements(snapshot.complianceRequirements);
+  }
+  if (snapshot.playerCompliance) {
+    localAdapter.savePlayerCompliance(snapshot.playerCompliance);
+  }
+  if (snapshot.equipmentGroups) {
+    localAdapter.saveEquipmentGroups(snapshot.equipmentGroups);
+  }
+  if (snapshot.equipmentItems) {
+    localAdapter.saveEquipmentItems(snapshot.equipmentItems);
+  }
+  if (snapshot.rankingBoundaries) {
+    localAdapter.saveRankingBoundaries(snapshot.rankingBoundaries);
+  }
   return snapshot;
 }
 
