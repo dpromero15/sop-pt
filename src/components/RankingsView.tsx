@@ -7,6 +7,7 @@ import {
   Download,
   Minus,
   Plus,
+  X,
 } from 'lucide-react';
 import {
   Player,
@@ -16,6 +17,9 @@ import {
   PlayerRanking,
   CalculatedFieldDefinition,
   AdjustedBumpConfig,
+  AdjustedBumpTransaction,
+  Coach,
+  CoachBallot,
 } from '../types';
 import { formatMetricValue } from '../utils/scoring';
 import {
@@ -24,10 +28,21 @@ import {
 } from '../utils/calculatedFields';
 import {
   bumpBudgetRemaining,
+  bumpUsage,
   canApplyBump,
+  LEGACY_BUMP_COACH_ID,
+  playerBumpNetForCoach,
+  playerBumpNetFromOthers,
+  transactionsForPlayer,
 } from '../utils/adjustedBumps';
 import {
+  activePlayers,
+  coachBallotOrdinals,
+  isCompleteBallot,
+} from '../utils/coachesRating';
+import {
   categoryScoreTagLabel,
+  compareOptionalRankValue,
   compareRankings,
   isUnscoredForRankMode,
   labelScoreForMode,
@@ -48,13 +63,179 @@ interface RankingsViewProps {
   formula: ScoringFormulaConfig;
   /** False when no metric entries exist (e.g. all sessions deleted). */
   hasLoggedData: boolean;
+  coaches: Coach[];
+  coachBallots: CoachBallot[];
+  bumpCoachId: string;
+  onBumpCoachChange: (coachId: string) => void;
   bumpBudget: AdjustedBumpConfig;
   adjustedBumps: Record<string, number>;
+  bumpTransactions: AdjustedBumpTransaction[];
   onApplyBump: (playerId: string, delta: 1 | -1) => void;
+  onClearBumps: () => void;
+  onClearPlayerBump: (playerId: string) => void;
   onOpenFormulaConfig: () => void;
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
 }
+
+function coachDisplayName(coaches: Coach[], coachId: string): string {
+  if (coachId === LEGACY_BUMP_COACH_ID) return 'Earlier bumps';
+  return coaches.find((c) => c.id === coachId)?.name ?? 'Unknown coach';
+}
+
+function formatCoachesAverage(sum: number, ballotCount: number): string {
+  if (ballotCount <= 0) return String(sum);
+  const avg = sum / ballotCount;
+  return Number.isInteger(avg) ? String(avg) : avg.toFixed(1);
+}
+
+function formatBumpTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function formatBumpNet(net: number): string {
+  return net > 0 ? `+${net}` : `${net}`;
+}
+
+/** Avatar badges: mine (green/red) + others (blue/amber) with transaction popout. */
+const PlayerBumpBadges: React.FC<{
+  playerId: string;
+  playerName: string;
+  totalNet: number;
+  myNet: number;
+  othersNet: number;
+  transactions: AdjustedBumpTransaction[];
+  coaches: Coach[];
+}> = ({
+  playerId,
+  playerName,
+  totalNet,
+  myNet,
+  othersNet,
+  transactions,
+  coaches,
+}) => {
+  if (myNet === 0 && othersNet === 0) return null;
+
+  const lines = transactionsForPlayer(transactions, playerId);
+
+  return (
+    <div
+      className="absolute -top-1.5 -left-1.5 z-30 group/bumpbadges"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-0.5">
+        {myNet !== 0 && (
+          <span
+            className={`min-w-[1.35rem] px-1 py-0.5 rounded-md text-[10px] font-black tabular-nums text-center border shadow-md cursor-default ${
+              myNet > 0
+                ? 'bg-emerald-500 text-slate-950 border-emerald-300'
+                : 'bg-rose-500 text-white border-rose-300'
+            }`}
+            title={`Your bumps ${formatBumpNet(myNet)}`}
+            aria-label={`Your bumps ${formatBumpNet(myNet)} for ${playerName}`}
+          >
+            {formatBumpNet(myNet)}
+          </span>
+        )}
+        {othersNet !== 0 && (
+          <span
+            className={`min-w-[1.35rem] px-1 py-0.5 rounded-md text-[10px] font-black tabular-nums text-center border shadow-md cursor-default ${
+              othersNet > 0
+                ? 'bg-slate-500 text-sky-100 border-slate-400'
+                : 'bg-amber-400 text-slate-950 border-amber-300'
+            }`}
+            title={`Other coaches ${formatBumpNet(othersNet)}`}
+            aria-label={`Other coaches ${formatBumpNet(othersNet)} for ${playerName}`}
+          >
+            {formatBumpNet(othersNet)}
+          </span>
+        )}
+      </div>
+      <div
+        role="tooltip"
+        className="pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-64 opacity-0 translate-y-1 transition-all group-hover/bumpbadges:opacity-100 group-hover/bumpbadges:translate-y-0 group-focus-within/bumpbadges:opacity-100 group-focus-within/bumpbadges:translate-y-0"
+      >
+        <div className="rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500">
+              Bump total
+            </p>
+            <span
+              className={`text-sm font-black tabular-nums ${
+                totalNet > 0
+                  ? 'text-emerald-400'
+                  : totalNet < 0
+                    ? 'text-rose-400'
+                    : 'text-slate-400'
+              }`}
+            >
+              {formatBumpNet(totalNet)}
+            </span>
+          </div>
+          {myNet !== 0 || othersNet !== 0 ? (
+            <div className="flex items-center gap-2 text-[10px] font-semibold mb-2 pb-2 border-b border-slate-800">
+              {myNet !== 0 && (
+                <span
+                  className={myNet > 0 ? 'text-emerald-400' : 'text-rose-400'}
+                >
+                  You {formatBumpNet(myNet)}
+                </span>
+              )}
+              {othersNet !== 0 && (
+                <span
+                  className={
+                    othersNet > 0 ? 'text-sky-300' : 'text-amber-400'
+                  }
+                >
+                  Others {formatBumpNet(othersNet)}
+                </span>
+              )}
+            </div>
+          ) : null}
+          <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5">
+            Transactions
+          </p>
+          {lines.length === 0 ? (
+            <p className="text-xs text-slate-500">No bump history.</p>
+          ) : (
+            <ul className="space-y-1.5 max-h-44 overflow-y-auto">
+              {lines.map((tx) => (
+                <li
+                  key={tx.id}
+                  className="flex items-center justify-between gap-2 text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="text-slate-200 truncate font-medium">
+                      {coachDisplayName(coaches, tx.coachId)}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {formatBumpTime(tx.createdAt)}
+                    </p>
+                  </div>
+                  <span
+                    className={`font-extrabold tabular-nums shrink-0 ${
+                      tx.delta > 0 ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {formatBumpNet(tx.delta)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const EMPTY_RANKINGS_LINES = [
   'Wow. Such empty. Much no sessions.',
@@ -69,9 +250,16 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   calculatedFields,
   formula,
   hasLoggedData,
+  coaches,
+  coachBallots,
+  bumpCoachId,
+  onBumpCoachChange,
   bumpBudget,
   adjustedBumps,
+  bumpTransactions,
   onApplyBump,
+  onClearBumps,
+  onClearPlayerBump,
   onOpenFormulaConfig,
   onSelectPlayer,
   onOpenQuickInsert,
@@ -82,12 +270,45 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<RankingsSortMode>('total');
   const [totalMode, setTotalMode] = useState<RankingsTotalMode>('overall');
+  /** 'average' = all complete ballots; otherwise a coach id. */
+  const [coachesScope, setCoachesScope] = useState<string>('average');
   const [emptyLine] = useState(
     () =>
       EMPTY_RANKINGS_LINES[
         Math.floor(Math.random() * EMPTY_RANKINGS_LINES.length)
       ],
   );
+
+  const rosterPlayers = useMemo(
+    () => rankings.map((r) => r.player),
+    [rankings],
+  );
+
+  const activePlayerIds = useMemo(
+    () => activePlayers(rosterPlayers).map((p) => p.id),
+    [rosterPlayers],
+  );
+
+  const completeBallotCount = useMemo(
+    () =>
+      coachBallots.filter((b) => isCompleteBallot(b, activePlayerIds)).length,
+    [coachBallots, activePlayerIds],
+  );
+
+  const coachesWithCompleteBallots = useMemo(
+    () =>
+      coaches.filter((c) => {
+        const ballot = coachBallots.find((b) => b.coachId === c.id);
+        return ballot ? isCompleteBallot(ballot, activePlayerIds) : false;
+      }),
+    [coaches, coachBallots, activePlayerIds],
+  );
+
+  const individualCoachOrdinals = useMemo(() => {
+    if (totalMode !== 'coaches' || coachesScope === 'average') return null;
+    const ballot = coachBallots.find((b) => b.coachId === coachesScope);
+    return coachBallotOrdinals(rosterPlayers, ballot);
+  }, [totalMode, coachesScope, coachBallots, rosterPlayers]);
 
   const scopedMetrics = useMemo(
     () => metricsForCategory(metrics, selectedLabelId),
@@ -109,6 +330,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   /** True when the current category / metric filter has any real logged values. */
   const scopeHasData = useMemo(() => {
     if (totalMode === 'coaches') {
+      if (individualCoachOrdinals) {
+        return individualCoachOrdinals.size > 0;
+      }
       return rankings.some((r) => r.coachesTotalSum !== null);
     }
 
@@ -152,12 +376,32 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     totalMode,
     activeMetric,
     activeCalculated,
+    individualCoachOrdinals,
   ]);
 
   const budgetRemaining = useMemo(
     () => bumpBudgetRemaining(adjustedBumps, bumpBudget),
     [adjustedBumps, bumpBudget],
   );
+
+  const bumpUsageTotals = useMemo(
+    () => bumpUsage(adjustedBumps),
+    [adjustedBumps],
+  );
+
+  const bumpedPlayers = useMemo(() => {
+    return rankings
+      .map((r) => ({
+        id: r.player.id,
+        name: r.player.name,
+        jersey: r.player.jerseyNumber,
+        bump: adjustedBumps[r.player.id] ?? r.adjustedBump ?? 0,
+      }))
+      .filter((p) => p.bump !== 0)
+      .sort((a, b) => b.bump - a.bump || a.jersey - b.jersey);
+  }, [rankings, adjustedBumps]);
+
+  const hasAnyBumps = bumpedPlayers.length > 0;
   const filteredRankings = rankings.filter((r) => {
     const q = searchQuery.toLowerCase();
     return (
@@ -167,8 +411,15 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     );
   });
 
-  const sortedRankings = [...filteredRankings].sort((a, b) =>
-    compareRankings(
+  const sortedRankings = [...filteredRankings].sort((a, b) => {
+    if (individualCoachOrdinals) {
+      return compareOptionalRankValue(
+        individualCoachOrdinals.get(a.player.id) ?? null,
+        individualCoachOrdinals.get(b.player.id) ?? null,
+        false,
+      );
+    }
+    return compareRankings(
       a,
       b,
       sortBy,
@@ -177,8 +428,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       metrics,
       calculatedFields,
       totalMode,
-    ),
-  );
+    );
+  });
 
   const selectCategory = (labelId: string | 'all') => {
     const next = selectionAfterCategoryChange(
@@ -194,7 +445,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
   const selectMetricTag = (metricId: string) => {
     // Second click clears metric rank-by → back to formula / category score
-    // (Rankings toggle still controls Overall vs Adjusted).
+    // (Rankings toggle still controls Statistical vs Adjusted).
     if (selectedMetricId === metricId) {
       setSelectedMetricId('none');
       setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
@@ -214,6 +465,11 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     setSortBy('calculated');
   };
 
+  const coachesScopeLabel =
+    coachesScope === 'average'
+      ? 'All coaches'
+      : (coaches.find((c) => c.id === coachesScope)?.name ?? 'Coach');
+
   const primaryScoreLabel =
     sortBy === 'metric' && activeMetric
       ? activeMetric.name
@@ -224,22 +480,27 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           : totalMode === 'adjusted'
             ? 'Adjusted Rank'
             : totalMode === 'coaches'
-              ? 'Coaches Totals'
-              : 'Overall Rank';
+              ? coachesScope === 'average'
+                ? 'Coaches Rank'
+                : `${coachesScopeLabel}'s Rank`
+              : 'Statistical Rank';
 
   const handleExportCSV = () => {
     let csv =
-      'Rank,Player Name,Jersey,Position,Overall Rank,Adjusted Rank,Coaches Rank,Overall Score,Adjusted Score,Coaches Sum,Bump,Attendance Rate\n';
+      'Rank,Player Name,Jersey,Position,Statistical Rank,Adjusted Rank,Coaches Rank,Statistical Score,Adjusted Score,Coaches Average,Bump,Attendance Rate\n';
     sortedRankings.forEach((r, idx) => {
       const overallRank = r.overallRank ?? 'Unscored';
       const adjustedRank = r.adjustedRank ?? 'Unscored';
       const coachesRank = r.coachesRank ?? 'Unscored';
       const overall = r.totalScore ?? 'Unscored';
       const adjusted = r.adjustedTotalScore ?? 'Unscored';
-      const coachesSum = r.coachesTotalSum ?? 'Unscored';
+      const coachesAvg =
+        r.coachesTotalSum != null && completeBallotCount > 0
+          ? formatCoachesAverage(r.coachesTotalSum, completeBallotCount)
+          : 'Unscored';
       const bump = r.adjustedBump ?? 0;
       const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesSum},${bump},${att}\n`;
+      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -249,7 +510,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     a.click();
   };
 
-  const isOverallMode =
+  const isBoardMode =
     selectedLabelId === 'all' && selectedMetricId === 'none';
 
   const scoreToneClass = (score: number | null | undefined) => {
@@ -262,9 +523,11 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const emptyCopy =
     totalMode === 'coaches' && !scopeHasData
       ? {
-          title: 'No Coaches Totals yet',
+          title: 'No Coaches Rank yet',
           detail:
-            'Save a complete coach ballot (unique ranks for every active player) in Config → Coaches Rating.',
+            coachesScope === 'average'
+              ? 'Add coaches and save a complete ballot (unique ranks for every active player) under Players → Coaches Rating.'
+              : `${coachesScopeLabel} has no complete ballot yet. Finish ranking every active player under Players → Coaches Rating.`,
         }
       : !hasLoggedData
       ? {
@@ -305,7 +568,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               Season Player Leaderboard
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1 max-w-2xl">
-              Pool ranks from squad standing scores (Overall omits gaps; Adjusted counts them), mixed by your coaching formula.
+              Pool ranks from squad standing scores (Statistical omits gaps; Adjusted counts them), mixed by your coaching formula.
             </p>
           </div>
 
@@ -360,7 +623,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           />
         </div>
 
-        {/* Rank mode: Overall / Adjusted / Coaches */}
+        {/* Rank mode: Statistical / Adjusted / Coaches */}
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
             Rankings
@@ -380,7 +643,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               }`}
               title="Unscored values are omitted — not counted against the player"
             >
-              Overall Rank
+              Statistical Rank
             </button>
             <button
               type="button"
@@ -407,33 +670,179 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Sum of ordinals from complete coach ballots (lower sum = better)"
+              title="Average of complete coach ballots, or one coach’s ordinal ranks"
             >
-              Coaches Totals
+              Coaches Rank
             </button>
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
             {totalMode === 'overall'
               ? 'Pool place from scored metrics only (gaps omitted).'
               : totalMode === 'adjusted'
-                ? 'Pool place from adjusted score (gaps count as 0), plus optional ±1 bumps.'
-                : 'Competition rank from sum of complete coach ballots (lower sum = better).'}{' '}
+                ? 'Pool place from adjusted score (gaps count as 0). Use +1 / −1 on each row to nudge a player. Combines Statistical + Coaches context with bumps.'
+                : coachesScope === 'average'
+                  ? 'Competition rank from the average of complete coach ballots (lower average = better). Add ballots under Players → Coaches Rating.'
+                  : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot (1 = best).`}{' '}
             {totalMode !== 'coaches' &&
               'Applies to every category and formula standing.'}
           </p>
-          {totalMode === 'adjusted' && (
-            <p className="text-[11px] text-cyan-400/90 mt-1 font-medium">
-              Bump budget remaining: +{budgetRemaining.plusRemaining} / −
-              {budgetRemaining.minusRemaining}
-              <span className="text-slate-500 font-normal">
-                {' '}
-                (of +{bumpBudget.plusBudget} / −{bumpBudget.minusBudget})
+          {totalMode === 'coaches' && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5">
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mr-0.5">
+                View
               </span>
-            </p>
+              <button
+                type="button"
+                onClick={() => setCoachesScope('average')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                  coachesScope === 'average'
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                    : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                }`}
+              >
+                All coaches (avg)
+              </button>
+              {coaches.map((c) => {
+                const hasComplete = coachesWithCompleteBallots.some(
+                  (x) => x.id === c.id,
+                );
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setCoachesScope(c.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                      coachesScope === c.id
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                    } ${!hasComplete ? 'opacity-60' : ''}`}
+                    title={
+                      hasComplete
+                        ? `${c.name}'s ballot`
+                        : `${c.name} — incomplete ballot`
+                    }
+                  >
+                    {c.name}
+                  </button>
+                );
+              })}
+              {coaches.length === 0 && (
+                <p className="text-xs text-amber-400/90">
+                  Add a coach under Players → Coaches Rating.
+                </p>
+              )}
+            </div>
+          )}
+          {totalMode === 'adjusted' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              {coaches.length === 0 ? (
+                <p className="text-xs text-amber-400/90">
+                  Add a coach under Players → Coaches Rating to apply bumps.
+                </p>
+              ) : (
+                <label className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                  <span className="font-semibold uppercase tracking-wider text-[10px] text-slate-500">
+                    Bumping as
+                  </span>
+                  <select
+                    value={bumpCoachId}
+                    onChange={(e) => onBumpCoachChange(e.target.value)}
+                    className="rounded-lg bg-slate-950 border border-slate-700 text-slate-200 text-xs font-semibold px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+                  >
+                    {coaches.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <div className="relative group/bumps">
+                <button
+                  type="button"
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-extrabold border transition-colors ${
+                    hasAnyBumps
+                      ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+                      : 'bg-slate-950 text-slate-400 border-slate-800'
+                  }`}
+                  aria-describedby="bump-breakdown"
+                >
+                  Bumps{' '}
+                  <span className="text-emerald-400">
+                    +{bumpUsageTotals.plusUsed}
+                  </span>
+                  <span className="text-slate-600">/</span>
+                  <span className="text-rose-400">
+                    −{bumpUsageTotals.minusUsed}
+                  </span>
+                  <span className="text-slate-500 font-semibold">
+                    · left +{budgetRemaining.plusRemaining}/−
+                    {budgetRemaining.minusRemaining}
+                  </span>
+                </button>
+                <div
+                  id="bump-breakdown"
+                  role="tooltip"
+                  className="pointer-events-none absolute left-0 top-full z-30 mt-1.5 w-64 opacity-0 translate-y-1 transition-all group-hover/bumps:opacity-100 group-hover/bumps:translate-y-0 group-focus-within/bumps:opacity-100 group-focus-within/bumps:translate-y-0"
+                >
+                  <div className="rounded-xl border border-slate-700 bg-slate-950 p-3 shadow-2xl">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">
+                      Who has bumps
+                    </p>
+                    {!hasAnyBumps ? (
+                      <p className="text-xs text-slate-500">
+                        No +1 / −1 applied yet. Use the Bump buttons on a player
+                        row.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {bumpedPlayers.map((p) => (
+                          <li
+                            key={p.id}
+                            className="flex items-center justify-between gap-2 text-xs"
+                          >
+                            <span className="text-slate-300 truncate">
+                              #{p.jersey} {p.name}
+                            </span>
+                            <span
+                              className={`font-extrabold tabular-nums shrink-0 ${
+                                p.bump > 0
+                                  ? 'text-emerald-400'
+                                  : 'text-rose-400'
+                              }`}
+                            >
+                              {p.bump > 0 ? `+${p.bump}` : p.bump}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {hasAnyBumps && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      confirm(
+                        'Clear all Adjusted +1 / −1 bumps for every player?',
+                      )
+                    ) {
+                      onClearBumps();
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-slate-700 hover:border-rose-500/40 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  Clear bumps
+                </button>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Category Label Tabs — hidden for Coaches Totals (ballot-only mode) */}
+        {/* Category Label Tabs — hidden for Coaches Rank (ballot-only mode) */}
         {totalMode !== 'coaches' && (
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
@@ -520,7 +929,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             {scopedMetrics.length === 0 && scopedCalculated.length === 0 ? (
               <span className="text-xs text-slate-500 px-1">
                 {selectedLabelId === 'all'
-                  ? 'No metric selected — ranking by Overall / Adjusted (see Rankings toggle).'
+                  ? 'No metric selected — ranking by Statistical / Adjusted (see Rankings toggle).'
                   : 'No metrics in this category — ranking by category standing (see Rankings toggle).'}
               </span>
             ) : selectedMetricId === 'none' ? (
@@ -572,29 +981,49 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
         ) : (
           sortedRankings.map((item, idx) => {
-            const unscored = isUnscoredForRankMode(
-              item,
-              sortBy,
-              selectedLabelId,
-              selectedMetricId,
-              metrics,
-              totalMode,
-            );
+            const bumpNet =
+              item.adjustedBump || adjustedBumps[item.player.id] || 0;
+            const myBumpNet = bumpCoachId
+              ? playerBumpNetForCoach(
+                  bumpTransactions,
+                  item.player.id,
+                  bumpCoachId,
+                )
+              : 0;
+            const othersBumpNet = bumpCoachId
+              ? playerBumpNetFromOthers(
+                  bumpTransactions,
+                  item.player.id,
+                  bumpCoachId,
+                )
+              : bumpNet;
+            const unscored = individualCoachOrdinals
+              ? !individualCoachOrdinals.has(item.player.id)
+              : isUnscoredForRankMode(
+                  item,
+                  sortBy,
+                  selectedLabelId,
+                  selectedMetricId,
+                  metrics,
+                  totalMode,
+                );
             const prevUnscored =
               idx > 0 &&
-              isUnscoredForRankMode(
-                sortedRankings[idx - 1],
-                sortBy,
-                selectedLabelId,
-                selectedMetricId,
-                metrics,
-                totalMode,
-              );
+              (individualCoachOrdinals
+                ? !individualCoachOrdinals.has(sortedRankings[idx - 1].player.id)
+                : isUnscoredForRankMode(
+                    sortedRankings[idx - 1],
+                    sortBy,
+                    selectedLabelId,
+                    selectedMetricId,
+                    metrics,
+                    totalMode,
+                  ));
             const showUnscoredDivider = unscored && !prevUnscored && idx > 0;
 
-            const isTop1 = idx === 0 && isOverallMode && !unscored;
-            const isTop2 = idx === 1 && isOverallMode && !unscored;
-            const isTop3 = idx === 2 && isOverallMode && !unscored;
+            const isTop1 = idx === 0 && isBoardMode && !unscored;
+            const isTop2 = idx === 1 && isBoardMode && !unscored;
+            const isTop3 = idx === 2 && isBoardMode && !unscored;
 
             let rankBadgeStyle = 'bg-slate-800 text-slate-300 border-slate-700';
             if (isTop1)
@@ -644,31 +1073,47 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             // Rank badge among scored players only; unscored share the bottom tier.
             const scoredAhead = sortedRankings
               .slice(0, idx)
-              .filter(
-                (r) =>
-                  !isUnscoredForRankMode(
-                    r,
-                    sortBy,
-                    selectedLabelId,
-                    selectedMetricId,
-                    metrics,
-                    totalMode,
-                  ),
+              .filter((r) =>
+                individualCoachOrdinals
+                  ? individualCoachOrdinals.has(r.player.id)
+                  : !isUnscoredForRankMode(
+                      r,
+                      sortBy,
+                      selectedLabelId,
+                      selectedMetricId,
+                      metrics,
+                      totalMode,
+                    ),
               ).length;
             const listRank = unscored ? null : scoredAhead + 1;
+            const individualOrdinal = individualCoachOrdinals?.get(
+              item.player.id,
+            );
             // Formula totals use competition ranks from scoring (ties share place).
             const displayRank =
-              sortBy === 'total' && !unscored
-                ? rankForMode(item, totalMode)
-                : listRank;
+              individualOrdinal != null
+                ? individualOrdinal
+                : sortBy === 'total' && !unscored
+                  ? rankForMode(item, totalMode)
+                  : listRank;
 
             const standingScore =
-              sortBy === 'label'
-                ? categoryScore
-                : sortBy === 'total' ||
-                    (sortBy !== 'metric' && sortBy !== 'calculated')
-                  ? totalForMode(item, totalMode)
-                  : null;
+              individualOrdinal != null
+                ? individualOrdinal
+                : sortBy === 'label'
+                  ? categoryScore
+                  : sortBy === 'total' ||
+                      (sortBy !== 'metric' && sortBy !== 'calculated')
+                    ? totalForMode(item, totalMode)
+                    : null;
+
+            const coachesAverageDetail =
+              totalMode === 'coaches' &&
+              coachesScope === 'average' &&
+              item.coachesTotalSum != null &&
+              completeBallotCount > 0
+                ? formatCoachesAverage(item.coachesTotalSum, completeBallotCount)
+                : null;
 
             const poolRankPrimary =
               !showingMeasuredValue &&
@@ -712,7 +1157,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               )}
               <div
                 onClick={() => onSelectPlayer(item.player)}
-                className={`group bg-slate-900/90 hover:bg-slate-800/90 border transition-all duration-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99] shadow-md ${
+                className={`group relative z-0 hover:z-30 focus-within:z-30 bg-slate-900/90 hover:bg-slate-800/90 border transition-all duration-200 rounded-2xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99] shadow-md ${
                   isTop1
                     ? 'border-amber-500/30 bg-gradient-to-r from-amber-950/20 to-slate-900'
                     : unscored
@@ -745,6 +1190,15 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     <span className="absolute -bottom-1 -right-1 px-1.5 py-0.2 rounded-md bg-slate-950 text-[10px] font-extrabold text-white border border-slate-700 shadow-sm">
                       #{item.player.jerseyNumber}
                     </span>
+                    <PlayerBumpBadges
+                      playerId={item.player.id}
+                      playerName={item.player.name}
+                      totalNet={bumpNet}
+                      myNet={myBumpNet}
+                      othersNet={othersBumpNet}
+                      transactions={bumpTransactions}
+                      coaches={coaches}
+                    />
                   </div>
 
                   <div>
@@ -755,19 +1209,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-bold">
                         {item.player.position}
                       </span>
-                      {item.adjustedBump !== 0 && (
-                        <span
-                          className={`px-1.5 py-0.5 rounded-md text-[10px] font-extrabold border ${
-                            item.adjustedBump > 0
-                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                              : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                          }`}
-                        >
-                          {item.adjustedBump > 0
-                            ? `+${item.adjustedBump}`
-                            : `${item.adjustedBump}`}
-                        </span>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
@@ -849,43 +1290,66 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800">
-                  {totalMode === 'adjusted' && sortBy === 'total' && (
+                  {totalMode === 'adjusted' && (
                     <div
-                      className="flex items-center gap-1"
+                      className="flex flex-col items-stretch gap-1 shrink-0"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <button
-                        type="button"
-                        disabled={
-                          !canApplyBump(
-                            adjustedBumps,
-                            bumpBudget,
-                            item.player.id,
-                            -1,
-                          )
-                        }
-                        onClick={() => onApplyBump(item.player.id, -1)}
-                        className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-rose-300 hover:border-rose-500/40 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="−1 Adjusted bump"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        disabled={
-                          !canApplyBump(
-                            adjustedBumps,
-                            bumpBudget,
-                            item.player.id,
-                            1,
-                          )
-                        }
-                        onClick={() => onApplyBump(item.player.id, 1)}
-                        className="p-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:text-emerald-300 hover:border-emerald-500/40 disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="+1 Adjusted bump"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+                      <span className="text-[9px] uppercase tracking-wider font-bold text-cyan-400/80 text-center">
+                        Bump
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={
+                            !bumpCoachId ||
+                            !canApplyBump(
+                              adjustedBumps,
+                              bumpBudget,
+                              item.player.id,
+                              -1,
+                            )
+                          }
+                          onClick={() => onApplyBump(item.player.id, -1)}
+                          className="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs font-extrabold text-slate-200 hover:text-rose-300 hover:border-rose-500/40 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-0.5"
+                          title="−1 Adjusted bump"
+                          aria-label="Minus one adjusted bump"
+                        >
+                          <Minus className="w-3 h-3" />
+                          1
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            !bumpCoachId ||
+                            !canApplyBump(
+                              adjustedBumps,
+                              bumpBudget,
+                              item.player.id,
+                              1,
+                            )
+                          }
+                          onClick={() => onApplyBump(item.player.id, 1)}
+                          className="px-2 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/40 text-xs font-extrabold text-cyan-300 hover:bg-cyan-500/25 hover:border-cyan-400/60 disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center gap-0.5"
+                          title="+1 Adjusted bump"
+                          aria-label="Plus one adjusted bump"
+                        >
+                          <Plus className="w-3 h-3" />
+                          1
+                        </button>
+                      </div>
+                      {bumpNet !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onClearPlayerBump(item.player.id)}
+                          className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-semibold uppercase tracking-wide text-slate-400 hover:text-rose-300 bg-slate-900/80 hover:bg-rose-500/15 border border-slate-800 hover:border-rose-500/40 transition-colors"
+                          title="Clear this player's Adjusted bumps"
+                          aria-label={`Clear bumps for ${item.player.name}`}
+                        >
+                          <X className="w-2.5 h-2.5" />
+                          Clear
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -915,21 +1379,22 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     </div>
                     {primaryIsPoolRank &&
                       standingScore !== null &&
-                      !unscored && (
+                      !unscored &&
+                      !(
+                        totalMode === 'coaches' && coachesScope !== 'average'
+                      ) && (
                       <div className="text-[10px] text-slate-500 font-semibold mt-0.5">
                         {totalMode === 'coaches'
-                          ? `Sum ${standingScore}`
+                          ? coachesAverageDetail != null
+                            ? `Avg ${coachesAverageDetail}`
+                            : `Avg ${standingScore}`
                           : `Standing ${standingScore}`}
                         {totalMode === 'adjusted' &&
-                          item.adjustedBump !== 0 &&
+                          bumpNet !== 0 &&
                           item.adjustedTotalScore !== null && (
                             <span className="text-cyan-400/80">
                               {' '}
-                              · effective{' '}
-                              {Math.round(
-                                (item.adjustedTotalScore + item.adjustedBump) *
-                                  10,
-                              ) / 10}
+                              · base {item.adjustedTotalScore}
                             </span>
                           )}
                       </div>

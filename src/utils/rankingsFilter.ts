@@ -9,8 +9,8 @@ export type RankingsSortMode = 'total' | 'label' | 'metric' | 'calculated';
 
 /**
  * How totals are ranked:
- * - overall / adjusted: formula standing (higher better)
- * - coaches: sum of ordinals from complete coach ballots (lower better)
+ * - overall (Statistical Rank) / adjusted: formula standing (higher better)
+ * - coaches: average ordinals from complete coach ballots (lower better)
  */
 export type RankingsTotalMode = 'overall' | 'adjusted' | 'coaches';
 
@@ -107,7 +107,11 @@ export function totalForMode(
   ranking: PlayerRanking,
   totalMode: RankingsTotalMode,
 ): number | null {
-  if (totalMode === 'adjusted') return ranking.adjustedTotalScore;
+  if (totalMode === 'adjusted') {
+    if (ranking.adjustedTotalScore === null) return null;
+    // Include ±1 bumps so Adjusted list order matches adjustedRank.
+    return ranking.adjustedTotalScore + (ranking.adjustedBump ?? 0);
+  }
   if (totalMode === 'coaches') return ranking.coachesTotalSum;
   return ranking.totalScore;
 }

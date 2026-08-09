@@ -9,8 +9,16 @@ import {
   UserPlus, 
   Download,
   Upload,
+  Award,
 } from 'lucide-react';
-import { Player, PlayerPosition, LabelDefinition, MetricDefinition } from '../types';
+import {
+  Player,
+  PlayerPosition,
+  LabelDefinition,
+  MetricDefinition,
+  Coach,
+  CoachBallot,
+} from '../types';
 import { StorageService } from '../services/storage';
 import { calculatePlayerRankings } from '../utils/scoring';
 import {
@@ -18,11 +26,16 @@ import {
   downloadCsv,
   parseAndValidatePlayerCsv,
 } from '../utils/playerCsv';
+import { CoachesRatingView } from './CoachesRatingView';
+
+type PlayersPane = 'roster' | 'coaches';
 
 interface PlayersViewProps {
   players: Player[];
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
+  coaches: Coach[];
+  coachBallots: CoachBallot[];
   onSelectPlayer: (player: Player) => void;
   onRefreshData: () => void;
   isAddModalOpen: boolean;
@@ -33,11 +46,14 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   players,
   labels,
   metrics,
+  coaches,
+  coachBallots,
   onSelectPlayer,
   onRefreshData,
   isAddModalOpen,
   onCloseAddModal
 }) => {
+  const [pane, setPane] = useState<PlayersPane>('roster');
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('all');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
@@ -210,64 +226,124 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           <div>
             <div className="flex items-center gap-2 text-blue-400 font-semibold text-xs uppercase tracking-wider mb-1">
               <Users className="w-4 h-4" />
-              <span>Squad Roster</span>
+              <span>Squad</span>
             </div>
             <h2 className="text-2xl font-extrabold text-white tracking-tight">
-              Registered Players ({players.length})
+              {pane === 'roster'
+                ? `Registered Players (${players.length})`
+                : 'Coaches Rating'}
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Manage your squad players, track positions, preferred feet, and individual season score sheets.
+              {pane === 'roster'
+                ? 'Manage your squad roster, positions, and individual score sheets.'
+                : 'Add coaches and submit ordinal ballots — complete ballots feed Rankings → Coaches Rank.'}
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleExportCsvTemplate}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
-            >
-              <Download className="w-4 h-4 text-emerald-400" />
-              <span>Export template</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => csvInputRef.current?.click()}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
-            >
-              <Upload className="w-4 h-4 text-blue-400" />
-              <span>Import CSV</span>
-            </button>
-            <input
-              ref={csvInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              className="hidden"
-              onChange={handleImportCsv}
-            />
-            <button
-              type="button"
-              onClick={handleClearAllPlayers}
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
-            >
-              <Trash2 className="w-4 h-4" />
-              <span>Clear all</span>
-            </button>
-            <button
-              onClick={() => {
-                setEditingPlayer(null);
-                setFormName('');
-                setFormJersey(Math.max(1, players.length + 1));
-                setFormNotes('');
-              }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
-            >
-              <UserPlus className="w-4 h-4" />
-              <span>Register New Player</span>
-            </button>
-          </div>
+          {pane === 'roster' && (
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleExportCsvTemplate}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+              >
+                <Download className="w-4 h-4 text-emerald-400" />
+                <span>Export template</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => csvInputRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+              >
+                <Upload className="w-4 h-4 text-blue-400" />
+                <span>Import CSV</span>
+              </button>
+              <input
+                ref={csvInputRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={handleImportCsv}
+              />
+              <button
+                type="button"
+                onClick={handleClearAllPlayers}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Clear all</span>
+              </button>
+              <button
+                onClick={() => {
+                  setEditingPlayer(null);
+                  setFormName('');
+                  setFormJersey(Math.max(1, players.length + 1));
+                  setFormNotes('');
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Register New Player</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Roster vs Coaches Rating */}
+      <div
+        className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+        role="group"
+        aria-label="Players pane"
+      >
+        <button
+          type="button"
+          onClick={() => setPane('roster')}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            pane === 'roster'
+              ? 'bg-blue-500 text-white shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          Roster
+        </button>
+        <button
+          type="button"
+          onClick={() => setPane('coaches')}
+          className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            pane === 'coaches'
+              ? 'bg-amber-500 text-slate-950 shadow-sm'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Award className="w-3.5 h-3.5" />
+          Coaches Rating
+          {coaches.length > 0 && (
+            <span
+              className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                pane === 'coaches'
+                  ? 'bg-slate-950/20 text-slate-950'
+                  : 'bg-slate-800 text-slate-300'
+              }`}
+            >
+              {coaches.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {pane === 'coaches' ? (
+        <CoachesRatingView
+          coaches={coaches}
+          ballots={coachBallots}
+          players={players}
+          rankings={rankings}
+          labels={labels}
+          onRefreshData={onRefreshData}
+        />
+      ) : (
+      <>
       {/* Search & Position Tabs */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-3">
         <div className="relative">
@@ -339,7 +415,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   </div>
 
                   <div className="text-right">
-                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Overall Rank</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500 block">Statistical Rank</span>
                     <span className={`text-xl font-black ${
                       rInfo?.overallRank == null
                         ? 'text-slate-500'
@@ -396,6 +472,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           );
         })}
       </div>
+      </>
+      )}
 
       {/* Modal Form for Add/Edit Player */}
       {(isAddModalOpen || editingPlayer) && (

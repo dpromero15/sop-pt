@@ -11,6 +11,7 @@ import type {
   Coach,
   CoachBallot,
   AdjustedBumpConfig,
+  AdjustedBumpTransaction,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -36,7 +37,12 @@ import {
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
-import { canApplyBump } from '../../utils/adjustedBumps';
+import {
+  canApplyBump,
+  createBumpTransaction,
+  netBumpsFromTransactions,
+  parseStoredBumpTransactions,
+} from '../../utils/adjustedBumps';
 
 export const STORAGE_KEYS = {
   TEAM: 'stm_team_v1',
@@ -154,10 +160,10 @@ export class LocalJsonAdapter implements StorageRepository {
 
   deletePlayer(id: string) {
     this.savePlayers(this.getPlayers().filter((p) => p.id !== id));
-    const bumps = { ...this.getAdjustedBumps() };
-    if (id in bumps) {
-      delete bumps[id];
-      this.saveAdjustedBumps(bumps);
+    const txs = this.getBumpTransactions();
+    const next = txs.filter((tx) => tx.playerId !== id);
+    if (next.length !== txs.length) {
+      this.saveBumpTransactions(next);
     }
   }
 
@@ -519,6 +525,11 @@ export class LocalJsonAdapter implements StorageRepository {
   deleteCoach(id: string) {
     this.saveCoaches(this.getCoaches().filter((c) => c.id !== id));
     this.saveCoachBallots(this.getCoachBallots().filter((b) => b.coachId !== id));
+    const txs = this.getBumpTransactions();
+    const next = txs.filter((tx) => tx.coachId !== id);
+    if (next.length !== txs.length) {
+      this.saveBumpTransactions(next);
+    }
   }
 
   getCoachBallots(): CoachBallot[] {
@@ -541,29 +552,65 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveCoachBallots(ballots);
   }
 
-  getAdjustedBumps(): Record<string, number> {
-    return this.readJson(STORAGE_KEYS.ADJUSTED_BUMPS, DEFAULT_ADJUSTED_BUMPS);
+  getBumpTransactions(): AdjustedBumpTransaction[] {
+    const raw = this.readJson<unknown>(
+      STORAGE_KEYS.ADJUSTED_BUMPS,
+      DEFAULT_ADJUSTED_BUMPS,
+    );
+    const parsed = parseStoredBumpTransactions(raw);
+    // Persist migration from legacy net map → transactions once.
+    if (
+      raw &&
+      typeof raw === 'object' &&
+      !Array.isArray(raw) &&
+      parsed.length > 0
+    ) {
+      this.writeJson(STORAGE_KEYS.ADJUSTED_BUMPS, parsed);
+    }
+    return parsed;
   }
 
-  saveAdjustedBumps(bumps: Record<string, number>) {
-    this.writeJson(STORAGE_KEYS.ADJUSTED_BUMPS, bumps);
+  saveBumpTransactions(transactions: AdjustedBumpTransaction[]) {
+    this.writeJson(STORAGE_KEYS.ADJUSTED_BUMPS, transactions);
     this.notify();
   }
 
-  applyBump(playerId: string, delta: 1 | -1): boolean {
+  /** Derived playerId → net bump (for ranking / budget). */
+  getAdjustedBumps(): Record<string, number> {
+    return netBumpsFromTransactions(this.getBumpTransactions());
+  }
+
+  /**
+   * Replace the bump ledger. Accepts a net map (clears / restores nets as
+   * legacy-style unit txs) or an empty object to clear all.
+   */
+  saveAdjustedBumps(bumps: Record<string, number>) {
+    this.saveBumpTransactions(
+      Object.keys(bumps).length === 0
+        ? []
+        : parseStoredBumpTransactions(bumps),
+    );
+  }
+
+  applyBump(playerId: string, delta: 1 | -1, coachId: string): boolean {
+    if (!coachId) return false;
     const budget = this.getBumpBudget();
-    const bumps = { ...this.getAdjustedBumps() };
+    const bumps = this.getAdjustedBumps();
     if (!canApplyBump(bumps, budget, playerId, delta)) {
       return false;
     }
-    const next = (bumps[playerId] ?? 0) + delta;
-    if (next === 0) {
-      delete bumps[playerId];
-    } else {
-      bumps[playerId] = next;
-    }
-    this.saveAdjustedBumps(bumps);
+    const txs = [
+      ...this.getBumpTransactions(),
+      createBumpTransaction(playerId, coachId, delta),
+    ];
+    this.saveBumpTransactions(txs);
     return true;
+  }
+
+  clearPlayerBumps(playerId: string) {
+    this.saveBumpTransactions(
+      this.getBumpTransactions().filter((tx) => tx.playerId !== playerId),
+    );
   }
 
   getBumpBudget(): AdjustedBumpConfig {
@@ -589,7 +636,7 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveCalculatedFields(DEFAULT_CALCULATED_FIELDS);
     this.saveCoaches(DEFAULT_COACHES);
     this.saveCoachBallots(DEFAULT_COACH_BALLOTS);
-    this.saveAdjustedBumps(DEFAULT_ADJUSTED_BUMPS);
+    this.saveBumpTransactions(DEFAULT_ADJUSTED_BUMPS);
     this.saveBumpBudget(DEFAULT_BUMP_BUDGET);
   }
 
@@ -606,6 +653,7 @@ export class LocalJsonAdapter implements StorageRepository {
       coaches: this.getCoaches(),
       coachBallots: this.getCoachBallots(),
       adjustedBumps: this.getAdjustedBumps(),
+      bumpTransactions: this.getBumpTransactions(),
       bumpBudget: this.getBumpBudget(),
     };
   }
@@ -635,7 +683,13 @@ export class LocalJsonAdapter implements StorageRepository {
         }
         if (data.coaches) this.saveCoaches(data.coaches);
         if (data.coachBallots) this.saveCoachBallots(data.coachBallots);
-        if (data.adjustedBumps) this.saveAdjustedBumps(data.adjustedBumps);
+        if (Array.isArray(data.bumpTransactions)) {
+          this.saveBumpTransactions(
+            parseStoredBumpTransactions(data.bumpTransactions),
+          );
+        } else if (data.adjustedBumps) {
+          this.saveAdjustedBumps(data.adjustedBumps);
+        }
         if (data.bumpBudget) this.saveBumpBudget(data.bumpBudget);
         return true;
       }

@@ -13,7 +13,7 @@ import { computeAllCalculatedValues } from './calculatedFields';
 
 /**
  * Absolute min/max normalization — kept for optional standards / benchmarks
- * (not used for Overall / Adjusted pool ranks).
+ * (not used for Statistical / Adjusted pool ranks).
  */
 export function normalizeMetricValue(
   value: number,
@@ -114,7 +114,7 @@ export function assignCompetitionRanks(
  * Calculates complete player rankings based on current metric entries and formula weights.
  *
  * Standing scores use **squad pool percentiles** per metric (not absolute min/max).
- * - **Overall** omits unscored / excused values.
+ * - **Statistical** omits unscored / excused values.
  * - **Adjusted** uses metrics with `includeInAdjustedTotal !== false`; missing
  *   values count as 0 when `treatNoScoreAsZero !== false`, otherwise omitted.
  * Pool places (`overallRank` / `adjustedRank`) are competition ranks from those scores.

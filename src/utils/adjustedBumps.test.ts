@@ -5,6 +5,11 @@ import {
   bumpBudgetRemaining,
   canApplyBump,
   DEFAULT_BUMP_BUDGET,
+  legacyNetsToTransactions,
+  netBumpsFromTransactions,
+  parseStoredBumpTransactions,
+  playerBumpNetForCoach,
+  playerBumpNetFromOthers,
 } from './adjustedBumps';
 
 function ranking(
@@ -61,6 +66,48 @@ describe('bump budgets', () => {
 
   it('allows moving toward zero even when budget was full', () => {
     expect(canApplyBump({ a: 3 }, budget, 'a', -1)).toBe(true);
+  });
+});
+
+describe('bump transactions', () => {
+  it('derives nets and splits mine vs others', () => {
+    const txs = [
+      {
+        id: '1',
+        playerId: 'p1',
+        coachId: 'me',
+        delta: 1 as const,
+        createdAt: '2026-08-07T12:00:00.000Z',
+      },
+      {
+        id: '2',
+        playerId: 'p1',
+        coachId: 'me',
+        delta: 1 as const,
+        createdAt: '2026-08-07T12:01:00.000Z',
+      },
+      {
+        id: '3',
+        playerId: 'p1',
+        coachId: 'them',
+        delta: -1 as const,
+        createdAt: '2026-08-07T12:02:00.000Z',
+      },
+    ];
+    expect(netBumpsFromTransactions(txs)).toEqual({ p1: 1 });
+    expect(playerBumpNetForCoach(txs, 'p1', 'me')).toBe(2);
+    expect(playerBumpNetFromOthers(txs, 'p1', 'me')).toBe(-1);
+  });
+
+  it('migrates legacy net maps into unit transactions', () => {
+    const txs = legacyNetsToTransactions(
+      { a: 2, b: -1 },
+      '2026-01-01T00:00:00.000Z',
+    );
+    expect(txs).toHaveLength(3);
+    expect(netBumpsFromTransactions(txs)).toEqual({ a: 2, b: -1 });
+    expect(parseStoredBumpTransactions({ a: 1 })).toHaveLength(1);
+    expect(parseStoredBumpTransactions(txs)).toEqual(txs);
   });
 });
 

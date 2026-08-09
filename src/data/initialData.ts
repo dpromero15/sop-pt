@@ -10,6 +10,7 @@ import {
   Coach,
   CoachBallot,
   AdjustedBumpConfig,
+  AdjustedBumpTransaction,
 } from '../types';
 
 export const DEFAULT_TEAM: Team = {
@@ -540,7 +541,7 @@ export const DEFAULT_FORMULA_CONFIG: ScoringFormulaConfig = {
   ]
 };
 
-/** Sample coaches for Coaches Totals (empty ballots until ranked). */
+/** Sample coaches for Coaches Rank (empty ballots until ranked). */
 export const DEFAULT_COACHES: Coach[] = [
   { id: 'coach_1', name: 'Coach Rivera' },
   { id: 'coach_2', name: 'Coach Patel' },
@@ -553,4 +554,5 @@ export const DEFAULT_BUMP_BUDGET: AdjustedBumpConfig = {
   minusBudget: 3,
 };
 
-export const DEFAULT_ADJUSTED_BUMPS: Record<string, number> = {};
+/** Empty bump ledger (transactions). Legacy net maps are migrated on read. */
+export const DEFAULT_ADJUSTED_BUMPS: AdjustedBumpTransaction[] = [];
