@@ -253,25 +253,30 @@ describe('LocalJsonAdapter', () => {
     adapter.saveBumpBudget({ plusBudget: 5, minusBudget: 2 });
     expect(adapter.getBumpBudget()).toEqual({ plusBudget: 5, minusBudget: 2 });
 
-    expect(adapter.applyBump('p1', 1)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
     expect(adapter.getAdjustedBumps().p1).toBe(1);
-    expect(adapter.applyBump('p1', 1)).toBe(true);
-    expect(adapter.applyBump('p1', 1)).toBe(true);
-    expect(adapter.applyBump('p1', 1)).toBe(true);
-    expect(adapter.applyBump('p1', 1)).toBe(true);
-    expect(adapter.applyBump('p1', 1)).toBe(false); // over plus budget of 5
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(false); // over plus budget of 5
+    expect(adapter.getBumpTransactions().every((tx) => tx.coachId === coach.id)).toBe(
+      true,
+    );
 
     adapter.clearAllPlayers();
     expect(adapter.getAdjustedBumps()).toEqual({});
+    expect(adapter.getBumpTransactions()).toEqual([]);
   });
 
   it('includes coaches and bumps in snapshot and backup round-trip', () => {
-    adapter.addCoach({ name: 'Backup Coach' });
-    adapter.saveAdjustedBumps({ p1: 1 });
+    const coach = adapter.addCoach({ name: 'Backup Coach' });
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
     adapter.saveBumpBudget({ plusBudget: 4, minusBudget: 1 });
     const snap = adapter.getSnapshot();
     expect(snap.coaches.length).toBeGreaterThan(0);
     expect(snap.adjustedBumps.p1).toBe(1);
+    expect(snap.bumpTransactions?.length).toBe(1);
     expect(snap.bumpBudget.plusBudget).toBe(4);
 
     const json = adapter.exportFullBackupJSON();
@@ -279,18 +284,32 @@ describe('LocalJsonAdapter', () => {
     expect(other.importFullBackupJSON(json)).toBe(true);
     expect(other.getCoaches().map((c) => c.name)).toContain('Backup Coach');
     expect(other.getAdjustedBumps().p1).toBe(1);
+    expect(other.getBumpTransactions()).toHaveLength(1);
     expect(other.getBumpBudget()).toEqual({ plusBudget: 4, minusBudget: 1 });
   });
 
-  it('deleteCoach removes ballot; deletePlayer clears bump', () => {
+  it('migrates legacy net bump maps to transactions', () => {
+    store.map.set(STORAGE_KEYS.ADJUSTED_BUMPS, JSON.stringify({ p1: 2, p2: -1 }));
+    const nets = adapter.getAdjustedBumps();
+    expect(nets).toEqual({ p1: 2, p2: -1 });
+    const txs = adapter.getBumpTransactions();
+    expect(txs).toHaveLength(3);
+    expect(txs.every((tx) => tx.coachId === 'coach_legacy')).toBe(true);
+  });
+
+  it('deleteCoach removes ballot and that coach bumps; deletePlayer clears bump', () => {
     const coach = adapter.addCoach({ name: 'Temp' });
+    const other = adapter.addCoach({ name: 'Other' });
     adapter.saveCoachBallot({ coachId: coach.id, ranks: { p1: 1 } });
-    adapter.saveAdjustedBumps({ p1: 2, p2: -1 });
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+    expect(adapter.applyBump('p2', -1, other.id)).toBe(true);
     adapter.deleteCoach(coach.id);
     expect(adapter.getCoachBallots().some((b) => b.coachId === coach.id)).toBe(
       false,
     );
-    adapter.deletePlayer('p1');
     expect(adapter.getAdjustedBumps()).toEqual({ p2: -1 });
+    adapter.deletePlayer('p2');
+    expect(adapter.getAdjustedBumps()).toEqual({});
   });
 });

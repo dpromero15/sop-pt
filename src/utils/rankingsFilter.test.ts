@@ -6,6 +6,7 @@ import {
   isUnscoredForRankMode,
   metricsForCategory,
   selectionAfterCategoryChange,
+  totalForMode,
 } from './rankingsFilter';
 import type {
   CalculatedFieldDefinition,
@@ -360,6 +361,32 @@ describe('compareRankings', () => {
         'overall',
       ),
     ).toBeLessThan(0);
+  });
+
+  it('includes adjusted bumps when sorting Adjusted totals', () => {
+    const lower = {
+      ...ranking('lower', 80, {}, {}, 80),
+      adjustedBump: 3,
+    };
+    const higher = {
+      ...ranking('higher', 82, {}, {}, 82),
+      adjustedBump: 0,
+    };
+    // effective: lower=83, higher=82 → lower sorts first
+    expect(
+      compareRankings(
+        lower,
+        higher,
+        'total',
+        'all',
+        'none',
+        metrics,
+        [],
+        'adjusted',
+      ),
+    ).toBeLessThan(0);
+    expect(totalForMode(lower, 'adjusted')).toBe(83);
+    expect(totalForMode(higher, 'adjusted')).toBe(82);
   });
 });
 

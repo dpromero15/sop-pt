@@ -53,7 +53,11 @@ export async function hydrateCloudToLocal(): Promise<TeamSnapshot> {
   }
   if (snapshot.coaches) localAdapter.saveCoaches(snapshot.coaches);
   if (snapshot.coachBallots) localAdapter.saveCoachBallots(snapshot.coachBallots);
-  if (snapshot.adjustedBumps) localAdapter.saveAdjustedBumps(snapshot.adjustedBumps);
+  if (snapshot.bumpTransactions) {
+    localAdapter.saveBumpTransactions(snapshot.bumpTransactions);
+  } else if (snapshot.adjustedBumps) {
+    localAdapter.saveAdjustedBumps(snapshot.adjustedBumps);
+  }
   if (snapshot.bumpBudget) localAdapter.saveBumpBudget(snapshot.bumpBudget);
   return snapshot;
 }

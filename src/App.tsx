@@ -13,6 +13,8 @@ import { attachCoachesTotals } from './utils/coachesRating';
 import { applyAdjustedBumps } from './utils/adjustedBumps';
 import { Player } from './types';
 
+const BUMP_COACH_STORAGE_KEY = 'stm_active_bump_coach_v1';
+
 export default function App() {
   // Hash Routing with default to 'rankings'
   const [currentTab, setCurrentTab] = useState<TabRoute>(() => {
@@ -41,9 +43,19 @@ export default function App() {
   const [adjustedBumps, setAdjustedBumps] = useState(() =>
     StorageService.getAdjustedBumps(),
   );
+  const [bumpTransactions, setBumpTransactions] = useState(() =>
+    StorageService.getBumpTransactions(),
+  );
   const [bumpBudget, setBumpBudget] = useState(() =>
     StorageService.getBumpBudget(),
   );
+  const [bumpCoachId, setBumpCoachId] = useState(() => {
+    try {
+      return localStorage.getItem(BUMP_COACH_STORAGE_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  });
 
   // Modal States
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
@@ -65,6 +77,7 @@ export default function App() {
     setCoaches(StorageService.getCoaches());
     setCoachBallots(StorageService.getCoachBallots());
     setAdjustedBumps(StorageService.getAdjustedBumps());
+    setBumpTransactions(StorageService.getBumpTransactions());
     setBumpBudget(StorageService.getBumpBudget());
   };
 
@@ -72,6 +85,29 @@ export default function App() {
     const unsubscribe = subscribeToStorage(refreshData);
     return () => unsubscribe();
   }, []);
+
+  // Keep bump coach selection valid as roster of coaches changes
+  useEffect(() => {
+    if (coaches.length === 0) {
+      if (bumpCoachId) setBumpCoachId('');
+      return;
+    }
+    if (!coaches.some((c) => c.id === bumpCoachId)) {
+      setBumpCoachId(coaches[0].id);
+    }
+  }, [coaches, bumpCoachId]);
+
+  useEffect(() => {
+    try {
+      if (bumpCoachId) {
+        localStorage.setItem(BUMP_COACH_STORAGE_KEY, bumpCoachId);
+      } else {
+        localStorage.removeItem(BUMP_COACH_STORAGE_KEY);
+      }
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [bumpCoachId]);
 
   // Listen to window hash changes
   useEffect(() => {
@@ -113,7 +149,18 @@ export default function App() {
   ]);
 
   const handleApplyBump = (playerId: string, delta: 1 | -1) => {
-    StorageService.applyBump(playerId, delta);
+    if (!bumpCoachId) return;
+    StorageService.applyBump(playerId, delta, bumpCoachId);
+    refreshData();
+  };
+
+  const handleClearBumps = () => {
+    StorageService.saveBumpTransactions([]);
+    refreshData();
+  };
+
+  const handleClearPlayerBump = (playerId: string) => {
+    StorageService.clearPlayerBumps(playerId);
     refreshData();
   };
 
@@ -146,9 +193,16 @@ export default function App() {
             calculatedFields={calculatedFields}
             formula={formula}
             hasLoggedData={entries.length > 0}
+            coaches={coaches}
+            coachBallots={coachBallots}
+            bumpCoachId={bumpCoachId}
+            onBumpCoachChange={setBumpCoachId}
             bumpBudget={bumpBudget}
             adjustedBumps={adjustedBumps}
+            bumpTransactions={bumpTransactions}
             onApplyBump={handleApplyBump}
+            onClearBumps={handleClearBumps}
+            onClearPlayerBump={handleClearPlayerBump}
             onOpenFormulaConfig={() => setIsFormulaModalOpen(true)}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onOpenQuickInsert={() => handleSelectTab('quick-insert')}
@@ -171,6 +225,8 @@ export default function App() {
             players={players}
             labels={labels}
             metrics={metrics}
+            coaches={coaches}
+            coachBallots={coachBallots}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onRefreshData={refreshData}
             isAddModalOpen={isAddPlayerOpen}
@@ -205,9 +261,6 @@ export default function App() {
             metrics={metrics}
             formula={formula}
             calculatedFields={calculatedFields}
-            coaches={coaches}
-            coachBallots={coachBallots}
-            players={players}
             bumpBudget={bumpBudget}
             onRefreshData={refreshData}
           />
@@ -219,7 +272,7 @@ export default function App() {
         <PlayerProfileModal
           player={selectedPlayer}
           onClose={() => setSelectedPlayer(null)}
-          onEditPlayer={(p) => {
+          onEditPlayer={() => {
             setSelectedPlayer(null);
             setCurrentTab('players');
           }}

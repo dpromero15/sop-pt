@@ -1,46 +1,278 @@
 import React, { useMemo, useState } from 'react';
-import { Award, Plus, Trash2, Check } from 'lucide-react';
-import type { Coach, CoachBallot, Player } from '../types';
+import { Award, Plus, Trash2, Check, GripVertical } from 'lucide-react';
+import { Reorder, useDragControls } from 'motion/react';
+import type {
+  Coach,
+  CoachBallot,
+  LabelDefinition,
+  Player,
+  PlayerRanking,
+} from '../types';
 import { StorageService } from '../services/storage';
 import { activePlayers, isCompleteBallot } from '../utils/coachesRating';
+
+const FALLBACK_AVATAR =
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128';
 
 interface CoachesRatingViewProps {
   coaches: Coach[];
   ballots: CoachBallot[];
   players: Player[];
+  rankings: PlayerRanking[];
+  labels: LabelDefinition[];
   onRefreshData: () => void;
 }
+
+function scoreToneClass(score: number | null | undefined): string {
+  if (score == null) return 'text-slate-500';
+  if (score >= 80) return 'text-emerald-400';
+  if (score >= 60) return 'text-amber-300';
+  return 'text-rose-400';
+}
+
+function formatRank(rank: number | null | undefined): string {
+  return rank != null ? `#${rank}` : '—';
+}
+
+/** Order active players by saved ranks (1 first); unscored/missing → jersey order at end. */
+function orderFromBallot(
+  active: Player[],
+  ranks: Record<string, number> | undefined,
+): Player[] {
+  const byId = new Map(active.map((p) => [p.id, p]));
+  const ranked = active
+    .filter((p) => ranks?.[p.id] != null && Number.isFinite(ranks[p.id]))
+    .sort((a, b) => (ranks![a.id] ?? 0) - (ranks![b.id] ?? 0));
+  const rankedIds = new Set(ranked.map((p) => p.id));
+  const rest = active
+    .filter((p) => !rankedIds.has(p.id))
+    .sort((a, b) => a.jerseyNumber - b.jerseyNumber);
+  return [...ranked, ...rest].map((p) => byId.get(p.id)!);
+}
+
+function ranksFromOrder(ordered: Player[]): Record<string, number> {
+  const ranks: Record<string, number> = {};
+  ordered.forEach((p, i) => {
+    ranks[p.id] = i + 1;
+  });
+  return ranks;
+}
+
+interface RankRowProps {
+  player: Player;
+  rank: number;
+  ranking?: PlayerRanking;
+  labels: LabelDefinition[];
+}
+
+const RankRow: React.FC<RankRowProps> = ({
+  player,
+  rank,
+  ranking,
+  labels,
+}) => {
+  const controls = useDragControls();
+  const labelChips = labels
+    .map((lbl) => {
+      const score = ranking?.labelScores[lbl.id]?.score ?? null;
+      return { lbl, score };
+    })
+    .filter((x) => x.score != null)
+    .slice(0, 6);
+
+  return (
+    <Reorder.Item
+      value={player}
+      dragListener={false}
+      dragControls={controls}
+      className="flex items-stretch gap-3 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 list-none select-none"
+      whileDrag={{
+        scale: 1.02,
+        boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
+        borderColor: 'rgba(245, 158, 11, 0.45)',
+        zIndex: 20,
+      }}
+    >
+      <button
+        type="button"
+        aria-label={`Drag to reorder ${player.name}`}
+        title="Drag to reorder"
+        className="p-1.5 -ml-1 self-center rounded-lg text-slate-500 hover:text-amber-300 hover:bg-slate-800 touch-none cursor-grab active:cursor-grabbing shrink-0"
+        onPointerDown={(e) => controls.start(e)}
+        style={{ touchAction: 'none' }}
+      >
+        <GripVertical className="w-5 h-5" />
+      </button>
+
+      <span
+        className={`w-8 shrink-0 self-center text-center text-sm font-black tabular-nums ${
+          rank === 1
+            ? 'text-amber-400'
+            : rank <= 3
+              ? 'text-emerald-400'
+              : 'text-slate-400'
+        }`}
+      >
+        #{rank}
+      </span>
+
+      <img
+        src={player.avatarUrl || FALLBACK_AVATAR}
+        alt=""
+        draggable={false}
+        className="w-11 h-11 self-center rounded-xl object-cover ring-2 ring-slate-800 shrink-0 pointer-events-none"
+      />
+
+      <div className="min-w-0 flex-1 pointer-events-none space-y-1.5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-semibold text-white truncate">
+                {player.name}
+              </span>
+              <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] font-bold shrink-0">
+                #{player.jerseyNumber}
+              </span>
+              <span className="px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 text-[10px] font-bold shrink-0">
+                {player.position}
+              </span>
+              {player.status === 'injured' && (
+                <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10px] font-semibold">
+                  Injured
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500 mt-0.5">
+              <span>
+                Att{' '}
+                <strong className="text-emerald-400 font-semibold">
+                  {ranking?.attendanceRate != null
+                    ? `${ranking.attendanceRate}%`
+                    : '—'}
+                </strong>
+              </span>
+              <span>Foot: {player.preferredFoot}</span>
+              {player.age != null && <span>Age {player.age}</span>}
+              {ranking?.recentTrend && ranking.recentTrend !== 'stable' && (
+                <span
+                  className={
+                    ranking.recentTrend === 'up'
+                      ? 'text-emerald-400'
+                      : 'text-rose-400'
+                  }
+                >
+                  Trend {ranking.recentTrend === 'up' ? '↑' : '↓'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="shrink-0 text-right tabular-nums">
+            <div className="flex items-baseline justify-end gap-2">
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-slate-500">
+                  Stat
+                </div>
+                <div
+                  className={`text-sm font-black leading-tight ${
+                    ranking?.overallRank != null
+                      ? 'text-emerald-400'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  {formatRank(ranking?.overallRank)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-slate-500">
+                  Adj
+                </div>
+                <div
+                  className={`text-sm font-black leading-tight ${
+                    ranking?.adjustedRank != null
+                      ? 'text-cyan-300'
+                      : 'text-slate-500'
+                  }`}
+                >
+                  {formatRank(ranking?.adjustedRank)}
+                </div>
+              </div>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">
+              {ranking?.totalScore != null ? (
+                <>
+                  Score{' '}
+                  <span className={scoreToneClass(ranking.totalScore)}>
+                    {Math.round(ranking.totalScore)}
+                  </span>
+                </>
+              ) : (
+                'Unscored'
+              )}
+            </div>
+          </div>
+        </div>
+
+        {labelChips.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {labelChips.map(({ lbl, score }) => (
+              <span
+                key={lbl.id}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] ${lbl.badgeBg}`}
+              >
+                <span className="opacity-80">{lbl.name}</span>
+                <span className={`font-extrabold ${scoreToneClass(score)}`}>
+                  {Math.round(score!)}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
+
+        {player.notes?.trim() && (
+          <p className="text-[11px] text-slate-500 italic line-clamp-1">
+            “{player.notes.trim()}”
+          </p>
+        )}
+      </div>
+    </Reorder.Item>
+  );
+};
 
 export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   coaches,
   ballots,
   players,
+  rankings,
+  labels,
   onRefreshData,
 }) => {
   const active = useMemo(() => activePlayers(players), [players]);
+  const rankingMap = useMemo(
+    () => new Map(rankings.map((r) => [r.player.id, r])),
+    [rankings],
+  );
   const [selectedCoachId, setSelectedCoachId] = useState<string>(
     () => coaches[0]?.id ?? '',
   );
   const [newCoachName, setNewCoachName] = useState('');
-  const [draftRanks, setDraftRanks] = useState<Record<string, number>>({});
+  const [orderedPlayers, setOrderedPlayers] = useState<Player[]>(() =>
+    orderFromBallot(activePlayers(players), undefined),
+  );
   const [toast, setToast] = useState<string | null>(null);
 
   const selectedCoach =
     coaches.find((c) => c.id === selectedCoachId) ?? coaches[0] ?? null;
 
-  const ballotForSelected = selectedCoach
-    ? ballots.find((b) => b.coachId === selectedCoach.id)
-    : undefined;
-
-  // Load ballot into draft when coach changes
+  // Load ballot order when coach or roster changes
   React.useEffect(() => {
     if (!selectedCoach) {
-      setDraftRanks({});
+      setOrderedPlayers(orderFromBallot(active, undefined));
       return;
     }
     const existing = ballots.find((b) => b.coachId === selectedCoach.id);
-    setDraftRanks(existing?.ranks ? { ...existing.ranks } : {});
-  }, [selectedCoach?.id, ballots]);
+    setOrderedPlayers(orderFromBallot(active, existing?.ranks));
+  }, [selectedCoach?.id, ballots, active]);
 
   // Keep selection valid when coaches list changes
   React.useEffect(() => {
@@ -74,18 +306,7 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
     onRefreshData();
   };
 
-  const setRank = (playerId: string, rank: number) => {
-    setDraftRanks((prev) => {
-      const next = { ...prev };
-      if (!rank) {
-        delete next[playerId];
-      } else {
-        next[playerId] = rank;
-      }
-      return next;
-    });
-  };
-
+  const draftRanks = ranksFromOrder(orderedPlayers);
   const draftBallot: CoachBallot | null = selectedCoach
     ? { coachId: selectedCoach.id, ranks: draftRanks }
     : null;
@@ -94,22 +315,18 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   const complete =
     draftBallot !== null && isCompleteBallot(draftBallot, activeIds);
 
-  const usedRanks = new Set(
-    Object.values(draftRanks).filter((r) => Number.isFinite(r)),
-  );
-
   const handleSaveBallot = () => {
     if (!draftBallot) return;
     StorageService.saveCoachBallot(draftBallot);
     onRefreshData();
     showToast(
       complete
-        ? 'Ballot saved (complete — counts toward Coaches Totals)'
-        : 'Ballot saved (incomplete — ignored until all active players ranked)',
+        ? 'Ballot saved — counts toward Coaches Rank'
+        : 'Ballot saved',
     );
   };
 
-  const n = active.length;
+  const n = orderedPlayers.length;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5">
@@ -127,9 +344,10 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
             <span>Coaches Rating</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
-            Each coach assigns unique ordinal ranks (1 = best) to every active
-            player. Coaches Totals sum complete ballots only — lower sum ranks
-            higher. Incomplete ballots are ignored.
+            Drag players by the grip handle — top of the list is #1 (best). Each
+            row shows Statistical/Adjusted ranks, attendance, and category scores so
+            you can rank with context. Complete ballots feed Rankings → Coaches
+            Rank (averaged or per coach).
           </p>
         </div>
       </div>
@@ -163,8 +381,7 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
             {coaches.map((c) => {
               const ballot = ballots.find((b) => b.coachId === c.id);
               const isComplete =
-                ballot !== undefined &&
-                isCompleteBallot(ballot, activeIds);
+                ballot !== undefined && isCompleteBallot(ballot, activeIds);
               const selected = selectedCoach?.id === c.id;
               return (
                 <div key={c.id} className="inline-flex items-center gap-1">
@@ -197,12 +414,13 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-slate-400">
-                  Ranking as <strong className="text-white">{selectedCoach.name}</strong>
+                  Ranking as{' '}
+                  <strong className="text-white">{selectedCoach.name}</strong>
                   {' · '}
                   {n} active player{n === 1 ? '' : 's'}
                   {' · '}
-                  <span className={complete ? 'text-emerald-400' : 'text-amber-400'}>
-                    {complete ? 'Complete ballot' : 'Incomplete'}
+                  <span className="text-emerald-400">
+                    Drag to reorder · top = #1
                   </span>
                 </p>
                 <button
@@ -215,57 +433,27 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
                 </button>
               </div>
 
-              {active.length === 0 ? (
-                <p className="text-sm text-slate-500">No active players to rank.</p>
+              {n === 0 ? (
+                <p className="text-sm text-slate-500">
+                  No active players to rank.
+                </p>
               ) : (
-                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-                  {[...active]
-                    .sort((a, b) => a.jerseyNumber - b.jerseyNumber)
-                    .map((p) => {
-                      const current = draftRanks[p.id];
-                      return (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2"
-                        >
-                          <div className="min-w-0">
-                            <span className="text-sm font-semibold text-white truncate">
-                              #{p.jerseyNumber} {p.name}
-                            </span>
-                            <span className="ml-2 text-[11px] text-slate-500">
-                              {p.position}
-                            </span>
-                          </div>
-                          <select
-                            value={current ?? ''}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setRank(p.id, v === '' ? 0 : Number(v));
-                            }}
-                            className="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
-                          >
-                            <option value="">—</option>
-                            {Array.from({ length: n }, (_, i) => i + 1).map(
-                              (rank) => {
-                                const taken =
-                                  usedRanks.has(rank) && current !== rank;
-                                return (
-                                  <option
-                                    key={rank}
-                                    value={rank}
-                                    disabled={taken}
-                                  >
-                                    {rank}
-                                    {rank === 1 ? ' (best)' : ''}
-                                  </option>
-                                );
-                              },
-                            )}
-                          </select>
-                        </div>
-                      );
-                    })}
-                </div>
+                <Reorder.Group
+                  axis="y"
+                  values={orderedPlayers}
+                  onReorder={setOrderedPlayers}
+                  className="space-y-2 max-h-[36rem] overflow-y-auto pr-1"
+                >
+                  {orderedPlayers.map((p, index) => (
+                    <RankRow
+                      key={p.id}
+                      player={p}
+                      rank={index + 1}
+                      ranking={rankingMap.get(p.id)}
+                      labels={labels}
+                    />
+                  ))}
+                </Reorder.Group>
               )}
             </div>
           )}

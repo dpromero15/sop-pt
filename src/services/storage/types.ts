@@ -10,6 +10,7 @@ import type {
   Coach,
   CoachBallot,
   AdjustedBumpConfig,
+  AdjustedBumpTransaction,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -38,7 +39,10 @@ export interface TeamSnapshot {
   calculatedFields: CalculatedFieldDefinition[];
   coaches: Coach[];
   coachBallots: CoachBallot[];
+  /** Derived playerId → net bump (convenience / older backups). */
   adjustedBumps: Record<string, number>;
+  /** Source of truth for Adjusted ±1 bumps with coach attribution. */
+  bumpTransactions?: AdjustedBumpTransaction[];
   bumpBudget: AdjustedBumpConfig;
 }
 
@@ -95,9 +99,12 @@ export interface StorageRepository {
   saveCoachBallots(ballots: CoachBallot[]): void;
   saveCoachBallot(ballot: CoachBallot): void;
 
+  getBumpTransactions(): AdjustedBumpTransaction[];
+  saveBumpTransactions(transactions: AdjustedBumpTransaction[]): void;
   getAdjustedBumps(): Record<string, number>;
   saveAdjustedBumps(bumps: Record<string, number>): void;
-  applyBump(playerId: string, delta: 1 | -1): boolean;
+  applyBump(playerId: string, delta: 1 | -1, coachId: string): boolean;
+  clearPlayerBumps(playerId: string): void;
 
   getBumpBudget(): AdjustedBumpConfig;
   saveBumpBudget(budget: AdjustedBumpConfig): void;

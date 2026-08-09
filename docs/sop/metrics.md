@@ -22,7 +22,7 @@ Legacy metrics without `aggregationMode` are migrated on load via `defaultAggreg
 
 When a specific measurable metric tag is selected, the leaderboard shows the **aggregated raw value** with unit (e.g. `5.12s`, `14 goals`), sorted by that value and direction.
 
-### Overall Rank vs Adjusted Rank
+### Statistical Rank vs Adjusted Rank
 
 Standing scores are **squad pool percentiles** per metric (100 = best among players who have that metric logged) — **not** absolute min/max expected ranges (standards/benchmarks are deferred).
 
@@ -30,8 +30,9 @@ A global **Rankings** toggle (not part of Rank by) applies to every category and
 
 | Mode | Behavior |
 |---|---|
-| **Overall Rank** | Pool place (1 = best) from scored metrics only. Unscored / missing / excused are **omitted** — they do not pull the average down |
-| **Adjusted Rank** | Pool place from the adjusted standing score. By default, unscored / missing / excused count as **0** (gaps lower standing). Per-metric flags can change this (below). |
+| **Statistical Rank** | Pool place (1 = best) from scored metrics only. Unscored / missing / excused are **omitted** — they do not pull the average down |
+| **Adjusted Rank** | Pool place from the adjusted standing score. By default, unscored / missing / excused count as **0** (gaps lower standing). Per-metric flags can change this (below). Optional ±1 coach bumps apply here. |
+| **Coaches Rank** | Average of complete coach ordinal ballots (lower average = better), or an individual coach’s ballot. Entered under Players → Coaches Rating. |
 
 Formula label weights still mix categories into the standing score that is then ranked. Primary display on the board is the **pool place** (`#1`, `#2`…), with standing score as secondary detail.
 
@@ -57,11 +58,11 @@ Legacy metrics missing these flags are migrated on load to `true`.
 | Present | 100 | Counted |
 | Late | 50 | Counted |
 | Absent | 0 | Counted (worst recorded) |
-| Excused | −1 | **Unscored** — omitted from Overall; 0 in Adjusted |
+| Excused | −1 | **Unscored** — omitted from Statistical; 0 in Adjusted |
 
-Attendance rate on cards uses Overall rules (present/late/absent only).
+Attendance rate on cards uses Statistical rules (present/late/absent only).
 
-Never-scored players sort last under an **Unscored** divider when ranking by Overall (or any mode where the value is null).
+Never-scored players sort last under an **Unscored** divider when ranking by Statistical Rank (or any mode where the value is null).
 
 ## Calculated fields
 

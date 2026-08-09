@@ -20,15 +20,11 @@ import {
   MetricType,
   MetricAggregationMode,
   CalculatedFieldDefinition,
-  Coach,
-  CoachBallot,
-  Player,
   AdjustedBumpConfig,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { TeamManagementView } from './TeamManagementView';
 import { AdminToolsView } from './AdminToolsView';
-import { CoachesRatingView } from './CoachesRatingView';
 import { defaultAggregationMode } from '../utils/metricAggregation';
 
 interface ConfigViewProps {
@@ -36,9 +32,6 @@ interface ConfigViewProps {
   metrics: MetricDefinition[];
   formula: ScoringFormulaConfig;
   calculatedFields: CalculatedFieldDefinition[];
-  coaches: Coach[];
-  coachBallots: CoachBallot[];
-  players: Player[];
   bumpBudget: AdjustedBumpConfig;
   onRefreshData: () => void;
 }
@@ -54,9 +47,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   metrics,
   formula,
   calculatedFields,
-  coaches,
-  coachBallots,
-  players,
   bumpBudget,
   onRefreshData
 }) => {
@@ -469,13 +459,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       <TeamManagementView onRefreshData={onRefreshData} />
       <AdminToolsView onRefreshData={onRefreshData} />
 
-      <CoachesRatingView
-        coaches={coaches}
-        ballots={coachBallots}
-        players={players}
-        onRefreshData={onRefreshData}
-      />
-
       {/* Adjusted ±1 bump budget */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
         <div className="pb-3 border-b border-slate-800">
@@ -484,9 +467,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             <span>Adjusted ±1 Bump Budget</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1">
-            Team-level budgets for Rankings → Adjusted Rank only. Sum of positive
-            bumps cannot exceed plus budget; abs sum of negatives cannot exceed
-            minus budget.
+            Team-level budgets for Rankings → Adjusted Rank. Bumps are attributed
+            to the selected coach. Sum of positive bumps cannot exceed plus
+            budget; abs sum of negatives cannot exceed minus budget.
           </p>
         </div>
         <div className="flex flex-wrap items-end gap-3">

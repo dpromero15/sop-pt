@@ -174,7 +174,7 @@ export interface PlayerLabelScore {
   }[];
 }
 
-/** Staff coach who submits ordinal ballots for Coaches Totals. */
+/** Staff coach who submits ordinal ballots for Coaches Rank. */
 export interface Coach {
   id: string;
   name: string;
@@ -196,6 +196,21 @@ export interface AdjustedBumpConfig {
   minusBudget: number;
 }
 
+/**
+ * One +1 / −1 Adjusted bump attributed to a coach.
+ * Net per player = sum of deltas; ranking uses that net as a score offset.
+ */
+export interface AdjustedBumpTransaction {
+  id: string;
+  playerId: string;
+  coachId: string;
+  delta: 1 | -1;
+  createdAt: string;
+}
+
+/** Coach id used when migrating pre-attribution bump nets. */
+export const LEGACY_BUMP_COACH_ID = 'coach_legacy';
+
 export interface PlayerRanking {
   player: Player;
   /**
@@ -209,7 +224,8 @@ export interface PlayerRanking {
    */
   adjustedTotalScore: number | null;
   /**
-   * Pool place for Overall (1 = best). Null when unscored for overall.
+   * Pool place for Statistical Rank (1 = best). Null when unscored.
+   * Field name `overallRank` kept for storage / API stability.
    */
   overallRank: number | null;
   /**
@@ -219,11 +235,12 @@ export interface PlayerRanking {
   adjustedRank: number | null;
   /**
    * Sum of ordinals across complete coach ballots only.
+   * Display as average (sum / ballot count); order matches average.
    * Null when no complete ballots (or player not active in the pool).
    */
   coachesTotalSum: number | null;
   /**
-   * Competition rank of coachesTotalSum (1 = best / lower sum).
+   * Competition rank of coaches averages (1 = best / lower average).
    * Null when coachesTotalSum is null.
    */
   coachesRank: number | null;

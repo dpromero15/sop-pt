@@ -144,7 +144,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
             {/* Rank Metric Box */}
             <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-center sm:text-right shrink-0 min-w-[9rem]">
               <span className="text-[10px] uppercase font-bold text-slate-400">
-                Overall Rank
+                Statistical Rank
               </span>
               <div className="text-3xl font-black text-emerald-400 tracking-tight mt-0.5">
                 {playerRanking?.overallRank != null

@@ -3,6 +3,7 @@ import type { CoachBallot, Player } from '../types';
 import {
   activePlayers,
   attachCoachesTotals,
+  coachBallotOrdinals,
   computeCoachesTotals,
   isCompleteBallot,
 } from './coachesRating';
@@ -62,16 +63,52 @@ describe('computeCoachesTotals', () => {
     expect(computeCoachesTotals(players, ballots).size).toBe(0);
   });
 
-  it('sums complete ballots and ranks lower sum better', () => {
+  it('averages complete ballots and ranks lower average better', () => {
     const ballots: CoachBallot[] = [
       { coachId: 'c1', ranks: { a: 1, b: 2, c: 3 } },
       { coachId: 'c2', ranks: { a: 2, b: 1, c: 3 } },
     ];
     const totals = computeCoachesTotals(players, ballots);
-    expect(totals.get('a')).toEqual({ sum: 3, rank: 1 });
-    expect(totals.get('b')).toEqual({ sum: 3, rank: 1 }); // tie
-    expect(totals.get('c')).toEqual({ sum: 6, rank: 3 });
+    expect(totals.get('a')).toEqual({
+      sum: 3,
+      average: 1.5,
+      rank: 1,
+      ballotCount: 2,
+    });
+    expect(totals.get('b')).toEqual({
+      sum: 3,
+      average: 1.5,
+      rank: 1,
+      ballotCount: 2,
+    }); // tie
+    expect(totals.get('c')).toEqual({
+      sum: 6,
+      average: 3,
+      rank: 3,
+      ballotCount: 2,
+    });
     expect(totals.has('d')).toBe(false);
+  });
+
+  it('exposes ordinals from a complete individual ballot', () => {
+    const ballot: CoachBallot = {
+      coachId: 'c1',
+      ranks: { a: 1, b: 2, c: 3 },
+    };
+    const ordinals = coachBallotOrdinals(players, ballot);
+    expect(ordinals.get('a')).toBe(1);
+    expect(ordinals.get('b')).toBe(2);
+    expect(ordinals.get('c')).toBe(3);
+    expect(ordinals.has('d')).toBe(false);
+  });
+
+  it('returns empty ordinals for incomplete ballots', () => {
+    expect(
+      coachBallotOrdinals(players, {
+        coachId: 'c1',
+        ranks: { a: 1, b: 2 },
+      }).size,
+    ).toBe(0);
   });
 
   it('uses only active players for completeness', () => {

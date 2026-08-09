@@ -31,12 +31,15 @@ export function isCompleteBallot(
 
 export interface CoachesTotalResult {
   sum: number;
+  /** Mean ordinal across complete ballots (sum / ballot count). */
+  average: number;
   rank: number;
+  ballotCount: number;
 }
 
 /**
- * Sum ordinals across **complete** ballots only, then competition-rank
- * (lower sum = better). Incomplete ballots are ignored.
+ * Average ordinals across **complete** ballots only, then competition-rank
+ * (lower average = better; same order as sum). Incomplete ballots are ignored.
  */
 export function computeCoachesTotals(
   players: Player[],
@@ -51,26 +54,50 @@ export function computeCoachesTotals(
     return result;
   }
 
-  const sums = activeIds.map((playerId) => {
+  const ballotCount = complete.length;
+  const averages = activeIds.map((playerId) => {
     let sum = 0;
     for (const ballot of complete) {
       sum += ballot.ranks[playerId];
     }
-    return sum;
+    return sum / ballotCount;
   });
 
-  const ranks = assignCompetitionRanks(sums, false);
+  const ranks = assignCompetitionRanks(averages, false);
   activeIds.forEach((playerId, i) => {
     const rank = ranks[i];
     if (rank !== null) {
-      result.set(playerId, { sum: sums[i], rank });
+      const average = averages[i];
+      result.set(playerId, {
+        sum: average * ballotCount,
+        average,
+        rank,
+        ballotCount,
+      });
     }
   });
 
   return result;
 }
 
-/** Merge coaches totals onto rankings (inactive / no ballots → null). */
+/**
+ * Ordinals from one coach's complete ballot (1 = best).
+ * Empty map when the ballot is missing or incomplete.
+ */
+export function coachBallotOrdinals(
+  players: Player[],
+  ballot: CoachBallot | undefined,
+): Map<string, number> {
+  const activeIds = activePlayers(players).map((p) => p.id);
+  const result = new Map<string, number>();
+  if (!ballot || !isCompleteBallot(ballot, activeIds)) return result;
+  for (const id of activeIds) {
+    result.set(id, ballot.ranks[id]);
+  }
+  return result;
+}
+
+/** Merge coaches averages onto rankings (inactive / no ballots → null). */
 export function attachCoachesTotals(
   rankings: PlayerRanking[],
   players: Player[],
