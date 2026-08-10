@@ -91,12 +91,22 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
   if (localOpenMode || !apiReady) {
     return (
       <div className="space-y-6">
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 text-sm text-amber-100/90">
-          Cloud Admin (teams / members) needs Firebase +{' '}
-          <code className="text-amber-200">VITE_API_BASE_URL</code>. Local-only
-          mode still exposes System Admin cloud tools below when configured.
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-5 text-sm text-amber-100/90 space-y-2">
+          <p>
+            Cloud Admin (create many teams / invite members) needs the API (
+            <code className="text-amber-200">VITE_API_BASE_URL</code>). Until
+            Cloud Run is live, use the team picker to open or rename the{' '}
+            <strong className="font-semibold text-amber-50">local squad</strong>{' '}
+            in this browser.
+          </p>
+          <p className="text-amber-100/70 text-xs leading-relaxed">
+            Later: System Admins will see all teams, enter in shadow mode (never
+            as another user), with every change attributed to the signed-in
+            admin.
+          </p>
         </div>
         {can('cloudSync') && <AdminToolsView onRefreshData={onRefreshData} />}
+        <DataMigrationPanel onComplete={onRefreshData} />
       </div>
     );
   }

@@ -29,6 +29,7 @@ import {
   type AuthState,
 } from '../services/firebase';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
+import { StorageService } from '../services/storage';
 import {
   can as canRole,
   resolveEffectiveAccess,
@@ -174,16 +175,36 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
         (import.meta.env.VITE_INITIAL_ADMIN_EMAIL as string | undefined)
           ?.trim()
           .toLowerCase() ?? '';
+      const isSystemAdmin = Boolean(initial && email === initial);
       setAppUser({
         uid: live.uid ?? '',
         email,
         displayName: live.displayName ?? undefined,
         photoURL: live.photoURL ?? undefined,
-        systemRole: initial && email === initial ? 'systemAdmin' : 'none',
+        systemRole: isSystemAdmin ? 'systemAdmin' : 'none',
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
       });
-      setTeams([]);
+      // Until Cloud Run multi-team API is live, System Admin can work the
+      // browser-local squad instead of landing on an empty picker.
+      if (isSystemAdmin) {
+        const localTeam = StorageService.getTeam();
+        const now = new Date().toISOString();
+        setTeams([
+          {
+            team: localTeam,
+            membership: {
+              uid: live.uid ?? '',
+              email,
+              role: 'teamAdmin',
+              createdAt: now,
+              createdByUid: live.uid ?? '',
+            } as TeamMembership,
+          },
+        ]);
+      } else {
+        setTeams([]);
+      }
       return;
     }
     try {
