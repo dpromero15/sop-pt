@@ -19,7 +19,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const simEnabled = isDevAuthSimulationEnabled();
-  const canRealGoogle = isFirebaseConfigured();
+  // Real Google OAuth on http://localhost fights the https authDomain iframe — skip when simulating.
+  const canRealGoogle = isFirebaseConfigured() && !simEnabled;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -126,9 +127,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
                       {busy ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : null}
-                      {canRealGoogle
-                        ? 'Dev: simulate Google login'
-                        : 'Continue (simulated Google)'}
+                      Continue (simulated Google)
                     </button>
                   ) : null}
                   {import.meta.env.DEV && !canRealGoogle && !simEnabled ? (

@@ -1,4 +1,4 @@
-import { initializeApp, type FirebaseApp } from 'firebase/app';
+import { getApp, getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
   GoogleAuthProvider,
@@ -7,6 +7,7 @@ import {
   signInWithPopup,
   signOut,
   type Auth,
+  type Unsubscribe,
   type User,
 } from 'firebase/auth';
 
@@ -37,6 +38,7 @@ const listeners = new Set<AuthListener>();
 let initialized = false;
 /** True when the current session is a local QA simulated Google user. */
 let simulatedSession = false;
+let unsubscribeAuth: Unsubscribe | null = null;
 
 function readConfig() {
   return {
@@ -76,6 +78,15 @@ export function isDevAuthSimulationEnabled(): boolean {
 
 export function isSimulatedAuthSession(): boolean {
   return simulatedSession;
+}
+
+/**
+ * Local debug / mock auth path (`npm run dev` + `VITE_DEV_SIMULATE_AUTH`).
+ * When true: no real Firebase Auth, System Admin + mock teams, never call the API
+ * for `/v1/me`. Production and Hosting builds always return false.
+ */
+export function isLocalDebugMockAuth(): boolean {
+  return isDevAuthSimulationEnabled();
 }
 
 /** Auth gate can open: real Firebase config and/or local simulate flag. */
@@ -154,29 +165,47 @@ export async function resetDevAuthState(): Promise<void> {
 }
 
 export function initFirebase(): boolean {
-  if (initialized) {
-    return isFirebaseConfigured() || isDevAuthSimulationEnabled();
-  }
-  initialized = true;
+  const sim = isDevAuthSimulationEnabled();
+  const configured = isFirebaseConfigured();
 
-  if (isDevAuthSimulationEnabled() && !isFirebaseConfigured()) {
+  // Local simulate mode: never touch real Auth. Initializing getAuth() loads an
+  // https://*.firebaseapp.com iframe that cannot talk to http://localhost
+  // (protocol mismatch + noisy CONFIGURATION_NOT_FOUND in the console).
+  if (sim) {
+    initialized = true;
     return true;
   }
 
-  if (!isFirebaseConfigured()) return false;
+  if (!configured) {
+    initialized = true;
+    return false;
+  }
 
   const c = readConfig();
-  app = initializeApp({
+  const options = {
     apiKey: c.apiKey!,
     authDomain: c.authDomain!,
     projectId: c.projectId!,
     appId: c.appId!,
-  });
-  auth = getAuth(app);
+  };
 
-  onAuthStateChanged(auth, async (user) => {
-    // With simulate mode on, ignore persisted Google sessions — QA uses simulate button.
-    if (isDevAuthSimulationEnabled() || simulatedSession) {
+  try {
+    // HMR-safe: Vite can re-run this module while the DEFAULT app already exists.
+    app = getApps().length > 0 ? getApp() : initializeApp(options);
+    auth = getAuth(app);
+  } catch (err) {
+    console.error('[sop-pt] Firebase init failed', err);
+    initialized = true;
+    return false;
+  }
+
+  if (unsubscribeAuth) {
+    unsubscribeAuth();
+    unsubscribeAuth = null;
+  }
+
+  unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+    if (simulatedSession) {
       return;
     }
     if (user) {
@@ -188,20 +217,7 @@ export function initFirebase(): boolean {
     notify();
   });
 
-  // Drop sticky Google cookies/session so landing isn't "already signed in" with no teams.
-  if (isDevAuthSimulationEnabled()) {
-    void signOut(auth).then(() => {
-      simulatedSession = false;
-      current = toAuthState(null, null);
-      try {
-        sessionStorage.removeItem('stm_workspace_ready_v1');
-      } catch {
-        /* ignore */
-      }
-      notify();
-    });
-  }
-
+  initialized = true;
   return true;
 }
 
@@ -254,7 +270,8 @@ export async function simulateGoogleSignIn(): Promise<void> {
 }
 
 export async function signInWithGoogle(): Promise<void> {
-  if (isDevAuthSimulationEnabled() && !isFirebaseConfigured()) {
+  // Simulate flag wins locally — never open the Firebase Auth popup on http localhost.
+  if (isDevAuthSimulationEnabled()) {
     await simulateGoogleSignIn();
     return;
   }

@@ -22,6 +22,7 @@ import {
 import { Player } from './types';
 import { useAccess } from './access/AccessProvider';
 import { ensureSignedInCoach } from './utils/coachIdentity';
+import { isLocalDebugMockAuth } from './services/firebase';
 
 const BUMP_COACH_STORAGE_KEY = 'stm_active_bump_coach_v1';
 
@@ -132,6 +133,20 @@ export default function App() {
     const unsubscribe = subscribeToStorage(refreshData);
     return () => unsubscribe();
   }, []);
+
+  // Local debug mock: if signed in but session never got System Admin / teams, retry once.
+  useEffect(() => {
+    if (!import.meta.env.DEV || !isLocalDebugMockAuth()) return;
+    if (!auth.signedIn || workspaceReady) return;
+    if (access.systemRole === 'systemAdmin' || accessTeams.length > 0) return;
+    void refreshSession();
+  }, [
+    auth.signedIn,
+    workspaceReady,
+    access.systemRole,
+    accessTeams.length,
+    refreshSession,
+  ]);
 
   // Link signed-in Google user to a Coach record for bumps / ballots
   useEffect(() => {
@@ -292,6 +307,26 @@ export default function App() {
 
   if (!workspaceReady) {
     if (access.systemRole !== 'systemAdmin' && accessTeams.length === 0) {
+      if (import.meta.env.DEV && isLocalDebugMockAuth()) {
+        return (
+          <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+            <div className="max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-6 space-y-4 text-center">
+              <h1 className="font-display text-lg font-bold">Local debug auth</h1>
+              <p className="text-sm text-slate-400">
+                Simulated sign-in is on, but mock System Admin access has not
+                loaded yet.
+              </p>
+              <button
+                type="button"
+                className="rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
+                onClick={() => void refreshSession()}
+              >
+                Load mock teams
+              </button>
+            </div>
+          </div>
+        );
+      }
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
           <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">

@@ -1,6 +1,7 @@
 import type { DataMigration } from './types';
 import { migration001ConsolidateLegacyShapes } from './migrations/001_consolidate_legacy_shapes';
 import { migration002SopPtWorkspaceDefaults } from './migrations/002_sop_pt_workspace_defaults';
+import { migration003RepairMetricsBlob } from './migrations/003_repair_metrics_blob';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -20,5 +21,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Ensure Team docs have required fields for landing/picker/header (2.8).',
     up: migration002SopPtWorkspaceDefaults,
+  },
+  {
+    id: 3,
+    name: 'repair_metrics_blob',
+    description:
+      'Fix metrics localStorage if a non-array `{ metrics, changed }` was written.',
+    up: migration003RepairMetricsBlob,
   },
 ];

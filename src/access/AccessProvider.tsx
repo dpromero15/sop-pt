@@ -23,7 +23,8 @@ import {
   getAuthState,
   initFirebase,
   isAuthReadyForApp,
-  isDevAuthSimulationEnabled,
+  isLocalDebugMockAuth,
+  isSimulatedAuthSession,
   subscribeToAuth,
   type AuthState,
 } from '../services/firebase';
@@ -66,6 +67,19 @@ function buildDevSimTeams(uid: string, email: string): SessionMeResponse['teams'
     mk('dev-team-u13', 'SOP Academy U13', 'U13'),
     mk('dev-team-u15', 'SOP Academy U15', 'U15'),
   ];
+}
+
+function buildDebugMockUser(live: AuthState): AppUser {
+  const email = live.email?.toLowerCase() ?? '';
+  return {
+    uid: live.uid ?? `dev-sim-${email || 'user'}`,
+    email,
+    displayName: live.displayName ?? undefined,
+    photoURL: live.photoURL ?? undefined,
+    systemRole: 'systemAdmin',
+    createdAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+  };
 }
 
 interface AccessContextValue {
@@ -133,39 +147,38 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [authConfigured]);
 
   const refreshSession = useCallback(async () => {
-    if (!authConfigured || !auth.signedIn) {
+    // Always read live auth — Landing onSignedIn can run before React state catches up.
+    const live = getAuthState();
+    const debugMock =
+      isSimulatedAuthSession() ||
+      (live.signedIn && isLocalDebugMockAuth());
+
+    if (!authConfigured || !live.signedIn) {
       setAppUser(null);
       setTeams([]);
       return;
     }
 
-    // Dev simulate mode (local `npm run dev` only): System Admin + mock teams.
-    if (import.meta.env.DEV && isDevAuthSimulationEnabled()) {
-      const email = auth.email?.toLowerCase() ?? '';
-      setAppUser({
-        uid: auth.uid ?? '',
-        email,
-        displayName: auth.displayName ?? undefined,
-        photoURL: auth.photoURL ?? undefined,
-        systemRole: 'systemAdmin',
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-      });
-      setTeams(buildDevSimTeams(auth.uid ?? 'dev', email));
+    // Local debug mock: System Admin + mock teams. Never hit /v1/me even if
+    // VITE_API_BASE_URL points at a dead localhost API.
+    if (debugMock) {
+      const email = live.email?.toLowerCase() ?? '';
+      setAppUser(buildDebugMockUser(live));
+      setTeams(buildDevSimTeams(live.uid ?? 'dev', email));
       return;
     }
 
     if (!getApiBaseUrl()) {
-      const email = auth.email?.toLowerCase() ?? '';
+      const email = live.email?.toLowerCase() ?? '';
       const initial =
         (import.meta.env.VITE_INITIAL_ADMIN_EMAIL as string | undefined)
           ?.trim()
           .toLowerCase() ?? '';
       setAppUser({
-        uid: auth.uid ?? '',
+        uid: live.uid ?? '',
         email,
-        displayName: auth.displayName ?? undefined,
-        photoURL: auth.photoURL ?? undefined,
+        displayName: live.displayName ?? undefined,
+        photoURL: live.photoURL ?? undefined,
         systemRole: initial && email === initial ? 'systemAdmin' : 'none',
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
@@ -190,18 +203,11 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     } catch {
+      // Real auth + API configured: do not invent access. Debug mock is handled above.
       setAppUser(null);
       setTeams([]);
     }
-  }, [
-    authConfigured,
-    auth.signedIn,
-    auth.email,
-    auth.uid,
-    auth.displayName,
-    auth.photoURL,
-    activeTeamId,
-  ]);
+  }, [authConfigured, auth.signedIn, auth.email, auth.uid, activeTeamId]);
 
   useEffect(() => {
     void refreshSession();

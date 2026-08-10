@@ -56,15 +56,31 @@ export function normalizeMetricDefinition(
 }
 
 export function migrateMetricsAggregation(
-  metrics: MetricMigrationInput[],
+  metrics: unknown,
 ): { metrics: MetricDefinition[]; changed: boolean } {
+  if (!Array.isArray(metrics)) {
+    // Repair corrupt writes (e.g. `{ metrics, changed }` stored as the blob).
+    if (
+      metrics &&
+      typeof metrics === 'object' &&
+      Array.isArray((metrics as { metrics?: unknown }).metrics)
+    ) {
+      const inner = migrateMetricsAggregation(
+        (metrics as { metrics: MetricMigrationInput[] }).metrics,
+      );
+      return { metrics: inner.metrics, changed: true };
+    }
+    return { metrics: [], changed: true };
+  }
+
   let changed = false;
   const next = metrics.map((m) => {
-    const normalized = normalizeMetricDefinition(m);
+    const normalized = normalizeMetricDefinition(m as MetricMigrationInput);
+    const original = m as MetricMigrationInput;
     if (
-      normalized.aggregationMode !== m.aggregationMode ||
-      normalized.includeInAdjustedTotal !== m.includeInAdjustedTotal ||
-      normalized.treatNoScoreAsZero !== m.treatNoScoreAsZero
+      normalized.aggregationMode !== original.aggregationMode ||
+      normalized.includeInAdjustedTotal !== original.includeInAdjustedTotal ||
+      normalized.treatNoScoreAsZero !== original.treatNoScoreAsZero
     ) {
       changed = true;
     }

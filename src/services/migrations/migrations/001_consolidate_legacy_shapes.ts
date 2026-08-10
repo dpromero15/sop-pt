@@ -9,7 +9,6 @@ import { migrateMetricsAggregation } from '../../../utils/metricAggregation';
 import { parseStoredBumpTransactions } from '../../../utils/adjustedBumps';
 import type {
   LabelDefinition,
-  MetricDefinition,
   MetricEntry,
   Session,
 } from '../../../types';
@@ -47,13 +46,18 @@ export function migration001ConsolidateLegacyShapes(
     }
   }
 
-  const metricsRaw = ctx.getJson<MetricDefinition[]>(STORAGE_KEYS.METRICS);
-  if (metricsRaw && Array.isArray(metricsRaw)) {
-    const migrated = migrateMetricsAggregation(metricsRaw);
-    if (JSON.stringify(metricsRaw) !== JSON.stringify(migrated)) {
+  const metricsRaw = ctx.getJson<unknown>(STORAGE_KEYS.METRICS);
+  if (metricsRaw != null) {
+    const { metrics: migrated, changed: metricsChanged } =
+      migrateMetricsAggregation(metricsRaw);
+    if (metricsChanged || !Array.isArray(metricsRaw)) {
       ctx.setJson(STORAGE_KEYS.METRICS, migrated);
       changed = true;
-      notes.push('Filled metric aggregation / Adjusted Rank fields.');
+      notes.push(
+        Array.isArray(metricsRaw)
+          ? 'Filled metric aggregation / Adjusted Rank fields.'
+          : 'Repaired corrupt metrics blob into an array.',
+      );
     }
   }
 

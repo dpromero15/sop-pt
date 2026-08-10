@@ -18,9 +18,19 @@ try {
   console.error('[sop-pt] data migration crashed', err);
 }
 
-initFirebase();
+try {
+  initFirebase();
+} catch (err) {
+  // Never block React mount (common after Vite HMR re-inits Firebase).
+  console.error('[sop-pt] Firebase init crashed', err);
+}
 
-createRoot(document.getElementById('root')!).render(
+const rootEl = document.getElementById('root');
+if (!rootEl) {
+  throw new Error('Missing #root element');
+}
+
+createRoot(rootEl).render(
   <StrictMode>
     <AccessProvider>
       <App />

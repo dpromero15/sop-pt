@@ -330,15 +330,18 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getMetrics(): MetricDefinition[] {
-    const raw = this.readJson<MetricDefinition[]>(
-      STORAGE_KEYS.METRICS,
-      DEFAULT_METRICS,
-    );
+    const raw = this.readJson<unknown>(STORAGE_KEYS.METRICS, DEFAULT_METRICS);
     const { metrics, changed } = migrateMetricsAggregation(raw);
-    if (changed) {
-      this.writeJson(STORAGE_KEYS.METRICS, metrics);
+    let next = metrics;
+    let shouldWrite = changed;
+    if (!Array.isArray(raw) && metrics.length === 0) {
+      next = DEFAULT_METRICS;
+      shouldWrite = true;
     }
-    return metrics;
+    if (shouldWrite) {
+      this.writeJson(STORAGE_KEYS.METRICS, next);
+    }
+    return next;
   }
 
   saveMetrics(metrics: MetricDefinition[]) {

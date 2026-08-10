@@ -100,6 +100,22 @@ describe('migrateMetricsAggregation', () => {
     expect(metrics[0].includeInAdjustedTotal).toBe(false);
     expect(metrics[0].treatNoScoreAsZero).toBe(false);
   });
+
+  it('unwraps corrupt `{ metrics, changed }` blob', () => {
+    const { metrics, changed } = migrateMetricsAggregation({
+      metrics: [dash],
+      changed: true,
+    });
+    expect(changed).toBe(true);
+    expect(Array.isArray(metrics)).toBe(true);
+    expect(metrics[0].id).toBe(dash.id);
+  });
+
+  it('returns empty array for non-array garbage', () => {
+    const { metrics, changed } = migrateMetricsAggregation({ oops: true });
+    expect(changed).toBe(true);
+    expect(metrics).toEqual([]);
+  });
 });
 
 describe('aggregateMetricValue', () => {
