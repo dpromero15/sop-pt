@@ -1,8 +1,10 @@
-# Soccer Team Manager
+# SOP-PT · Systems of Play Player Tracker
 
 Soccer team management app for registering players, sideline session logging (swipe attendance + player-card scoring), metric labels, configurable scoring rankings, editable team profile, and durable storage (local JSON blobs with optional Cloud Run + Firestore).
 
-**Version:** 2.7.0
+**Product:** SOP-PT (Player Tracker) — a **Systems of Play** product (SOP = System of Play).
+
+**Version:** 2.8.0
 
 ## Run locally
 

@@ -7,10 +7,10 @@ import {
   Sliders,
   Shield,
   Plus,
-  LogOut,
 } from 'lucide-react';
 import type { Team } from '../types';
 import { useAccess } from '../access/AccessProvider';
+import { ProfileMenu } from './ProfileMenu';
 
 export type TabRoute =
   | 'rankings'
@@ -25,6 +25,7 @@ interface NavigationProps {
   onSelectTab: (tab: TabRoute) => void;
   onOpenQuickAddPlayer: () => void;
   onOpenQuickSession: () => void;
+  onOpenSettings: () => void;
   playerCount: number;
   sessionCount: number;
   team: Team;
@@ -35,12 +36,12 @@ export const Navigation: React.FC<NavigationProps> = ({
   onSelectTab,
   onOpenQuickAddPlayer,
   onOpenQuickSession,
+  onOpenSettings,
   playerCount,
   sessionCount,
   team,
 }) => {
-  const { can, auth, roleLabel, signOut, localOpenMode, teams, activeTeamId, setActiveTeamId } =
-    useAccess();
+  const { can, roleLabel } = useAccess();
 
   const tabs = [
     {
@@ -109,7 +110,9 @@ export const Navigation: React.FC<NavigationProps> = ({
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center shrink-0">
               <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center">
-                <Shield className="w-5 h-5 text-emerald-400" />
+                <span className="font-display text-[10px] font-bold text-emerald-400 tracking-tight">
+                  SOP
+                </span>
               </div>
             </div>
             <div className="min-w-0">
@@ -125,30 +128,12 @@ export const Navigation: React.FC<NavigationProps> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5 font-medium truncate">
-                Season {team.season} • Performance Tracker
-                {!localOpenMode && auth.email ? ` • ${auth.email}` : ''}
+                SOP-PT · Season {team.season}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {teams.length > 1 && (
-              <select
-                value={activeTeamId ?? ''}
-                onChange={(e) => setActiveTeamId(e.target.value || null)}
-                className="hidden md:block max-w-[10rem] rounded-xl border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs"
-                aria-label="Active team"
-              >
-                {teams.map((row) => {
-                  const t = row.team as Team;
-                  return (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  );
-                })}
-              </select>
-            )}
             {can('dataEntry') && (
               <button
                 onClick={onOpenQuickSession}
@@ -167,25 +152,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <span>Register Player</span>
               </button>
             )}
-            {!localOpenMode && auth.signedIn && (
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300"
-                title="Sign out"
-                aria-label="Sign out"
-              >
-                {auth.photoURL ? (
-                  <img
-                    src={auth.photoURL}
-                    alt=""
-                    className="w-5 h-5 rounded-full"
-                  />
-                ) : (
-                  <LogOut className="w-4 h-4" />
-                )}
-              </button>
-            )}
+            <ProfileMenu onOpenSettings={onOpenSettings} />
           </div>
         </div>
       </header>

@@ -3,6 +3,10 @@ import { ApiAdapter } from './storage/apiAdapter';
 import { getApiBaseUrl, checkConnectionStatus } from './storage/connectionStatus';
 import { LocalJsonAdapter } from './storage/localJsonAdapter';
 import type { TeamSnapshot } from './storage/types';
+import {
+  runLocalMigrations,
+  writeStoredSchemaVersion,
+} from './migrations/runner';
 
 const localAdapter = new LocalJsonAdapter();
 
@@ -10,6 +14,16 @@ export const StorageService = localAdapter;
 
 export function subscribeToStorage(listener: () => void): () => void {
   return localAdapter.subscribe(listener);
+}
+
+/** After importing cloud/backup payloads, re-apply migrations to adapted shapes. */
+function migrateImportedLocalData(): void {
+  if (typeof localStorage === 'undefined') return;
+  writeStoredSchemaVersion(localStorage, 0);
+  const report = runLocalMigrations(localStorage);
+  if (report.error) {
+    console.error('[sop-pt] post-import migration failed', report);
+  }
 }
 
 export async function bootstrapLocalToCloud(): Promise<void> {
@@ -74,6 +88,7 @@ export async function hydrateCloudToLocal(): Promise<TeamSnapshot> {
   if (snapshot.rankingBoundaries) {
     localAdapter.saveRankingBoundaries(snapshot.rankingBoundaries);
   }
+  migrateImportedLocalData();
   return snapshot;
 }
 

@@ -6,7 +6,9 @@ import { PlayersView } from './components/PlayersView';
 import { SessionsView } from './components/SessionsView';
 import { ConfigView } from './components/ConfigView';
 import { AdminPageView } from './components/AdminPageView';
-import { SignInGate } from './components/SignInGate';
+import { AuthConfigMissing, LandingPage } from './components/LandingPage';
+import { TeamPickerPage } from './components/TeamPickerPage';
+import { AccountSettingsModal } from './components/AccountSettingsModal';
 import { PlayerProfileModal } from './components/PlayerProfileModal';
 import { ScoringConfigModal } from './components/ScoringConfigModal';
 import { StorageService, subscribeToStorage } from './services/storage';
@@ -39,7 +41,7 @@ export default function App() {
     auth,
     can,
     access,
-    localOpenMode,
+    workspaceReady,
     refreshSession,
     teams: accessTeams,
   } = useAccess();
@@ -102,6 +104,7 @@ export default function App() {
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [isAddPlayerOpen, setIsAddPlayerOpen] = useState(false);
   const [isAddSessionOpen, setIsAddSessionOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loggerSessionId, setLoggerSessionId] = useState<string | null>(null);
 
   const refreshData = () => {
@@ -273,9 +276,13 @@ export default function App() {
     );
   }
 
-  if (authConfigured && !auth.signedIn) {
+  if (!authConfigured) {
+    return <AuthConfigMissing />;
+  }
+
+  if (!auth.signedIn) {
     return (
-      <SignInGate
+      <LandingPage
         onSignedIn={() => {
           void refreshSession();
         }}
@@ -283,20 +290,38 @@ export default function App() {
     );
   }
 
-  if (
-    authConfigured &&
-    !localOpenMode &&
-    auth.signedIn &&
-    access.role === 'none'
-  ) {
+  if (!workspaceReady) {
+    if (access.systemRole !== 'systemAdmin' && accessTeams.length === 0) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+          <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">
+            <h1 className="font-display text-lg font-bold">No team access</h1>
+            <p className="text-sm text-slate-400">
+              Signed in as {auth.email}. Ask a System Admin to invite this email
+              to a team, or set it in <code>ADMIN_EMAIL_ALLOWLIST</code> for
+              System Admin.
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <TeamPickerPage
+        onEnterAdmin={() => {
+          setCurrentTab('admin');
+        }}
+      />
+    );
+  }
+
+  if (access.role === 'none') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">
-          <h1 className="text-lg font-bold">No team access</h1>
+          <h1 className="font-display text-lg font-bold">No team access</h1>
           <p className="text-sm text-slate-400">
-            Signed in as {auth.email}. Ask a System Admin to invite this email
-            to a team, or set it in <code>ADMIN_EMAIL_ALLOWLIST</code> for System
-            Admin.
+            Signed in as {auth.email}. Pick another team from your profile, or
+            ask a System Admin for access.
           </p>
         </div>
       </div>
@@ -318,6 +343,7 @@ export default function App() {
           setCurrentTab('sessions');
           setIsAddSessionOpen(true);
         }}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         playerCount={players.length}
         sessionCount={sessions.length}
         team={team}
@@ -452,6 +478,14 @@ export default function App() {
           onRefreshData={refreshData}
         />
       )}
+
+      <AccountSettingsModal
+        open={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        onOpenAdmin={() => {
+          if (can('adminPage')) setCurrentTab('admin');
+        }}
+      />
     </div>
   );
 }

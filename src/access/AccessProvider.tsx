@@ -22,7 +22,8 @@ import {
   adminSignOut,
   getAuthState,
   initFirebase,
-  isFirebaseConfigured,
+  isAuthReadyForApp,
+  isDevAuthSimulationEnabled,
   subscribeToAuth,
   type AuthState,
 } from '../services/firebase';
@@ -33,6 +34,40 @@ import {
   roleLabel,
 } from '../utils/roles';
 
+function buildDevSimTeams(uid: string, email: string): SessionMeResponse['teams'] {
+  const now = new Date().toISOString();
+  const mk = (
+    id: string,
+    name: string,
+    ageGroup: string,
+  ): SessionMeResponse['teams'][number] => ({
+    team: {
+      id,
+      name,
+      shortName: ageGroup,
+      ageGroup,
+      season: '2025-26',
+      clubName: 'Systems of Play Academy',
+      homeVenue: 'SOP Pitch',
+      primaryColor: '#10b981',
+      secondaryColor: '#0f172a',
+      timezone: 'America/Denver',
+      updatedAt: now,
+    } as Team,
+    membership: {
+      uid,
+      email,
+      role: 'teamAdmin',
+      createdAt: now,
+      createdByUid: uid,
+    } as TeamMembership,
+  });
+  return [
+    mk('dev-team-u13', 'SOP Academy U13', 'U13'),
+    mk('dev-team-u15', 'SOP Academy U15', 'U15'),
+  ];
+}
+
 interface AccessContextValue {
   authConfigured: boolean;
   authReady: boolean;
@@ -41,8 +76,12 @@ interface AccessContextValue {
   teams: SessionMeResponse['teams'];
   activeTeamId: string | null;
   setActiveTeamId: (id: string | null) => void;
+  /** True after the user explicitly picks a team (or admin workspace) this session. */
+  workspaceReady: boolean;
+  enterWorkspace: (teamId: string | null) => void;
+  clearWorkspace: () => void;
   access: EffectiveAccess;
-  /** Local-only mode (Firebase unset): full access for offline/dev. */
+  /** True when Firebase web config is missing. */
   localOpenMode: boolean;
   can: (action: AccessAction) => boolean;
   roleLabel: string;
@@ -53,11 +92,20 @@ interface AccessContextValue {
 const AccessContext = createContext<AccessContextValue | null>(null);
 
 const ACTIVE_TEAM_KEY = 'stm_active_team_id_v1';
+const WORKSPACE_READY_KEY = 'stm_workspace_ready_v1';
+
+function readWorkspaceReady(): boolean {
+  try {
+    return sessionStorage.getItem(WORKSPACE_READY_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const authConfigured = isFirebaseConfigured();
+  const authConfigured = isAuthReadyForApp();
   const [authReady, setAuthReady] = useState(!authConfigured);
   const [auth, setAuth] = useState<AuthState>(() => getAuthState());
   const [appUser, setAppUser] = useState<AppUser | null>(null);
@@ -69,6 +117,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       return null;
     }
   });
+  const [workspaceReady, setWorkspaceReady] = useState(readWorkspaceReady);
 
   useEffect(() => {
     if (!authConfigured) {
@@ -89,8 +138,24 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       setTeams([]);
       return;
     }
+
+    // Dev simulate mode (local `npm run dev` only): System Admin + mock teams.
+    if (import.meta.env.DEV && isDevAuthSimulationEnabled()) {
+      const email = auth.email?.toLowerCase() ?? '';
+      setAppUser({
+        uid: auth.uid ?? '',
+        email,
+        displayName: auth.displayName ?? undefined,
+        photoURL: auth.photoURL ?? undefined,
+        systemRole: 'systemAdmin',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      });
+      setTeams(buildDevSimTeams(auth.uid ?? 'dev', email));
+      return;
+    }
+
     if (!getApiBaseUrl()) {
-      // Signed in but no API — treat allowlist client-side for chrome only
       const email = auth.email?.toLowerCase() ?? '';
       const initial =
         (import.meta.env.VITE_INITIAL_ADMIN_EMAIL as string | undefined)
@@ -101,8 +166,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
         email,
         displayName: auth.displayName ?? undefined,
         photoURL: auth.photoURL ?? undefined,
-        systemRole:
-          initial && email === initial ? 'systemAdmin' : 'none',
+        systemRole: initial && email === initial ? 'systemAdmin' : 'none',
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
       });
@@ -113,15 +177,14 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       const me = await fetchSessionMe();
       setAppUser(me.user);
       setTeams(me.teams);
+      // Keep remembered team if still valid; do not auto-enter workspace.
       if (
-        me.teams.length > 0 &&
-        (!activeTeamId ||
-          !me.teams.some((t) => (t.team as Team).id === activeTeamId))
+        activeTeamId &&
+        !me.teams.some((t) => (t.team as Team).id === activeTeamId)
       ) {
-        const firstId = (me.teams[0].team as Team).id;
-        setActiveTeamIdState(firstId);
+        setActiveTeamIdState(null);
         try {
-          localStorage.setItem(ACTIVE_TEAM_KEY, firstId);
+          localStorage.removeItem(ACTIVE_TEAM_KEY);
         } catch {
           /* ignore */
         }
@@ -130,7 +193,15 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       setAppUser(null);
       setTeams([]);
     }
-  }, [authConfigured, auth.signedIn, auth.email, auth.uid, auth.displayName, auth.photoURL, activeTeamId]);
+  }, [
+    authConfigured,
+    auth.signedIn,
+    auth.email,
+    auth.uid,
+    auth.displayName,
+    auth.photoURL,
+    activeTeamId,
+  ]);
 
   useEffect(() => {
     void refreshSession();
@@ -146,6 +217,25 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const enterWorkspace = (teamId: string | null) => {
+    setActiveTeamId(teamId);
+    setWorkspaceReady(true);
+    try {
+      sessionStorage.setItem(WORKSPACE_READY_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const clearWorkspace = () => {
+    setWorkspaceReady(false);
+    try {
+      sessionStorage.removeItem(WORKSPACE_READY_KEY);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const membership: TeamMembership | null = useMemo(() => {
     if (!activeTeamId) return null;
     const row = teams.find((t) => (t.team as Team).id === activeTeamId);
@@ -155,20 +245,12 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
   const localOpenMode = !authConfigured;
 
   const access = useMemo((): EffectiveAccess => {
-    if (localOpenMode) {
-      return {
-        role: 'systemAdmin',
-        systemRole: 'systemAdmin',
-        teamId: activeTeamId,
-        membershipRole: null,
-      };
-    }
     return resolveEffectiveAccess({
       systemRole: appUser?.systemRole ?? 'none',
       membershipRole: membership?.role ?? null,
       teamId: activeTeamId,
     });
-  }, [localOpenMode, appUser, membership, activeTeamId]);
+  }, [appUser, membership, activeTeamId]);
 
   const value: AccessContextValue = {
     authConfigured,
@@ -178,6 +260,9 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
     teams,
     activeTeamId,
     setActiveTeamId,
+    workspaceReady,
+    enterWorkspace,
+    clearWorkspace,
     access,
     localOpenMode,
     can: (action: AccessAction) => canRole(access.role, action),
@@ -187,6 +272,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       await adminSignOut();
       setAppUser(null);
       setTeams([]);
+      clearWorkspace();
     },
   };
 

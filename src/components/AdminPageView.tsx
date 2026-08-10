@@ -17,6 +17,7 @@ import {
 } from '../services/adminApi';
 import type { Team, TeamMembership, TeamMembershipRole } from '../types';
 import { AdminToolsView } from './AdminToolsView';
+import { DataMigrationPanel } from './DataMigrationPanel';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
 
 interface AdminPageViewProps {
@@ -295,6 +296,8 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
           <AdminToolsView onRefreshData={onRefreshData} />
         </section>
       )}
+
+      <DataMigrationPanel onComplete={onRefreshData} />
 
       {(busy || message) && (
         <p className="text-xs text-slate-400 flex items-center gap-2">

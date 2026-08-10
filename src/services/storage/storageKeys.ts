@@ -1,0 +1,20 @@
+/** Canonical localStorage keys for SOP-PT domain blobs. */
+export const STORAGE_KEYS = {
+  TEAM: 'stm_team_v1',
+  PLAYERS: 'stm_players_v1',
+  SESSIONS: 'stm_sessions_v1',
+  ENTRIES: 'stm_entries_v1',
+  METRICS: 'stm_metrics_v1',
+  LABELS: 'stm_labels_v1',
+  FORMULA: 'stm_formula_v1',
+  CALCULATED_FIELDS: 'stm_calculated_fields_v1',
+  COACHES: 'stm_coaches_v1',
+  COACH_BALLOTS: 'stm_coach_ballots_v1',
+  ADJUSTED_BUMPS: 'stm_adjusted_bumps_v1',
+  BUMP_BUDGET: 'stm_bump_budget_v1',
+  COMPLIANCE_REQUIREMENTS: 'stm_compliance_requirements_v1',
+  PLAYER_COMPLIANCE: 'stm_player_compliance_v1',
+  EQUIPMENT_GROUPS: 'stm_equipment_groups_v1',
+  EQUIPMENT_ITEMS: 'stm_equipment_items_v1',
+  RANKING_BOUNDARIES: 'stm_ranking_boundaries_v1',
+} as const;
