@@ -35,6 +35,7 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 - Attendance metric id is always first and cannot be removed in the UI.
 - On create, seed `metricIds = [attendanceMetricId]`. Match sessions may additionally suggest a default game pack (`m_goals`, `m_assists`, `m_tackles`).
 - **Migration:** if a stored session lacks `metricIds`, derive the set from distinct `metricId` values in that session’s entries, ensure the attendance metric id is included first, then persist.
+- **Versioned runner:** `src/services/migrations` (`stm_schema_version_v1`). Boot + Admin “Data migrations” + post-import/hydrate. See `.cursor/skills/data-migrations/SKILL.md`.
 
 ### Metric definition fields
 

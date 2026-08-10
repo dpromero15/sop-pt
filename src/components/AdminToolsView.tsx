@@ -10,7 +10,6 @@ import {
   Download,
 } from 'lucide-react';
 import {
-  adminSignIn,
   adminSignOut,
   initFirebase,
   isFirebaseConfigured,
@@ -35,8 +34,6 @@ interface AdminToolsViewProps {
 export const AdminToolsView: React.FC<AdminToolsViewProps> = ({ onRefreshData }) => {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [auth, setAuth] = useState<AuthState | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -142,49 +139,15 @@ export const AdminToolsView: React.FC<AdminToolsViewProps> = ({ onRefreshData })
       </div>
 
       {!auth?.signedIn ? (
-        <div className="space-y-2">
-          <button
-            type="button"
-            disabled={busy || !isFirebaseConfigured()}
-            onClick={() => void run(() => signInWithGoogle(), 'Signed in with Google.')}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 disabled:opacity-50 px-3 py-2 text-xs font-bold"
-          >
-            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
-            Sign in with Google
-          </button>
-          <form
-            className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void run(() => adminSignIn(email, password), 'Signed in.');
-            }}
-          >
-            <input
-              type="email"
-              required
-              placeholder="Legacy admin email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
-            />
-            <input
-              type="password"
-              required
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              disabled={busy || !isFirebaseConfigured()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 px-3 py-2 text-xs font-semibold"
-            >
-              {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
-              Email sign in
-            </button>
-          </form>
-        </div>
+        <button
+          type="button"
+          disabled={busy || !isFirebaseConfigured()}
+          onClick={() => void run(() => signInWithGoogle(), 'Signed in with Google.')}
+          className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 rounded-xl bg-white text-slate-900 hover:bg-slate-100 disabled:opacity-50 px-3 py-2 text-xs font-bold"
+        >
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogIn className="w-3.5 h-3.5" />}
+          Sign in with Google
+        </button>
       ) : (
         <button
           type="button"
