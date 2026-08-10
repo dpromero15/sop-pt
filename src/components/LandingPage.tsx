@@ -19,7 +19,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const simEnabled = isDevAuthSimulationEnabled();
-  const canRealGoogle = isFirebaseConfigured();
+  // Real Google OAuth on http://localhost fights the https authDomain iframe — skip when simulating.
+  const canRealGoogle = isFirebaseConfigured() && !simEnabled;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -126,9 +127,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
                       {busy ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                       ) : null}
-                      {canRealGoogle
-                        ? 'Dev: simulate Google login'
-                        : 'Continue (simulated Google)'}
+                      Continue (simulated Google)
                     </button>
                   ) : null}
                   {import.meta.env.DEV && !canRealGoogle && !simEnabled ? (
@@ -224,23 +223,38 @@ function GoogleMark() {
 
 export const AuthConfigMissing: React.FC = () => (
   <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-    <div className="max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-6 space-y-3">
-      <h1 className="font-display text-lg font-bold text-amber-200">
-        Auth not configured
+    <div className="max-w-lg rounded-2xl border border-amber-500/40 bg-slate-900 p-8 space-y-4 shadow-2xl">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-400/90">
+        Systems of Play · SOP-PT
+      </p>
+      <h1 className="font-display text-2xl font-bold text-amber-100">
+        Firebase Auth is not configured
       </h1>
       <p className="text-sm text-slate-400 leading-relaxed">
-        Set <code className="text-slate-300">VITE_FIREBASE_*</code> for Hosting /
-        production builds. SOP-PT will not open without Google sign-in.
-        {import.meta.env.DEV ? (
-          <>
-            {' '}
-            For local QA only, you may also set{' '}
-            <code className="text-slate-300">VITE_DEV_SIMULATE_AUTH=true</code> in{' '}
-            <code className="text-slate-300">.env.local</code> and run{' '}
-            <code className="text-slate-300">npm run dev</code>.
-          </>
-        ) : null}
+        This Hosting build was shipped without <code className="text-slate-300">VITE_FIREBASE_*</code>{' '}
+        values, so Google sign-in cannot start. Add those secrets in GitHub Actions (or deploy
+        locally with <code className="text-slate-300">.env.firebase</code>), then redeploy.
       </p>
+      <ol className="text-sm text-slate-400 list-decimal pl-5 space-y-1.5">
+        <li>
+          Repo → Settings → Secrets → Actions → set{' '}
+          <code className="text-slate-300">VITE_FIREBASE_API_KEY</code>,{' '}
+          <code className="text-slate-300">AUTH_DOMAIN</code>,{' '}
+          <code className="text-slate-300">PROJECT_ID</code>,{' '}
+          <code className="text-slate-300">APP_ID</code>
+        </li>
+        <li>
+          Or run <code className="text-slate-300">npm run deploy:hosting</code> from a machine
+          with <code className="text-slate-300">.env.firebase</code> filled in
+        </li>
+      </ol>
+      {import.meta.env.DEV ? (
+        <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-800 pt-3">
+          Local QA: set <code className="text-slate-400">VITE_DEV_SIMULATE_AUTH=true</code> in{' '}
+          <code className="text-slate-400">.env.local</code> and use{' '}
+          <code className="text-slate-400">npm run dev</code>.
+        </p>
+      ) : null}
     </div>
   </div>
 );

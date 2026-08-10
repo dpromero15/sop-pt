@@ -90,4 +90,35 @@ describe('runLocalMigrations', () => {
     expect(again.error).toBeUndefined();
     expect(again.toVersion).toBe(CURRENT_SCHEMA_VERSION);
   });
+
+  it('repairs corrupt metrics `{ metrics, changed }` blob via v3', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(2));
+    store.setItem(
+      STORAGE_KEYS.METRICS,
+      JSON.stringify({
+        metrics: [
+          {
+            id: 'm_dash',
+            name: 'Dash',
+            type: 'time_seconds',
+            unit: 's',
+            higherIsBetter: false,
+            aggregationMode: 'best',
+            includeInAdjustedTotal: true,
+            treatNoScoreAsZero: true,
+          },
+        ],
+        changed: true,
+      }),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(3);
+
+    const metrics = JSON.parse(store.getItem(STORAGE_KEYS.METRICS)!);
+    expect(Array.isArray(metrics)).toBe(true);
+    expect(metrics[0].id).toBe('m_dash');
+  });
 });

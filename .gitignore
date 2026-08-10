@@ -9,3 +9,4 @@ services/api/dist
 .vite
 .agents/
 skills-lock.json
+.firebase/
