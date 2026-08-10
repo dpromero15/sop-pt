@@ -6,7 +6,7 @@ Cross-session handoff for agents and humans. **Update this file before ending a 
 |---|---|
 | **Release** | `2.7.0` |
 | **Branch** | `release/v2.7.0` |
-| **Last updated** | 2026-08-09 (implemented #75 / #84–#89) |
+| **Last updated** | 2026-08-10 (Firebase Hosting init + deploy workflows) |
 
 Canonical version file: [`VERSION.md`](VERSION.md) (must match `package.json` + README).
 
@@ -75,6 +75,7 @@ _None._
 - On every version bump update **all three**: `VERSION.md`, root `package.json`, `README.md` **Version:**
 - Do **not** open a PR until QA + explicit human approval (github-prs skill).
 - Cloud access tightened: team routes require membership (or System Admin); set `ADMIN_EMAIL_ALLOWLIST` + `VITE_INITIAL_ADMIN_EMAIL` to your Google email; enable Google provider in Firebase Console.
+- Firebase **Hosting** (not Storage) configured: `firebase.json` public=`dist`; deploy via `npm run deploy:hosting` or GitHub Actions on merge to `main`. Prod SPA env: `.env.firebase` (gitignored); CI needs `VITE_*` + `FIREBASE_SERVICE_ACCOUNT_SOP_PT` secrets. Cloud Run API still separate; Hosting-only is SPA shell until `VITE_API_BASE_URL` points at Cloud Run. Firestore rules deny all client access (Admin SDK only).
 
 ---
 

@@ -3,6 +3,9 @@ dist
 services/api/node_modules
 services/api/dist
 .env.local
+.env.firebase
 .env
 *.log
 .vite
+.agents/
+skills-lock.json

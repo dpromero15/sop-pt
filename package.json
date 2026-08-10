@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
+    "build:firebase": "vite build --mode firebase",
     "preview": "vite preview",
+    "deploy:hosting": "npm run build:firebase && firebase deploy --only hosting",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "vitest run",
