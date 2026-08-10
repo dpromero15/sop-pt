@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronRight, Plus, Shield, Users } from 'lucide-react';
+import { ChevronRight, Loader2, Plus, Shield, Users } from 'lucide-react';
 import type { Team, TeamMembership } from '../types';
 import { claimLocalSquad, useAccess } from '../access/AccessProvider';
 import { roleLabel } from '../utils/roles';
@@ -29,6 +29,7 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
   const [showCreate, setShowCreate] = useState(teams.length === 0);
   const [newName, setNewName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const openAdmin = () => {
@@ -39,7 +40,7 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
 
   const addNewTeam = async () => {
     const name = newName.trim();
-    if (!name) return;
+    if (!name || busy) return;
     setBusy(true);
     setError(null);
     try {
@@ -88,6 +89,56 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
   };
 
   const canAddTeam = localOnly || isSystemAdmin;
+
+  const createForm = (
+    <div className="space-y-3 text-left">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        Add new team
+      </p>
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              void addNewTeam();
+            }
+          }}
+          placeholder="Team name"
+          className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm"
+          autoFocus
+          disabled={busy}
+        />
+        <button
+          type="button"
+          disabled={busy || !newName.trim()}
+          onClick={() => void addNewTeam()}
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2.5 text-sm disabled:opacity-40"
+        >
+          {busy ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Plus className="w-4 h-4" />
+          )}
+          {busy ? 'Creating…' : 'Create & enter'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-rose-300">{error}</p>}
+      {localOnly && (
+        <p className="text-[11px] text-slate-500 leading-snug">
+          Stored in this browser until the cloud API is connected. Changes stay
+          tied to your signed-in Google account.
+        </p>
+      )}
+      {!localOnly && (
+        <p className="text-[11px] text-slate-500 leading-snug">
+          Creates the team via the cloud API. If this hangs, the API may be
+          unreachable — check <code className="text-slate-400">VITE_API_BASE_URL</code>.
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <div className="min-h-screen relative overflow-hidden bg-slate-950 text-slate-100">
@@ -148,28 +199,27 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
 
         <div className="space-y-3">
           {teams.length === 0 ? (
-            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-4 text-center">
-              <Users className="w-8 h-8 text-slate-600 mx-auto" />
-              <p className="text-sm text-slate-400 leading-relaxed">
-                No teams yet. Add a new team to get started
-                {isSystemAdmin ? ', or continue as admin.' : '.'}
-              </p>
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-5">
+              <div className="text-center space-y-3">
+                <Users className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  No teams yet.
+                  {canAddTeam
+                    ? ' Enter a name below to create one'
+                    : ' Ask a System Admin for an invite'}
+                  {isSystemAdmin ? ', or continue as admin.' : '.'}
+                </p>
+              </div>
 
-              <div className="flex flex-col gap-3">
-                {canAddTeam && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreate(true);
-                      setError(null);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-white text-slate-950 font-semibold px-4 py-3 text-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add new team
-                  </button>
-                )}
+              {canAddTeam && createForm}
 
+              {!canAddTeam && (
+                <p className="text-xs text-slate-500 text-center">
+                  Ask a System Admin to invite this email, then refresh.
+                </p>
+              )}
+
+              <div className="flex flex-col gap-3 pt-1">
                 {isSystemAdmin && (
                   <button
                     type="button"
@@ -180,21 +230,35 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
                     Continue as admin
                   </button>
                 )}
+
+                <button
+                  type="button"
+                  disabled={refreshBusy}
+                  onClick={() => {
+                    void (async () => {
+                      setRefreshBusy(true);
+                      setError(null);
+                      try {
+                        await refreshSession();
+                      } catch (err) {
+                        setError(
+                          err instanceof Error
+                            ? err.message
+                            : 'Could not refresh teams',
+                        );
+                      } finally {
+                        setRefreshBusy(false);
+                      }
+                    })();
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 mx-auto text-xs text-slate-500 hover:text-slate-300 disabled:opacity-50"
+                >
+                  {refreshBusy ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : null}
+                  Refresh teams
+                </button>
               </div>
-
-              {!canAddTeam && (
-                <p className="text-xs text-slate-500">
-                  Ask a System Admin to invite this email, then refresh.
-                </p>
-              )}
-
-              <button
-                type="button"
-                onClick={() => void refreshSession()}
-                className="block mx-auto text-xs text-slate-500 hover:text-slate-300"
-              >
-                Refresh teams
-              </button>
             </div>
           ) : (
             teams.map((row) => {
@@ -230,52 +294,26 @@ export const TeamPickerPage: React.FC<TeamPickerPageProps> = ({
           )}
         </div>
 
-        {canAddTeam && showCreate && (
+        {teams.length > 0 && canAddTeam && showCreate && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-              Add new team
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                placeholder="Team name"
-                className="flex-1 rounded-xl border border-slate-700 bg-slate-950 px-3 py-2.5 text-sm"
-                autoFocus
-              />
-              <button
-                type="button"
-                disabled={busy || !newName.trim()}
-                onClick={() => void addNewTeam()}
-                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2.5 text-sm disabled:opacity-40"
-              >
-                <Plus className="w-4 h-4" />
-                Create & enter
-              </button>
-            </div>
-            {error && <p className="text-xs text-rose-300">{error}</p>}
-            {localOnly && (
-              <p className="text-[11px] text-slate-500 leading-snug">
-                Stored in this browser until the cloud API is connected. Changes
-                stay tied to your signed-in Google account.
-              </p>
-            )}
-            {teams.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowCreate(false)}
-                className="text-xs text-slate-500 hover:text-slate-300"
-              >
-                Cancel
-              </button>
-            )}
+            {createForm}
+            <button
+              type="button"
+              onClick={() => setShowCreate(false)}
+              className="text-xs text-slate-500 hover:text-slate-300"
+            >
+              Cancel
+            </button>
           </div>
         )}
 
         {teams.length > 0 && canAddTeam && !showCreate && (
           <button
             type="button"
-            onClick={() => setShowCreate(true)}
+            onClick={() => {
+              setShowCreate(true);
+              setError(null);
+            }}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 text-slate-200 font-semibold px-4 py-3 text-sm hover:border-emerald-500/40 hover:text-emerald-100"
           >
             <Plus className="w-4 h-4" />

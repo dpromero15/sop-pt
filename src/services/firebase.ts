@@ -82,7 +82,7 @@ export function isSimulatedAuthSession(): boolean {
 
 /**
  * Local debug / mock auth path (`npm run dev` + `VITE_DEV_SIMULATE_AUTH`).
- * When true: no real Firebase Auth, System Admin + mock teams, never call the API
+ * When true: no real Firebase Auth; persona mock teams; never call the API
  * for `/v1/me`. Production and Hosting builds always return false.
  */
 export function isLocalDebugMockAuth(): boolean {
@@ -126,11 +126,70 @@ function toAuthState(user: User | null, idToken: string | null): AuthState {
   };
 }
 
-function simulatedIdentity(): {
+/** Local QA personas for `simulateGoogleSignIn`. Not shipped to production. */
+export type DevSimPersona = 'systemAdmin' | 'emptyRosterCoach';
+
+const DEV_SIM_PERSONA_KEY = 'stm_dev_sim_persona_v1';
+const DEV_EMPTY_ROSTER_SEED_KEY = 'stm_dev_empty_roster_seed_v1';
+
+export function getDevSimPersona(): DevSimPersona {
+  try {
+    const raw = sessionStorage.getItem(DEV_SIM_PERSONA_KEY);
+    if (raw === 'emptyRosterCoach') return 'emptyRosterCoach';
+  } catch {
+    /* ignore */
+  }
+  return 'systemAdmin';
+}
+
+/** True once after empty-roster coach sign-in until local data is seeded. */
+export function consumeEmptyRosterSeedPending(): boolean {
+  try {
+    if (sessionStorage.getItem(DEV_EMPTY_ROSTER_SEED_KEY) !== 'pending') {
+      return false;
+    }
+    sessionStorage.setItem(DEV_EMPTY_ROSTER_SEED_KEY, 'done');
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function setDevSimPersona(persona: DevSimPersona): void {
+  try {
+    sessionStorage.setItem(DEV_SIM_PERSONA_KEY, persona);
+    if (persona === 'emptyRosterCoach') {
+      sessionStorage.setItem(DEV_EMPTY_ROSTER_SEED_KEY, 'pending');
+    } else {
+      sessionStorage.removeItem(DEV_EMPTY_ROSTER_SEED_KEY);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearDevSimPersona(): void {
+  try {
+    sessionStorage.removeItem(DEV_SIM_PERSONA_KEY);
+    sessionStorage.removeItem(DEV_EMPTY_ROSTER_SEED_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function simulatedIdentity(persona: DevSimPersona = getDevSimPersona()): {
   email: string;
   displayName: string;
   uid: string;
 } {
+  if (persona === 'emptyRosterCoach') {
+    const email = 'coach.empty@sop.local';
+    return {
+      email,
+      displayName: 'Empty Roster Coach',
+      uid: `dev-sim-${email}`,
+    };
+  }
   const email =
     (
       (import.meta.env.VITE_DEV_SIMULATE_EMAIL as string | undefined) ||
@@ -148,6 +207,7 @@ function simulatedIdentity(): {
 /** Clear Firebase + workspace leftovers that block local QA simulate flow. */
 export async function resetDevAuthState(): Promise<void> {
   simulatedSession = false;
+  clearDevSimPersona();
   current = toAuthState(null, null);
   try {
     sessionStorage.removeItem('stm_workspace_ready_v1');
@@ -231,8 +291,13 @@ export function subscribeToAuth(listener: AuthListener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Fake Google session for local QA (`VITE_DEV_SIMULATE_AUTH=true` + `npm run dev`). */
-export async function simulateGoogleSignIn(): Promise<void> {
+/**
+ * Fake Google session for local QA (`VITE_DEV_SIMULATE_AUTH=true` + `npm run dev`).
+ * @param persona `systemAdmin` (default) or `emptyRosterCoach` (one team, zero players).
+ */
+export async function simulateGoogleSignIn(
+  persona: DevSimPersona = 'systemAdmin',
+): Promise<void> {
   if (import.meta.env.PROD || !import.meta.env.DEV) {
     throw new Error('Auth simulation is not available outside local development.');
   }
@@ -255,7 +320,8 @@ export async function simulateGoogleSignIn(): Promise<void> {
   } catch {
     /* ignore */
   }
-  const id = simulatedIdentity();
+  setDevSimPersona(persona);
+  const id = simulatedIdentity(persona);
   simulatedSession = true;
   current = {
     signedIn: true,
@@ -283,6 +349,8 @@ export async function signInWithGoogle(): Promise<void> {
   }
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
+  // Popup (not redirect): if the browser blocks it, Firebase rejects with
+  // auth/popup-blocked — LandingPage surfaces that. Avoid leaving busy=true forever.
   await signInWithPopup(auth, provider);
 }
 
@@ -297,6 +365,7 @@ export async function adminSignIn(email: string, password: string): Promise<void
 export async function adminSignOut(): Promise<void> {
   if (simulatedSession) {
     simulatedSession = false;
+    clearDevSimPersona();
     current = toAuthState(null, null);
     notify();
     return;

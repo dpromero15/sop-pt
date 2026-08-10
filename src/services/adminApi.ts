@@ -17,19 +17,42 @@ async function authHeader(): Promise<HeadersInit> {
   };
 }
 
+const API_TIMEOUT_MS = 12_000;
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getApiBaseUrl();
   if (!base) throw new Error('VITE_API_BASE_URL is not set.');
   const headers = await authHeader();
-  const res = await fetch(`${base}${path}`, {
-    ...init,
-    headers: { ...headers, ...(init?.headers ?? {}) },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error || `API ${res.status}`);
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { ...headers, ...(init?.headers ?? {}) },
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      throw new Error(body?.error || `API ${res.status}`);
+    }
+    return (await res.json()) as T;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(
+        `API timed out after ${API_TIMEOUT_MS / 1000}s (${base}). Is the server running?`,
+      );
+    }
+    if (err instanceof TypeError) {
+      throw new Error(
+        `API unreachable at ${base}. Start the API or clear VITE_API_BASE_URL for local-only.`,
+      );
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timer);
   }
-  return (await res.json()) as T;
 }
 
 export interface SessionMeResponse {
