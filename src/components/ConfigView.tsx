@@ -29,7 +29,6 @@ import {
 } from '../types';
 import { StorageService } from '../services/storage';
 import { TeamManagementView } from './TeamManagementView';
-import { AdminToolsView } from './AdminToolsView';
 import { ComplianceConfigPanel } from './ComplianceConfigPanel';
 import { EquipmentConfigPanel } from './EquipmentConfigPanel';
 import { RankingBoundariesPanel } from './RankingBoundariesPanel';
@@ -475,7 +474,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       )}
 
       <TeamManagementView onRefreshData={onRefreshData} />
-      <AdminToolsView onRefreshData={onRefreshData} />
 
       <ComplianceConfigPanel
         requirements={complianceRequirements}

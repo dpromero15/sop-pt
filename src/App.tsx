@@ -5,6 +5,8 @@ import { QuickInsertView } from './components/QuickInsertView';
 import { PlayersView } from './components/PlayersView';
 import { SessionsView } from './components/SessionsView';
 import { ConfigView } from './components/ConfigView';
+import { AdminPageView } from './components/AdminPageView';
+import { SignInGate } from './components/SignInGate';
 import { PlayerProfileModal } from './components/PlayerProfileModal';
 import { ScoringConfigModal } from './components/ScoringConfigModal';
 import { StorageService, subscribeToStorage } from './services/storage';
@@ -16,20 +18,40 @@ import {
   eligiblePlayerIdSet,
 } from './utils/eligibility';
 import { Player } from './types';
+import { useAccess } from './access/AccessProvider';
+import { ensureSignedInCoach } from './utils/coachIdentity';
 
 const BUMP_COACH_STORAGE_KEY = 'stm_active_bump_coach_v1';
 
+const ALL_TABS: TabRoute[] = [
+  'rankings',
+  'quick-insert',
+  'players',
+  'sessions',
+  'config',
+  'admin',
+];
+
 export default function App() {
-  // Hash Routing with default to 'rankings'
+  const {
+    authConfigured,
+    authReady,
+    auth,
+    can,
+    access,
+    localOpenMode,
+    refreshSession,
+    teams: accessTeams,
+  } = useAccess();
+
   const [currentTab, setCurrentTab] = useState<TabRoute>(() => {
     const hash = window.location.hash.replace('#', '');
-    if (['rankings', 'quick-insert', 'players', 'sessions', 'config'].includes(hash)) {
+    if (ALL_TABS.includes(hash as TabRoute)) {
       return hash as TabRoute;
     }
     return 'rankings';
   });
 
-  // App Data State
   const [team, setTeam] = useState(() => StorageService.getTeam());
   const [players, setPlayers] = useState(() => StorageService.getPlayers());
   const [sessions, setSessions] = useState(() => StorageService.getSessions());
@@ -76,14 +98,12 @@ export default function App() {
     }
   });
 
-  // Modal States
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [isFormulaModalOpen, setIsFormulaModalOpen] = useState<boolean>(false);
-  const [isAddPlayerOpen, setIsAddPlayerOpen] = useState<boolean>(false);
-  const [isAddSessionOpen, setIsAddSessionOpen] = useState<boolean>(false);
+  const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
+  const [isAddPlayerOpen, setIsAddPlayerOpen] = useState(false);
+  const [isAddSessionOpen, setIsAddSessionOpen] = useState(false);
   const [loggerSessionId, setLoggerSessionId] = useState<string | null>(null);
 
-  // Sync state on storage updates
   const refreshData = () => {
     setTeam(StorageService.getTeam());
     setPlayers(StorageService.getPlayers());
@@ -110,7 +130,38 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Keep bump coach selection valid as roster of coaches changes
+  // Link signed-in Google user to a Coach record for bumps / ballots
+  useEffect(() => {
+    if (!auth.signedIn || access.role === 'none' || access.role === 'viewer') {
+      return;
+    }
+    const row = accessTeams.find(
+      (t) => (t.team as { id?: string }).id === access.teamId,
+    );
+    const membershipName =
+      (row?.membership as { coachDisplayName?: string } | null)
+        ?.coachDisplayName ?? null;
+    const coach = ensureSignedInCoach({
+      uid: auth.uid,
+      email: auth.email,
+      displayName: auth.displayName,
+      membershipCoachName: membershipName,
+    });
+    if (coach) {
+      setBumpCoachId(coach.id);
+      refreshData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    auth.signedIn,
+    auth.uid,
+    auth.email,
+    auth.displayName,
+    access.role,
+    access.teamId,
+    accessTeams,
+  ]);
+
   useEffect(() => {
     if (coaches.length === 0) {
       if (bumpCoachId) setBumpCoachId('');
@@ -129,21 +180,36 @@ export default function App() {
         localStorage.removeItem(BUMP_COACH_STORAGE_KEY);
       }
     } catch {
-      /* ignore quota / private mode */
+      /* ignore */
     }
   }, [bumpCoachId]);
 
-  // Listen to window hash changes
   useEffect(() => {
     const handleHashChange = () => {
       const hash = window.location.hash.replace('#', '');
-      if (['rankings', 'quick-insert', 'players', 'sessions', 'config'].includes(hash)) {
+      if (ALL_TABS.includes(hash as TabRoute)) {
         setCurrentTab(hash as TabRoute);
       }
     };
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
+
+  // Redirect away from gated tabs
+  useEffect(() => {
+    if (currentTab === 'quick-insert' && !can('dataEntry')) {
+      setCurrentTab('rankings');
+      window.location.hash = 'rankings';
+    }
+    if (currentTab === 'config' && !can('configWrite')) {
+      setCurrentTab('rankings');
+      window.location.hash = 'rankings';
+    }
+    if (currentTab === 'admin' && !can('adminPage')) {
+      setCurrentTab('rankings');
+      window.location.hash = 'rankings';
+    }
+  }, [currentTab, can]);
 
   const handleSelectTab = (tab: TabRoute) => {
     setCurrentTab(tab);
@@ -181,32 +247,74 @@ export default function App() {
   ]);
 
   const handleApplyBump = (playerId: string, delta: 1 | -1) => {
+    if (!can('adjustedBumps')) return;
     if (!bumpCoachId) return;
     StorageService.applyBump(playerId, delta, bumpCoachId);
     refreshData();
   };
 
   const handleClearBumps = () => {
+    if (!can('adjustedBumps')) return;
     StorageService.saveBumpTransactions([]);
     refreshData();
   };
 
   const handleClearPlayerBump = (playerId: string) => {
+    if (!can('adjustedBumps')) return;
     StorageService.clearPlayerBumps(playerId);
     refreshData();
   };
 
+  if (!authReady) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center">
+        Loading…
+      </div>
+    );
+  }
+
+  if (authConfigured && !auth.signedIn) {
+    return (
+      <SignInGate
+        onSignedIn={() => {
+          void refreshSession();
+        }}
+      />
+    );
+  }
+
+  if (
+    authConfigured &&
+    !localOpenMode &&
+    auth.signedIn &&
+    access.role === 'none'
+  ) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">
+          <h1 className="text-lg font-bold">No team access</h1>
+          <p className="text-sm text-slate-400">
+            Signed in as {auth.email}. Ask a System Admin to invite this email
+            to a team, or set it in <code>ADMIN_EMAIL_ALLOWLIST</code> for System
+            Admin.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
-      {/* iOS App Navigation Header */}
       <Navigation
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
         onOpenQuickAddPlayer={() => {
+          if (!can('rosterWrite')) return;
           setCurrentTab('players');
           setIsAddPlayerOpen(true);
         }}
         onOpenQuickSession={() => {
+          if (!can('dataEntry')) return;
           setCurrentTab('sessions');
           setIsAddSessionOpen(true);
         }}
@@ -215,7 +323,6 @@ export default function App() {
         team={team}
       />
 
-      {/* Main Screen Router View Container */}
       <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6">
         {currentTab === 'rankings' && (
           <RankingsView
@@ -235,14 +342,19 @@ export default function App() {
             onApplyBump={handleApplyBump}
             onClearBumps={handleClearBumps}
             onClearPlayerBump={handleClearPlayerBump}
-            onOpenFormulaConfig={() => setIsFormulaModalOpen(true)}
+            onOpenFormulaConfig={() => {
+              if (can('configWrite')) setIsFormulaModalOpen(true);
+            }}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
-            onOpenQuickInsert={() => handleSelectTab('quick-insert')}
+            onOpenQuickInsert={() => {
+              if (can('dataEntry')) handleSelectTab('quick-insert');
+            }}
             rankingBoundaries={rankingBoundaries}
+            allowBumps={can('adjustedBumps')}
           />
         )}
 
-        {currentTab === 'quick-insert' && (
+        {currentTab === 'quick-insert' && can('dataEntry') && (
           <QuickInsertView
             players={players}
             sessions={sessions}
@@ -264,8 +376,11 @@ export default function App() {
             playerCompliance={playerCompliance}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onRefreshData={refreshData}
-            isAddModalOpen={isAddPlayerOpen}
+            isAddModalOpen={isAddPlayerOpen && can('rosterWrite')}
             onCloseAddModal={() => setIsAddPlayerOpen(false)}
+            readOnlyRoster={!can('rosterWrite')}
+            allowCoachesRating={can('coachesRating')}
+            allowProfileNotes={can('profileNotes')}
           />
         )}
 
@@ -275,10 +390,13 @@ export default function App() {
             players={players}
             metrics={metrics}
             onRefreshData={refreshData}
-            isAddModalOpen={isAddSessionOpen}
+            isAddModalOpen={isAddSessionOpen && can('dataEntry')}
             onCloseAddModal={() => setIsAddSessionOpen(false)}
-            onOpenAddModal={() => setIsAddSessionOpen(true)}
+            onOpenAddModal={() => {
+              if (can('dataEntry')) setIsAddSessionOpen(true);
+            }}
             onOpenQuickInsertForSession={(sId) => {
+              if (!can('dataEntry')) return;
               const session = StorageService.getSessions().find((s) => s.id === sId);
               if (session?.status === 'closed') {
                 StorageService.updateSession({ ...session, status: 'open' });
@@ -287,10 +405,11 @@ export default function App() {
               setLoggerSessionId(sId);
               handleSelectTab('quick-insert');
             }}
+            readOnly={!can('dataEntry')}
           />
         )}
 
-        {currentTab === 'config' && (
+        {currentTab === 'config' && can('configWrite') && (
           <ConfigView
             labels={labels}
             metrics={metrics}
@@ -305,9 +424,12 @@ export default function App() {
             onRefreshData={refreshData}
           />
         )}
+
+        {currentTab === 'admin' && can('adminPage') && (
+          <AdminPageView onRefreshData={refreshData} />
+        )}
       </main>
 
-      {/* Global Modals */}
       {selectedPlayer && (
         <PlayerProfileModal
           player={selectedPlayer}
@@ -321,7 +443,7 @@ export default function App() {
         />
       )}
 
-      {isFormulaModalOpen && (
+      {isFormulaModalOpen && can('configWrite') && (
         <ScoringConfigModal
           isOpen={isFormulaModalOpen}
           onClose={() => setIsFormulaModalOpen(false)}
