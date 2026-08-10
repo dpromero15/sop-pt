@@ -77,6 +77,17 @@ _None._
 - Cloud access tightened: team routes require membership (or System Admin); set `ADMIN_EMAIL_ALLOWLIST` + `VITE_INITIAL_ADMIN_EMAIL` to your Google email; enable Google provider in Firebase Console.
 - Firebase **Hosting** (not Storage) configured: `firebase.json` public=`dist`; deploy via `npm run deploy:hosting` or GitHub Actions on merge to `main`. Prod SPA env: `.env.firebase` (gitignored); CI needs `VITE_*` + `FIREBASE_SERVICE_ACCOUNT_SOP_PT` secrets. Cloud Run API still separate; Hosting-only is SPA shell until `VITE_API_BASE_URL` points at Cloud Run. Firestore rules deny all client access (Admin SDK only).
 
+### Firestore production rollout (stepped — do not block Hosting PR)
+
+App already falls back to localStorage when `VITE_API_BASE_URL` is empty/unhealthy — Hosting-first will not blow up.
+
+1. **Ship Hosting PR** — merge `release/v2.7.0` → `main`; SPA live; mode = local-fallback; Google Auth works if Firebase web config baked in.
+2. **Enable Blaze** (if not already) — required for Cloud Run; Firestore free quota still applies.
+3. **Deploy API to Cloud Run** — `gcloud run deploy sop-pt-api --source services/api --region us-central1` (or us-west1 to match Firestore) with env: `GOOGLE_CLOUD_PROJECT=sop-pt`, `ADMIN_EMAIL_ALLOWLIST=…`, `CORS_ORIGIN=https://sop-pt.web.app,https://sop-pt.firebaseapp.com`. Rely on default SA (no JSON key). Confirm `GET /health` and signed-in `GET /v1/status` → `firestoreReachable: true`.
+4. **Wire SPA to API** — set `VITE_API_BASE_URL` in `.env.firebase` + GitHub secrets; `npm run deploy:hosting` (or merge a tiny follow-up). Add Hosting domain to Firebase Auth authorized domains.
+5. **Verify cloud mode** — sign in as allowlisted admin; connection status = cloud; create team / bootstrap from local if needed; confirm data in Firestore console.
+6. **Optional later** — Hosting rewrite `/api/**` → Cloud Run; CI job for API deploy; budget alerts.
+
 ---
 
 ## How to use
