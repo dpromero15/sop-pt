@@ -165,9 +165,8 @@ export default function App() {
       displayName: auth.displayName,
       membershipCoachName: membershipName,
     });
-    if (coach) {
+    if (coach && coach.id !== bumpCoachId) {
       setBumpCoachId(coach.id);
-      refreshData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -178,6 +177,7 @@ export default function App() {
     access.role,
     access.teamId,
     accessTeams,
+    bumpCoachId,
   ]);
 
   useEffect(() => {
@@ -344,12 +344,13 @@ export default function App() {
       <TeamPickerPage
         onEnterAdmin={() => {
           setCurrentTab('admin');
+          window.location.hash = 'admin';
         }}
       />
     );
   }
 
-  if (access.role === 'none') {
+  if (access.role === 'none' && access.systemRole !== 'systemAdmin') {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
         <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">
