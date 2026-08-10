@@ -10,7 +10,7 @@
 
 ### Fix System Admin empty-teams picker and Admin entry freeze
 - **Status:** implemented
-- **Notes:** Opening Admin with `teamId=null` no longer dead-ends. No-API System Admin sees browser-local squad + create/rename on picker. Admin entry prefers that squad id.
+- **Notes:** Empty picker shows **Add new team** for everyone (local) + **Continue as admin** / Open administration for System Admin only. Local squad only appears after claim/create (no auto-seed).
 - **Touchpoints:** `App.tsx`, `AccessProvider.tsx`, `TeamPickerPage.tsx`, `AdminPageView.tsx`
 
 **Suggested PR Closes:**

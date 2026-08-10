@@ -306,36 +306,28 @@ export default function App() {
   }
 
   if (!workspaceReady) {
-    if (access.systemRole !== 'systemAdmin' && accessTeams.length === 0) {
-      if (import.meta.env.DEV && isLocalDebugMockAuth()) {
-        return (
-          <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-            <div className="max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-6 space-y-4 text-center">
-              <h1 className="font-display text-lg font-bold">Local debug auth</h1>
-              <p className="text-sm text-slate-400">
-                Simulated sign-in is on, but mock System Admin access has not
-                loaded yet.
-              </p>
-              <button
-                type="button"
-                className="rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
-                onClick={() => void refreshSession()}
-              >
-                Load mock teams
-              </button>
-            </div>
-          </div>
-        );
-      }
+    // Always show the picker so anyone can Add new team (or Continue as admin).
+    if (
+      import.meta.env.DEV &&
+      isLocalDebugMockAuth() &&
+      access.systemRole !== 'systemAdmin' &&
+      accessTeams.length === 0
+    ) {
       return (
         <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-          <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 space-y-3 text-center">
-            <h1 className="font-display text-lg font-bold">No team access</h1>
+          <div className="max-w-md rounded-2xl border border-amber-500/30 bg-slate-900 p-6 space-y-4 text-center">
+            <h1 className="font-display text-lg font-bold">Local debug auth</h1>
             <p className="text-sm text-slate-400">
-              Signed in as {auth.email}. Ask a System Admin to invite this email
-              to a team, or set it in <code>ADMIN_EMAIL_ALLOWLIST</code> for
-              System Admin.
+              Simulated sign-in is on, but mock System Admin access has not
+              loaded yet.
             </p>
+            <button
+              type="button"
+              className="rounded-xl bg-amber-500/20 border border-amber-500/40 px-4 py-2 text-sm font-semibold text-amber-100 hover:bg-amber-500/30"
+              onClick={() => void refreshSession()}
+            >
+              Load mock teams
+            </button>
           </div>
         </div>
       );
