@@ -29,7 +29,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
       await fn();
       onSignedIn?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Sign-in failed');
+      const code =
+        err && typeof err === 'object' && 'code' in err
+          ? String((err as { code?: string }).code ?? '')
+          : '';
+      if (code === 'auth/popup-blocked') {
+        setError(
+          'Google sign-in popup was blocked. Allow pop-ups for this site and try again.',
+        );
+      } else if (code === 'auth/popup-closed-by-user') {
+        setError('Sign-in window was closed before finishing. Try again.');
+      } else if (code === 'auth/cancelled-popup-request') {
+        setError('Another sign-in popup was already open. Close it and retry.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Sign-in failed');
+      }
     } finally {
       setBusy(false);
     }
@@ -118,17 +132,36 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
                   )}
                   {/* `import.meta.env.DEV` is compile-false in production — Vite strips this branch. */}
                   {import.meta.env.DEV && simEnabled ? (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void run(() => simulateGoogleSignIn())}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-100 font-semibold px-5 py-3.5 hover:bg-amber-500/20 disabled:opacity-50 transition-colors"
-                    >
-                      {busy ? (
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                      ) : null}
-                      Continue (simulated Google)
-                    </button>
+                    <div className="flex flex-col gap-3 w-full sm:w-auto">
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => simulateGoogleSignIn('systemAdmin'))
+                        }
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-100 font-semibold px-5 py-3.5 hover:bg-amber-500/20 disabled:opacity-50 transition-colors"
+                      >
+                        {busy ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : null}
+                        Continue as System Admin (simulated)
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() =>
+                            simulateGoogleSignIn('emptyRosterCoach'),
+                          )
+                        }
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 text-sky-100 font-semibold px-5 py-3.5 hover:bg-sky-500/20 disabled:opacity-50 transition-colors"
+                      >
+                        {busy ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : null}
+                        Continue as coach (empty roster)
+                      </button>
+                    </div>
                   ) : null}
                   {import.meta.env.DEV && !canRealGoogle && !simEnabled ? (
                     <p className="text-sm text-amber-200/90">
@@ -145,7 +178,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onSignedIn }) => {
                 </div>
                 <p className="text-xs text-slate-500 max-w-sm leading-snug">
                   {import.meta.env.DEV && simEnabled
-                    ? 'Local debug only — simulated System Admin + mock teams. This control is not shipped to production.'
+                    ? 'Local debug only — System Admin (mock teams) or coach with an empty roster. Not shipped to production.'
                     : 'Secure Google authentication required. You’ll choose a team after sign-in.'}
                 </p>
               </div>

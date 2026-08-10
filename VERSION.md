@@ -4,8 +4,8 @@ Canonical release line for humans and agents. Keep in sync with root `package.js
 
 | Field | Value |
 |---|---|
-| **Version** | `2.8.2` |
-| **Release branch** | `release/v2.8.2` |
-| **Last shipped** | `2.8.1` ([PR #93](https://github.com/dpromero15/sop-pt/pull/93)) |
+| **Version** | `2.8.3` |
+| **Release branch** | `release/v2.8.3` |
+| **Last shipped** | `2.8.2` ([PR #94](https://github.com/dpromero15/sop-pt/pull/94)) |
 
 Cross-session issue handoff: [`WORKING.md`](WORKING.md).

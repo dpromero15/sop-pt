@@ -21,6 +21,8 @@ import {
 import {
   adminSignOut,
   getAuthState,
+  getDevSimPersona,
+  consumeEmptyRosterSeedPending,
   initFirebase,
   isAuthReadyForApp,
   isLocalDebugMockAuth,
@@ -30,23 +32,32 @@ import {
 } from '../services/firebase';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
 import { StorageService } from '../services/storage';
+import { DEFAULT_TEAM } from '../data/initialData';
 import {
   can as canRole,
   resolveEffectiveAccess,
   roleLabel,
 } from '../utils/roles';
 
-function buildDevSimTeams(uid: string, email: string): SessionMeResponse['teams'] {
+/** Local QA team id for the empty-roster coach persona. */
+export const DEV_EMPTY_ROSTER_TEAM_ID = 'dev-team-empty-roster';
+
+function buildDevSimTeams(
+  uid: string,
+  email: string,
+  persona: ReturnType<typeof getDevSimPersona>,
+): SessionMeResponse['teams'] {
   const now = new Date().toISOString();
   const mk = (
     id: string,
     name: string,
     ageGroup: string,
+    role: TeamMembership['role'] = 'teamAdmin',
   ): SessionMeResponse['teams'][number] => ({
     team: {
       id,
       name,
-      shortName: ageGroup,
+      shortName: ageGroup.slice(0, 4).toUpperCase(),
       ageGroup,
       season: '2025-26',
       clubName: 'Systems of Play Academy',
@@ -59,11 +70,25 @@ function buildDevSimTeams(uid: string, email: string): SessionMeResponse['teams'
     membership: {
       uid,
       email,
-      role: 'teamAdmin',
+      role,
       createdAt: now,
       createdByUid: uid,
+      coachDisplayName:
+        persona === 'emptyRosterCoach' ? 'Empty Roster Coach' : undefined,
     } as TeamMembership,
   });
+
+  if (persona === 'emptyRosterCoach') {
+    return [
+      mk(
+        DEV_EMPTY_ROSTER_TEAM_ID,
+        'SOP Academy (empty roster)',
+        'U15',
+        'teamAdmin',
+      ),
+    ];
+  }
+
   return [
     mk('dev-team-u13', 'SOP Academy U13', 'U13'),
     mk('dev-team-u15', 'SOP Academy U15', 'U15'),
@@ -72,15 +97,41 @@ function buildDevSimTeams(uid: string, email: string): SessionMeResponse['teams'
 
 function buildDebugMockUser(live: AuthState): AppUser {
   const email = live.email?.toLowerCase() ?? '';
+  const persona = getDevSimPersona();
   return {
     uid: live.uid ?? `dev-sim-${email || 'user'}`,
     email,
     displayName: live.displayName ?? undefined,
     photoURL: live.photoURL ?? undefined,
-    systemRole: 'systemAdmin',
+    systemRole: persona === 'systemAdmin' ? 'systemAdmin' : 'none',
     createdAt: new Date().toISOString(),
     lastLoginAt: new Date().toISOString(),
   };
+}
+
+/** Wipe local roster so empty-coach QA is reproducible. Local simulate only. */
+function applyEmptyRosterCoachLocalData(): void {
+  const now = new Date().toISOString();
+  StorageService.saveTeam({
+    ...DEFAULT_TEAM,
+    id: DEV_EMPTY_ROSTER_TEAM_ID,
+    name: 'SOP Academy (empty roster)',
+    shortName: 'EMPTY',
+    ageGroup: 'U15',
+    season: '2025-26',
+    clubName: 'Systems of Play Academy',
+    homeVenue: 'SOP Pitch',
+    coachName: 'Empty Roster Coach',
+    contactEmail: 'coach.empty@sop.local',
+    notes: 'Local QA mock — zero players.',
+    updatedAt: now,
+  });
+  StorageService.savePlayers([]);
+  StorageService.saveSessions([]);
+  StorageService.saveEntries([]);
+  StorageService.saveCoachBallots([]);
+  StorageService.saveAdjustedBumps({});
+  StorageService.saveBumpTransactions([]);
 }
 
 interface AccessContextValue {
@@ -179,12 +230,16 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    // Local debug mock: System Admin + mock teams. Never hit /v1/me even if
+    // Local debug mock: persona-based teams. Never hit /v1/me even if
     // VITE_API_BASE_URL points at a dead localhost API.
     if (debugMock) {
       const email = live.email?.toLowerCase() ?? '';
+      const persona = getDevSimPersona();
+      if (persona === 'emptyRosterCoach' && consumeEmptyRosterSeedPending()) {
+        applyEmptyRosterCoachLocalData();
+      }
       setAppUser(buildDebugMockUser(live));
-      setTeams(buildDevSimTeams(live.uid ?? 'dev', email));
+      setTeams(buildDevSimTeams(live.uid ?? 'dev', email, persona));
       return;
     }
 
