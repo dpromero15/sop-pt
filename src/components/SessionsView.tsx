@@ -26,6 +26,7 @@ interface SessionsViewProps {
   onCloseAddModal: () => void;
   onOpenAddModal: () => void;
   onOpenQuickInsertForSession: (sessionId: string) => void;
+  readOnly?: boolean;
 }
 
 export const SessionsView: React.FC<SessionsViewProps> = ({
@@ -36,7 +37,8 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   isAddModalOpen,
   onCloseAddModal,
   onOpenAddModal,
-  onOpenQuickInsertForSession
+  onOpenQuickInsertForSession,
+  readOnly = false,
 }) => {
   const [selectedSession, setSelectedSession] = useState<Session | null>(sessions[0] || null);
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -126,6 +128,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             </p>
           </div>
 
+          {!readOnly && (
           <button
             onClick={() => {
               setFormTitle('');
@@ -137,6 +140,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             <Plus className="w-4 h-4" />
             <span>Create Session</span>
           </button>
+          )}
         </div>
       </div>
 

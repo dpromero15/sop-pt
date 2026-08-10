@@ -93,6 +93,8 @@ interface RankingsViewProps {
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
   rankingBoundaries: RankingBoundariesConfig;
+  /** When false, hide Adjusted ± bump controls (Viewer). */
+  allowBumps?: boolean;
 }
 
 function coachDisplayName(coaches: Coach[], coachId: string): string {
@@ -281,6 +283,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   onSelectPlayer,
   onOpenQuickInsert,
   rankingBoundaries,
+  allowBumps = true,
 }) => {
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
   const [selectedMetricId, setSelectedMetricId] =
@@ -829,7 +832,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               )}
             </div>
           )}
-          {effectiveTotalMode === 'adjusted' && (
+          {effectiveTotalMode === 'adjusted' && allowBumps && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {coaches.length === 0 ? (
                 <p className="text-xs text-amber-400/90">
@@ -1457,7 +1460,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 </div>
 
                 <div className="flex items-center justify-between md:justify-end gap-4 pt-3 md:pt-0 border-t md:border-t-0 border-slate-800">
-                  {effectiveTotalMode === 'adjusted' && (
+                  {effectiveTotalMode === 'adjusted' && allowBumps && (
                     <div
                       className="flex flex-col items-stretch gap-1 shrink-0"
                       onClick={(e) => e.stopPropagation()}

@@ -1,8 +1,10 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
 import {
   getAuth,
+  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
   type Auth,
   type User,
@@ -13,6 +15,8 @@ export interface AuthState {
   email: string | null;
   uid: string | null;
   idToken: string | null;
+  displayName: string | null;
+  photoURL: string | null;
   user: User | null;
 }
 
@@ -25,6 +29,8 @@ let current: AuthState = {
   email: null,
   uid: null,
   idToken: null,
+  displayName: null,
+  photoURL: null,
   user: null,
 };
 const listeners = new Set<AuthListener>();
@@ -44,6 +50,29 @@ export function isFirebaseConfigured(): boolean {
   return Boolean(c.apiKey && c.authDomain && c.projectId && c.appId);
 }
 
+function toAuthState(user: User | null, idToken: string | null): AuthState {
+  if (!user) {
+    return {
+      signedIn: false,
+      email: null,
+      uid: null,
+      idToken: null,
+      displayName: null,
+      photoURL: null,
+      user: null,
+    };
+  }
+  return {
+    signedIn: true,
+    email: user.email,
+    uid: user.uid,
+    idToken,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+    user,
+  };
+}
+
 export function initFirebase(): boolean {
   if (initialized) return isFirebaseConfigured();
   initialized = true;
@@ -61,21 +90,9 @@ export function initFirebase(): boolean {
   onAuthStateChanged(auth, async (user) => {
     if (user) {
       const idToken = await user.getIdToken();
-      current = {
-        signedIn: true,
-        email: user.email,
-        uid: user.uid,
-        idToken,
-        user,
-      };
+      current = toAuthState(user, idToken);
     } else {
-      current = {
-        signedIn: false,
-        email: null,
-        uid: null,
-        idToken: null,
-        user: null,
-      };
+      current = toAuthState(null, null);
     }
     listeners.forEach((fn) => fn(current));
   });
@@ -93,6 +110,16 @@ export function subscribeToAuth(listener: AuthListener): () => void {
   return () => listeners.delete(listener);
 }
 
+export async function signInWithGoogle(): Promise<void> {
+  if (!auth) {
+    if (!initFirebase()) throw new Error('Firebase Auth is not configured.');
+  }
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  await signInWithPopup(auth!, provider);
+}
+
+/** @deprecated Prefer signInWithGoogle; kept for legacy Admin tools. */
 export async function adminSignIn(email: string, password: string): Promise<void> {
   if (!auth) {
     if (!initFirebase()) throw new Error('Firebase Auth is not configured.');
@@ -110,4 +137,8 @@ export async function refreshIdToken(): Promise<string | null> {
   const token = await current.user.getIdToken(true);
   current = { ...current, idToken: token };
   return token;
+}
+
+export function getFirebaseApp(): FirebaseApp | null {
+  return app;
 }

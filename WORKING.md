@@ -1,12 +1,12 @@
-# Working ledger — release v2.6.0
+# Working ledger — release v2.7.0
 
 Cross-session handoff for agents and humans. **Update this file before ending a chat** when issue work progresses. The [working-files skill](.cursor/skills/working-files/SKILL.md) and [github-prs skill](.cursor/skills/github-prs/SKILL.md) read this when continuing work or opening a PR.
 
 | Field | Value |
 |---|---|
-| **Release** | `2.6.0` |
-| **Branch** | `release/v2.6.0` |
-| **Last updated** | 2026-08-09 (implemented #77–#81) |
+| **Release** | `2.7.0` |
+| **Branch** | `release/v2.7.0` |
+| **Last updated** | 2026-08-09 (implemented #75 / #84–#89) |
 
 Canonical version file: [`VERSION.md`](VERSION.md) (must match `package.json` + README).
 
@@ -14,38 +14,44 @@ Canonical version file: [`VERSION.md`](VERSION.md) (must match `package.json` + 
 
 ## Ready to ship
 
-### #77 — Compliance requirements: paperwork/fees/eligibility with blocksPlay
+### #75 — Auth & roles: Google login, coach identity, 4 access levels
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Config CRUD; per-player checklist in edit modal; roster Ineligible badge; `eligibility.ts` util; storage + snapshot.
-- **Touchpoints:** `ComplianceConfigPanel.tsx`, `PlayersView.tsx`, `eligibility.ts`, storage, `types.ts`
+- **Notes:** Google sign-in; allowlist → System Admin; Viewer/DataEntry/TeamAdmin/SystemAdmin matrix; Admin tab for teams/members; actor identity for bumps/coaches
+- **Touchpoints:** `firebase.ts`, `AccessProvider`, `SignInGate`, `AdminPageView`, API auth/me/teams, `roles.ts`, Navigation, App gates
 
-### #78 — Equipment inventory: groups, assignable items, return to stock
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Groups + items; assign/return; delete group cascades items; player delete frees assignments.
-- **Touchpoints:** `EquipmentConfigPanel.tsx`, storage
+### #84 — Google sign-in + user upsert; allowlist → System Admin
+- **Status:** implemented
+- **Touchpoints:** `firebase.ts`, API `upsertAppUser`, `.env.example`
 
-### #79 — Adjusted ranks: eligible-only + Ineligible bottom group
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** `applyEligibilityToAdjustedRanks` after bumps; Ineligible divider; Statistical unchanged.
-- **Touchpoints:** `App.tsx`, `eligibility.ts`, `RankingsView.tsx`, `rankingsFilter.ts`
+### #85 — Role helpers, signed-in gate, header identity/role
+- **Status:** implemented
+- **Touchpoints:** `roles.ts`, `SignInGate`, `AccessProvider`, Navigation
 
-### #80 — Rankings: configurable cut lines (default 18 / 36)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Config panel; violet Cut @ N dividers on Adjusted total sort.
-- **Touchpoints:** `RankingBoundariesPanel.tsx`, `RankingsView.tsx`, storage
+### #86 — Firestore memberships + requireTeamRole + team list/create API
+- **Status:** implemented
+- **Touchpoints:** `services/api/src/auth.ts`, `routes/teams.ts`, `routes/me.ts`
 
-### #81 — Specialty rankings: re-rank within position pool (GK cut 4)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Specialty chips; `specialtyAdjustedRankings`; GK specialty cut default 4.
-- **Touchpoints:** `RankingsView.tsx`, `eligibility.ts`
+### #87 — Admin page: manage teams and assign members by email+role
+- **Status:** implemented
+- **Touchpoints:** `AdminPageView.tsx`, Admin tab
+
+### #88 — Enforce capability matrix across UI + API
+- **Status:** implemented
+- **Touchpoints:** App/Navigation/Players/Sessions/Rankings/Config gates; API role middleware
+
+### #89 — Attribute bumps and Coaches Rating to signed-in Google identity
+- **Status:** implemented
+- **Touchpoints:** `coachIdentity.ts`, App bump coach linking
 
 **Suggested PR Closes:**
 ```
-Closes #77
-Closes #78
-Closes #79
-Closes #80
-Closes #81
+Closes #75
+Closes #84
+Closes #85
+Closes #86
+Closes #87
+Closes #88
+Closes #89
 ```
 
 ---
@@ -58,19 +64,17 @@ _None._
 
 ## Still open (not ready)
 
-- **#75** — Auth & roles (**deferred** — do not implement this line)
+_None._
 
 ---
 
 ## Agent notes (do not lose)
 
 - Do **not** `gh issue close` for finished work — close only via PR `Closes #N`.
-- v2.5.1 shipped via [PR #82](https://github.com/dpromero15/sop-pt/pull/82).
-- v2.5.0 shipped via [PR #76](https://github.com/dpromero15/sop-pt/pull/76).
+- v2.6.0 shipped via [PR #83](https://github.com/dpromero15/sop-pt/pull/83).
 - On every version bump update **all three**: `VERSION.md`, root `package.json`, `README.md` **Version:**
-- **#75 auth deferred** — Coaches Rating / bumps use local coach names until a later auth line.
 - Do **not** open a PR until QA + explicit human approval (github-prs skill).
-- Existing localStorage without compliance keys seeds default requirements; sample roster compliance completes blocking paperwork so Adjusted still ranks until coaches edit.
+- Cloud access tightened: team routes require membership (or System Admin); set `ADMIN_EMAIL_ALLOWLIST` + `VITE_INITIAL_ADMIN_EMAIL` to your Google email; enable Google provider in Firebase Console.
 
 ---
 

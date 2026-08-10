@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   Users, 
   Search, 
@@ -50,6 +50,9 @@ interface PlayersViewProps {
   onRefreshData: () => void;
   isAddModalOpen: boolean;
   onCloseAddModal: () => void;
+  readOnlyRoster?: boolean;
+  allowCoachesRating?: boolean;
+  allowProfileNotes?: boolean;
 }
 
 export const PlayersView: React.FC<PlayersViewProps> = ({
@@ -63,7 +66,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   onSelectPlayer,
   onRefreshData,
   isAddModalOpen,
-  onCloseAddModal
+  onCloseAddModal,
+  readOnlyRoster = false,
+  allowCoachesRating = true,
+  allowProfileNotes = true,
 }) => {
   const [pane, setPane] = useState<PlayersPane>('roster');
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,6 +86,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formNotes, setFormNotes] = useState('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!allowCoachesRating && pane === 'coaches') setPane('roster');
+  }, [allowCoachesRating, pane]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -259,7 +269,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
             </p>
           </div>
 
-          {pane === 'roster' && (
+          {pane === 'roster' && !readOnlyRoster && (
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
@@ -310,6 +320,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       </div>
 
       {/* Roster vs Coaches Rating */}
+      {allowCoachesRating && (
       <div
         className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
         role="group"
@@ -351,8 +362,9 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           )}
         </button>
       </div>
+      )}
 
-      {pane === 'coaches' ? (
+      {pane === 'coaches' && allowCoachesRating ? (
         <CoachesRatingView
           coaches={coaches}
           ballots={coachBallots}
@@ -493,6 +505,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   >
                     <Edit3 className="w-3.5 h-3.5" />
                   </button>
+                  {!readOnlyRoster && (
                   <button
                     onClick={(e) => handleDeletePlayer(player.id, e)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-all active:scale-95"
@@ -500,6 +513,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
+                  )}
                   <div className="p-1.5 rounded-lg bg-blue-500/20 text-blue-400">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </div>

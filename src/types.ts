@@ -229,6 +229,59 @@ export interface PlayerLabelScore {
 export interface Coach {
   id: string;
   name: string;
+  /** Linked Firebase Auth uid when coach is a signed-in user. */
+  uid?: string;
+  email?: string;
+}
+
+/** Access roles for Firebase-backed multi-user mode (#75 / v2.7.0). */
+export type AppRole =
+  | 'none'
+  | 'viewer'
+  | 'dataEntry'
+  | 'teamAdmin'
+  | 'systemAdmin';
+
+export type TeamMembershipRole = 'viewer' | 'dataEntry' | 'teamAdmin';
+
+export type AccessAction =
+  | 'view'
+  | 'dataEntry'
+  | 'coachesRating'
+  | 'adjustedBumps'
+  | 'rosterWrite'
+  | 'profileNotes'
+  | 'configWrite'
+  | 'adminPage'
+  | 'manageAllTeams'
+  | 'manageTeamMembers'
+  | 'promoteSystemAdmin'
+  | 'cloudSync';
+
+export interface AppUser {
+  uid: string;
+  email: string;
+  displayName?: string;
+  photoURL?: string;
+  systemRole: 'none' | 'systemAdmin';
+  createdAt: string;
+  lastLoginAt: string;
+}
+
+export interface TeamMembership {
+  uid?: string;
+  email: string;
+  role: TeamMembershipRole;
+  coachDisplayName?: string;
+  createdAt: string;
+  createdByUid: string;
+}
+
+export interface EffectiveAccess {
+  role: AppRole;
+  systemRole: 'none' | 'systemAdmin';
+  teamId: string | null;
+  membershipRole: TeamMembershipRole | null;
 }
 
 /**
