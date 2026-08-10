@@ -29,6 +29,7 @@ import {
   type AuthState,
 } from '../services/firebase';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
+import { StorageService } from '../services/storage';
 import {
   can as canRole,
   resolveEffectiveAccess,
@@ -107,12 +108,31 @@ const AccessContext = createContext<AccessContextValue | null>(null);
 
 const ACTIVE_TEAM_KEY = 'stm_active_team_id_v1';
 const WORKSPACE_READY_KEY = 'stm_workspace_ready_v1';
+/** Browser claimed a local squad (no Cloud API yet). */
+const LOCAL_SQUAD_CLAIMED_KEY = 'stm_local_squad_claimed_v1';
 
 function readWorkspaceReady(): boolean {
   try {
     return sessionStorage.getItem(WORKSPACE_READY_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function isLocalSquadClaimed(): boolean {
+  try {
+    return localStorage.getItem(LOCAL_SQUAD_CLAIMED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Mark this browser’s local squad as active for the signed-in user. */
+export function claimLocalSquad(): void {
+  try {
+    localStorage.setItem(LOCAL_SQUAD_CLAIMED_KEY, '1');
+  } catch {
+    /* ignore */
   }
 }
 
@@ -174,16 +194,36 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
         (import.meta.env.VITE_INITIAL_ADMIN_EMAIL as string | undefined)
           ?.trim()
           .toLowerCase() ?? '';
+      const isSystemAdmin = Boolean(initial && email === initial);
       setAppUser({
         uid: live.uid ?? '',
         email,
         displayName: live.displayName ?? undefined,
         photoURL: live.photoURL ?? undefined,
-        systemRole: initial && email === initial ? 'systemAdmin' : 'none',
+        systemRole: isSystemAdmin ? 'systemAdmin' : 'none',
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
       });
-      setTeams([]);
+      // Until Cloud Run multi-team API is live: only show a local squad after
+      // the user explicitly adds/claims one (empty picker → Add new team).
+      if (isLocalSquadClaimed()) {
+        const localTeam = StorageService.getTeam();
+        const now = new Date().toISOString();
+        setTeams([
+          {
+            team: localTeam,
+            membership: {
+              uid: live.uid ?? '',
+              email,
+              role: 'teamAdmin',
+              createdAt: now,
+              createdByUid: live.uid ?? '',
+            } as TeamMembership,
+          },
+        ]);
+      } else {
+        setTeams([]);
+      }
       return;
     }
     try {
