@@ -200,36 +200,39 @@ export class LocalJsonAdapter implements StorageRepository {
     this.silent += 1;
     try {
       if (snapshot.team) this.saveTeam(snapshot.team);
-      if (snapshot.players) this.savePlayers(snapshot.players);
-      if (snapshot.sessions) this.saveSessions(snapshot.sessions);
-      if (snapshot.entries) this.saveEntries(snapshot.entries);
-      if (snapshot.metrics) this.saveMetrics(snapshot.metrics);
-      if (snapshot.labels) this.saveLabels(snapshot.labels);
-      if (snapshot.formula) this.saveFormula(snapshot.formula);
-      if (snapshot.calculatedFields) {
+      // Use Array.isArray so empty collections persist (truthy `if (arr)` skips []).
+      if (Array.isArray(snapshot.players)) this.savePlayers(snapshot.players);
+      if (Array.isArray(snapshot.sessions)) this.saveSessions(snapshot.sessions);
+      if (Array.isArray(snapshot.entries)) this.saveEntries(snapshot.entries);
+      if (Array.isArray(snapshot.metrics)) this.saveMetrics(snapshot.metrics);
+      if (Array.isArray(snapshot.labels)) this.saveLabels(snapshot.labels);
+      if (snapshot.formula != null) this.saveFormula(snapshot.formula);
+      if (Array.isArray(snapshot.calculatedFields)) {
         this.saveCalculatedFields(snapshot.calculatedFields);
       }
-      if (snapshot.coaches) this.saveCoaches(snapshot.coaches);
-      if (snapshot.coachBallots) this.saveCoachBallots(snapshot.coachBallots);
+      if (Array.isArray(snapshot.coaches)) this.saveCoaches(snapshot.coaches);
+      if (Array.isArray(snapshot.coachBallots)) {
+        this.saveCoachBallots(snapshot.coachBallots);
+      }
       if (Array.isArray(snapshot.bumpTransactions)) {
         this.saveBumpTransactions(snapshot.bumpTransactions);
       } else if (snapshot.adjustedBumps) {
         this.saveAdjustedBumps(snapshot.adjustedBumps);
       }
-      if (snapshot.bumpBudget) this.saveBumpBudget(snapshot.bumpBudget);
-      if (snapshot.complianceRequirements) {
+      if (snapshot.bumpBudget != null) this.saveBumpBudget(snapshot.bumpBudget);
+      if (Array.isArray(snapshot.complianceRequirements)) {
         this.saveComplianceRequirements(snapshot.complianceRequirements);
       }
-      if (snapshot.playerCompliance) {
+      if (snapshot.playerCompliance != null) {
         this.savePlayerCompliance(snapshot.playerCompliance);
       }
-      if (snapshot.equipmentGroups) {
+      if (Array.isArray(snapshot.equipmentGroups)) {
         this.saveEquipmentGroups(snapshot.equipmentGroups);
       }
-      if (snapshot.equipmentItems) {
+      if (Array.isArray(snapshot.equipmentItems)) {
         this.saveEquipmentItems(snapshot.equipmentItems);
       }
-      if (snapshot.rankingBoundaries) {
+      if (snapshot.rankingBoundaries != null) {
         this.saveRankingBoundaries(snapshot.rankingBoundaries);
       }
       if (opts?.migrate !== false) {
@@ -1084,19 +1087,25 @@ export class LocalJsonAdapter implements StorageRepository {
   importFullBackupJSON(jsonString: string): boolean {
     try {
       const data = JSON.parse(jsonString);
-      if (data.players && data.sessions && data.entries) {
+      if (
+        Array.isArray(data.players) &&
+        Array.isArray(data.sessions) &&
+        Array.isArray(data.entries)
+      ) {
         if (data.team) this.saveTeam(data.team);
-        if (data.players) this.savePlayers(data.players);
-        if (data.sessions) this.saveSessions(data.sessions);
-        if (data.entries) this.saveEntries(data.entries);
-        if (data.metrics) this.saveMetrics(data.metrics);
-        if (data.labels) this.saveLabels(data.labels);
-        if (data.formula) this.saveFormula(data.formula);
-        if (data.calculatedFields) {
+        this.savePlayers(data.players);
+        this.saveSessions(data.sessions);
+        this.saveEntries(data.entries);
+        if (Array.isArray(data.metrics)) this.saveMetrics(data.metrics);
+        if (Array.isArray(data.labels)) this.saveLabels(data.labels);
+        if (data.formula != null) this.saveFormula(data.formula);
+        if (Array.isArray(data.calculatedFields)) {
           this.saveCalculatedFields(data.calculatedFields);
         }
-        if (data.coaches) this.saveCoaches(data.coaches);
-        if (data.coachBallots) this.saveCoachBallots(data.coachBallots);
+        if (Array.isArray(data.coaches)) this.saveCoaches(data.coaches);
+        if (Array.isArray(data.coachBallots)) {
+          this.saveCoachBallots(data.coachBallots);
+        }
         if (Array.isArray(data.bumpTransactions)) {
           this.saveBumpTransactions(
             parseStoredBumpTransactions(data.bumpTransactions),
@@ -1104,20 +1113,20 @@ export class LocalJsonAdapter implements StorageRepository {
         } else if (data.adjustedBumps) {
           this.saveAdjustedBumps(data.adjustedBumps);
         }
-        if (data.bumpBudget) this.saveBumpBudget(data.bumpBudget);
-        if (data.complianceRequirements) {
+        if (data.bumpBudget != null) this.saveBumpBudget(data.bumpBudget);
+        if (Array.isArray(data.complianceRequirements)) {
           this.saveComplianceRequirements(data.complianceRequirements);
         }
-        if (data.playerCompliance) {
+        if (data.playerCompliance != null) {
           this.savePlayerCompliance(data.playerCompliance);
         }
-        if (data.equipmentGroups) {
+        if (Array.isArray(data.equipmentGroups)) {
           this.saveEquipmentGroups(data.equipmentGroups);
         }
-        if (data.equipmentItems) {
+        if (Array.isArray(data.equipmentItems)) {
           this.saveEquipmentItems(data.equipmentItems);
         }
-        if (data.rankingBoundaries) {
+        if (data.rankingBoundaries != null) {
           this.saveRankingBoundaries(data.rankingBoundaries);
         }
         writeStoredSchemaVersion(this.store, 0);

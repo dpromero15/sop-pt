@@ -35,6 +35,8 @@ import {
   parseAndValidatePlayerCsv,
 } from '../utils/playerCsv';
 import { CoachesRatingView } from './CoachesRatingView';
+import { defaultAvatarFor } from '../constants/avatars';
+import { flushNow } from '../services/storage/cloudSync';
 
 type PlayersPane = 'roster' | 'coaches';
 
@@ -121,7 +123,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         position: formPosition,
         preferredFoot: formFoot,
         age: formAge,
-        avatarUrl: formAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256',
+        avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
         notes: formNotes
       });
       setEditingPlayer(null);
@@ -132,7 +134,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         position: formPosition,
         preferredFoot: formFoot,
         age: formAge,
-        avatarUrl: formAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256',
+        avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
         status: 'active',
         notes: formNotes
       });
@@ -213,6 +215,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     StorageService.clearAllPlayers();
     onRefreshData();
     showToast('✓ Roster cleared');
+    void flushNow();
   };
 
   // Filter logic
@@ -436,7 +439,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src={player.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256'}
+                      src={player.avatarUrl || defaultAvatarFor(player.id || player.jerseyNumber)}
                       alt={player.name}
                       className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-800 group-hover:ring-blue-500/50 transition-all"
                     />
@@ -618,7 +621,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 <label className="block text-slate-400 font-semibold mb-1">Avatar Image URL (Optional)</label>
                 <input
                   type="text"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="/avatars/cucurella-outline.svg or https://..."
                   value={formAvatar}
                   onChange={(e) => setFormAvatar(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"

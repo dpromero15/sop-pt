@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Bench warm cat outline">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#f5e8eb"/>
+      <stop offset="100%" stop-color="#dcc5cb"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="128" fill="url(#bg)"/>
+  <!-- bench -->
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"
+    d="M48 176h160M64 176v28M192 176v28M56 156h144"/>
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M96 128c0-24 14-42 32-42s32 18 32 42c0 18-12 32-32 32s-32-14-32-32z"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linejoin="round"
+    d="M108 100l-6-20 20 10M148 100l6-20-20 10"/>
+  <circle cx="116" cy="122" r="3" fill="#0f172a"/>
+  <circle cx="140" cy="122" r="3" fill="#0f172a"/>
+  <path fill="none" stroke="#0f172a" stroke-width="3" stroke-linecap="round"
+    d="M124 132c3 4 6 4 9 0M104 136c-10 2-18 0-24-4M152 136c10 2 18 0 24-4"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"
+    d="M100 156c8-8 18-12 28-12s20 4 28 12"/>
+  <circle cx="200" cy="120" r="14" fill="none" stroke="#0f172a" stroke-width="3.5"/>
+  <path fill="none" stroke="#0f172a" stroke-width="2.5" d="M200 106v28M186 120h28"/>
+</svg>

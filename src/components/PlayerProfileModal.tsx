@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Player, LabelDefinition, MetricEntry, MetricDefinition } from '../types';
 import { calculatePlayerRankings } from '../utils/scoring';
+import { defaultAvatarFor } from '../constants/avatars';
 import { StorageService } from '../services/storage';
 
 interface PlayerProfileModalProps {
@@ -113,7 +114,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           <div className="bg-gradient-to-r from-slate-900 via-slate-800/60 to-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
             <div className="flex items-center gap-4">
               <img
-                src={player.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=256'}
+                src={player.avatarUrl || defaultAvatarFor(player.id || player.jerseyNumber)}
                 alt={player.name}
                 className="w-20 h-20 rounded-2xl object-cover ring-4 ring-slate-800 shadow-xl"
               />
