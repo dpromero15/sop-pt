@@ -5,6 +5,7 @@ import { migration003RepairMetricsBlob } from './migrations/003_repair_metrics_b
 import { migration004PerTeamLocalCache } from './migrations/004_per_team_local_cache';
 import { migration005ComplianceBlocksPractice } from './migrations/005_compliance_blocks_practice';
 import { migration006AttendanceFormulaWeight } from './migrations/006_attendance_formula_weight';
+import { migration007AttendanceLabel } from './migrations/007_attendance_label';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -52,5 +53,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Ensure Attendance is enabled with a positive weight in the scoring formula.',
     up: migration006AttendanceFormulaWeight,
+  },
+  {
+    id: 7,
+    name: 'attendance_label',
+    description:
+      'Ensure Attendance system category label exists for Active Weights UI.',
+    up: migration007AttendanceLabel,
   },
 ];

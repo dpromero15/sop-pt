@@ -47,7 +47,7 @@ import {
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
-import { ensureAttendanceFormulaWeight } from '../../utils/formulaWeights';
+import { ensureAttendanceFormulaWeight, ensureAttendanceLabel } from '../../utils/formulaWeights';
 import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
@@ -504,18 +504,11 @@ export class LocalJsonAdapter implements StorageRepository {
 
   getLabels(): LabelDefinition[] {
     const labels = this.readJson(STORAGE_KEYS.LABELS, DEFAULT_LABELS);
-    let changed = false;
-    const migrated = labels.map((label) => {
-      if (label.id === 'attendance' && !label.system) {
-        changed = true;
-        return { ...label, system: true };
-      }
-      return label;
-    });
+    const { labels: ensured, changed } = ensureAttendanceLabel(labels);
     if (changed) {
-      this.writeJson(STORAGE_KEYS.LABELS, migrated);
+      this.writeJson(STORAGE_KEYS.LABELS, ensured);
     }
-    return migrated;
+    return ensured;
   }
 
   saveLabels(labels: LabelDefinition[]) {
@@ -577,15 +570,17 @@ export class LocalJsonAdapter implements StorageRepository {
 
   clearNonSystemLabels() {
     const labels = this.getLabels();
-    const kept = labels.filter((l) => l.system);
-    const keptIds = new Set(kept.map((l) => l.id));
-    this.saveLabels(kept);
+    const kept = labels.filter((l) => l.system || l.id === 'attendance');
+    const { labels: ensured } = ensureAttendanceLabel(kept);
+    const keptIds = new Set(ensured.map((l) => l.id));
+    this.saveLabels(ensured);
 
     const formula = this.getFormula();
-    this.saveFormula({
+    const { formula: withAttendance } = ensureAttendanceFormulaWeight({
       ...formula,
       weights: formula.weights.filter((w) => keptIds.has(w.labelId)),
     });
+    this.saveFormula(withAttendance);
   }
 
   clearNonSystemMetrics() {

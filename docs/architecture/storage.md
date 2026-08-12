@@ -51,6 +51,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Versioned runner:** `src/services/migrations` (`stm_schema_version_v1`). Boot + Admin “Data migrations” + post-import/hydrate. See `.cursor/skills/data-migrations/SKILL.md`.
 - **Compliance (v5):** requirements gain `blocksPractice` (default false) and may include `kind: 'disciplinary'` (e.g. red-card sit-out). Migration backfills missing `blocksPractice` and seeds `req_red_card_sitout` when absent.
 - **Formula (v6):** Attendance is always enabled in the scoring formula with a positive weight (default 20% if missing/disabled). Season attendance rate feeds that weight directly.
+- **Labels (v7):** Attendance category label is always restored as `system: true` so Active Weights and Config always show it.
 
 ### Metric definition fields
 

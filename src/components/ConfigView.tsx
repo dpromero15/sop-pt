@@ -33,6 +33,10 @@ import { ComplianceConfigPanel } from './ComplianceConfigPanel';
 import { EquipmentConfigPanel } from './EquipmentConfigPanel';
 import { RankingBoundariesPanel } from './RankingBoundariesPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
+import {
+  ATTENDANCE_LABEL,
+  DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+} from '../utils/formulaWeights';
 
 interface ConfigViewProps {
   labels: LabelDefinition[];
@@ -70,16 +74,35 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
     const map: Record<string, { weightPercent: number; enabled: boolean }> = {};
     formula.weights.forEach(w => {
-      map[w.labelId] = { weightPercent: w.weightPercent, enabled: w.enabled };
+      map[w.labelId] = {
+        weightPercent: w.weightPercent,
+        enabled: w.labelId === 'attendance' ? true : w.enabled,
+      };
     });
-    // Ensure all labels exist in map
     labels.forEach(l => {
       if (!map[l.id]) {
-        map[l.id] = { weightPercent: 10, enabled: true };
+        map[l.id] = {
+          weightPercent: l.id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+          enabled: true,
+        };
       }
     });
+    if (!map.attendance) {
+      map.attendance = {
+        weightPercent: DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+        enabled: true,
+      };
+    }
     return map;
   });
+
+  // Labels for weight sliders: Attendance always first and always present.
+  const weightLabels = (() => {
+    const withoutAtt = labels.filter((l) => l.id !== 'attendance');
+    const attendance =
+      labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+    return [attendance, ...withoutAtt];
+  })();
 
   // Keep weightsMap in sync when labels change (add/remove/clear)
   useEffect(() => {
@@ -91,14 +114,26 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
           { weightPercent: w.weightPercent, enabled: w.enabled },
         ]),
       );
-      labels.forEach((l) => {
-        const fromFormula = formulaById.get(l.id);
-        next[l.id] =
-          prev[l.id] ??
+      const ensureId = (id: string) => {
+        const fromFormula = formulaById.get(id);
+        next[id] =
+          prev[id] ??
           (fromFormula
-            ? { weightPercent: fromFormula.weightPercent, enabled: fromFormula.enabled }
-            : { weightPercent: 10, enabled: true });
-      });
+            ? {
+                weightPercent: fromFormula.weightPercent,
+                enabled: id === 'attendance' ? true : fromFormula.enabled,
+              }
+            : {
+                weightPercent:
+                  id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+                enabled: true,
+              });
+        if (id === 'attendance') {
+          next[id] = { ...next[id], enabled: true };
+        }
+      };
+      ensureId('attendance');
+      labels.forEach((l) => ensureId(l.id));
       return next;
     });
   }, [labels, formula.weights]);
@@ -614,8 +649,12 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
         {/* Sliders Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {labels.map(lbl => {
-            const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
+          {weightLabels.map(lbl => {
+            const item = weightsMap[lbl.id] || {
+              weightPercent:
+                lbl.id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+              enabled: true,
+            };
             const toggleLocked = isWeightToggleLocked(lbl);
             return (
               <div

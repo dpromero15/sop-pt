@@ -655,17 +655,27 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
         <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Active Weights:</span>
-          {formula.weights
+          {[...formula.weights]
             .filter((w) => w.enabled && w.weightPercent > 0)
+            .sort((a, b) => {
+              if (a.labelId === 'attendance') return -1;
+              if (b.labelId === 'attendance') return 1;
+              return 0;
+            })
             .map((w) => {
               const labelDef = labels.find((l) => l.id === w.labelId);
-              if (!labelDef) return null;
+              const name = labelDef?.name ?? (w.labelId === 'attendance' ? 'Attendance' : w.labelId);
+              const badgeBg =
+                labelDef?.badgeBg ??
+                (w.labelId === 'attendance'
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30'
+                  : 'bg-slate-800 text-slate-300 border-slate-700');
               return (
                 <span
                   key={w.labelId}
-                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-medium ${labelDef.badgeBg}`}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border font-medium ${badgeBg}`}
                 >
-                  <span>{labelDef.name}</span>
+                  <span>{name}</span>
                   <span className="font-bold">{w.weightPercent}%</span>
                 </span>
               );

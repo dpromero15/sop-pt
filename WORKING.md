@@ -27,11 +27,18 @@ _(none)_
 - **Notes:** Players → Compliance pane with Out of compliance (who/why + quick mark) and Board (squad × requirements grid, column mark-complete). Config still defines requirements; per-player edit checklist kept as secondary.
 - **Touchpoints:** `ComplianceBoardView.tsx`, `PlayersView.tsx`, `eligibility.ts` (`missingRequirements`)
 
+### Attendance always on Active Weights + formula score
+- **Status:** implemented; **needs GitHub issue** before PR (`gh auth refresh -h github.com`, then file + label `v2.10.0`)
+- **Notes:** Season attendance rate feeds formula weight (006). Attendance system label always restored (007); Active Weights / Config always show Attendance first (always-on, not removable). Scoring uses absolute season rate for Attendance category.
+- **Touchpoints:** `formulaWeights.ts`, `scoring.ts`, `metricAggregation.ts`, `006_attendance_formula_weight.ts`, `007_attendance_label.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `ScoringConfigModal.tsx`, `localJsonAdapter.ts`
+- **QA:** `npm run lint` + `npm test` pass (158 tests) 2026-08-12
+
 **Suggested PR Closes:**
 ```
 Closes #103
 Closes #104
 Closes #105
+Closes #N   <!-- replace after filing Attendance issue -->
 ```
 
 ## Still open (this release)
@@ -45,3 +52,5 @@ Closes #105
 - `2.9.0` shipped via [#96](https://github.com/dpromero15/sop-pt/pull/96) + follow-up [#102](https://github.com/dpromero15/sop-pt/pull/102).
 - Yes: calculated fields include **average** (`kind: 'average'`, e.g. 40m Average) under Config → Calculated Fields.
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
+- Attendance system category: schema **006** (formula weight) + **007** (label). HEAD already has ranking/compliance + attendance scoring; pending commit is Active Weights label UI follow-up.
+- **Pre-PR gate:** lint/test OK; VERSION 2.10.0 synced. Blocked on filing Attendance issue until `gh auth refresh -h github.com`. Do not open PR until human approval.

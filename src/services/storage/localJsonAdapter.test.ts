@@ -220,6 +220,25 @@ describe('LocalJsonAdapter', () => {
     );
   });
 
+  it('restores Attendance label when missing from storage', () => {
+    store.map.set(
+      scoped(STORAGE_KEYS.LABELS),
+      JSON.stringify([
+        {
+          id: 'speed',
+          name: 'Speed',
+          description: '',
+          color: 'blue',
+          badgeBg: '',
+          badgeText: '',
+        },
+      ]),
+    );
+    const labels = adapter.getLabels();
+    expect(labels[0]).toMatchObject({ id: 'attendance', system: true });
+    expect(labels.some((l) => l.id === 'speed')).toBe(true);
+  });
+
   it('clearNonSystemMetrics keeps attendance and scrubs sessions', () => {
     adapter.getMetrics();
     adapter.getSessions();
