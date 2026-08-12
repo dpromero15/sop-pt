@@ -8,6 +8,7 @@ import { migration006AttendanceFormulaWeight } from './migrations/006_attendance
 import { migration007AttendanceLabel } from './migrations/007_attendance_label';
 import { migration008ClearCalculatedFields } from './migrations/008_clear_calculated_fields';
 import { migration009MetricMultiLabels } from './migrations/009_metric_multi_labels';
+import { migration010PruneGhostCategories } from './migrations/010_prune_ghost_categories';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -76,5 +77,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Map legacy metric labelId → labelIds + primaryLabelId (multi-category).',
     up: migration009MetricMultiLabels,
+  },
+  {
+    id: 10,
+    name: 'prune_ghost_categories',
+    description:
+      'Prune unused sample categories and orphan formula weights (Rankings vs Config).',
+    up: migration010PruneGhostCategories,
   },
 ];

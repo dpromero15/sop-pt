@@ -54,6 +54,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Labels (v7):** Attendance category label is always restored as `system: true` so Active Weights and Config always show it.
 - **Calculated fields (v8):** Stored calculated-fields catalog cleared; use metric `aggregationMode: 'average'` instead.
 - **Metrics (v9):** `labelId` → `labelIds[]` + `primaryLabelId` (multi-category membership; primary owns formula standing).
+- **Ghost categories (v10):** Unused Thunder FC sample labels (Speed, Fitness, …) with no metrics are removed; orphan formula weights and metrics pointing at missing labels are pruned so Rankings tabs / Active Weights match Config. Fresh teams seed Attendance-only labels/metrics/formula (not the full demo catalog).
 
 ### Metric definition fields
 

@@ -148,10 +148,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [editingMetricId, setEditingMetricId] = useState<string | null>(null);
   const [metricName, setMetricName] = useState('');
   const [metricLabelIds, setMetricLabelIds] = useState<string[]>([
-    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed',
+    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'attendance',
   ]);
   const [metricPrimaryLabelId, setMetricPrimaryLabelId] = useState(
-    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed',
+    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'attendance',
   );
   const [metricType, setMetricType] = useState<MetricType>('count');
   const [metricUnit, setMetricUnit] = useState('reps');
@@ -191,7 +191,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setEditingMetricId(null);
     setMetricName('');
     const defaultLabel =
-      labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed';
+      labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'attendance';
     setMetricLabelIds([defaultLabel]);
     setMetricPrimaryLabelId(defaultLabel);
     setMetricType('count');
@@ -216,7 +216,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     const ids =
       m.labelIds?.length > 0
         ? m.labelIds
-        : [m.primaryLabelId || 'speed'];
+        : [m.primaryLabelId || 'attendance'];
     setMetricLabelIds(ids);
     setMetricPrimaryLabelId(
       ids.includes(m.primaryLabelId) ? m.primaryLabelId : ids[0],
@@ -262,7 +262,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
   // Save Formula Config
   const handleSaveFormula = () => {
-    const updatedWeights = Object.entries(weightsMap).map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
+    const allowed = new Set(weightLabels.map((l) => l.id));
+    const updatedWeights = Object.entries(weightsMap)
+      .filter(([labelId]) => allowed.has(labelId))
+      .map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
       labelId,
       weightPercent: item.weightPercent,
       enabled: labelId === 'attendance' ? true : item.enabled,
@@ -277,31 +280,37 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     showToast('✓ Total score formula weights saved successfully!');
   };
 
-  // Formula Presets
+  // Formula Presets — only touch categories that currently exist.
   const handleApplyPreset = (presetType: 'balanced' | 'offense' | 'fitness') => {
     const updated: Record<string, { weightPercent: number; enabled: boolean }> = {};
     labels.forEach(l => {
       updated[l.id] = { weightPercent: 0, enabled: false };
     });
 
+    const setIfPresent = (id: string, weightPercent: number) => {
+      if (id in updated) {
+        updated[id] = { weightPercent, enabled: true };
+      }
+    };
+
     if (presetType === 'balanced') {
-      updated['attendance'] = { weightPercent: 20, enabled: true };
-      updated['speed'] = { weightPercent: 15, enabled: true };
-      updated['technical'] = { weightPercent: 20, enabled: true };
-      updated['offense'] = { weightPercent: 15, enabled: true };
-      updated['defense'] = { weightPercent: 15, enabled: true };
-      updated['character'] = { weightPercent: 15, enabled: true };
+      setIfPresent('attendance', 20);
+      setIfPresent('speed', 15);
+      setIfPresent('technical', 20);
+      setIfPresent('offense', 15);
+      setIfPresent('defense', 15);
+      setIfPresent('character', 15);
     } else if (presetType === 'offense') {
-      updated['attendance'] = { weightPercent: 10, enabled: true };
-      updated['speed'] = { weightPercent: 20, enabled: true };
-      updated['technical'] = { weightPercent: 25, enabled: true };
-      updated['offense'] = { weightPercent: 35, enabled: true };
-      updated['character'] = { weightPercent: 10, enabled: true };
+      setIfPresent('attendance', 10);
+      setIfPresent('speed', 20);
+      setIfPresent('technical', 25);
+      setIfPresent('offense', 35);
+      setIfPresent('character', 10);
     } else if (presetType === 'fitness') {
-      updated['attendance'] = { weightPercent: 25, enabled: true };
-      updated['speed'] = { weightPercent: 25, enabled: true };
-      updated['agility'] = { weightPercent: 25, enabled: true };
-      updated['fitness'] = { weightPercent: 25, enabled: true };
+      setIfPresent('attendance', 25);
+      setIfPresent('speed', 25);
+      setIfPresent('agility', 25);
+      setIfPresent('fitness', 25);
     }
 
     // System categories stay enabled; preset may still update their %.

@@ -268,6 +268,30 @@ describe('runLocalMigrations', () => {
       STORAGE_KEYS.TEAM,
       JSON.stringify({ id: 't1', name: 'Test FC' }),
     );
+    const labels = [
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+    ];
+    store.setItem(STORAGE_KEYS.LABELS, JSON.stringify(labels));
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.LABELS),
+      JSON.stringify(labels),
+    );
     const legacyMetrics = [
       {
         id: 'm_40m',
@@ -298,5 +322,92 @@ describe('runLocalMigrations', () => {
       primaryLabelId: 'speed',
     });
     expect(scoped[0].labelId).toBeUndefined();
+  });
+
+  it('prunes unused sample categories and orphan weights via v10', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(9));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const labels = [
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+      {
+        id: 'fitness',
+        name: 'Fitness',
+        description: '',
+        color: 'orange',
+        badgeBg: '',
+        badgeText: '',
+      },
+    ];
+    const metrics = [
+      {
+        id: 'm_attendance',
+        name: 'Session Attendance',
+        labelIds: ['attendance'],
+        primaryLabelId: 'attendance',
+        type: 'attendance',
+        unit: 'status',
+        higherIsBetter: true,
+        aggregationMode: 'latest',
+      },
+    ];
+    const formula = {
+      id: 'default_formula',
+      name: 'Balanced',
+      weights: [
+        { labelId: 'attendance', weightPercent: 20, enabled: true },
+        { labelId: 'speed', weightPercent: 15, enabled: true },
+        { labelId: 'fitness', weightPercent: 5, enabled: true },
+      ],
+    };
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.LABELS),
+      JSON.stringify(labels),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.METRICS),
+      JSON.stringify(metrics),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.FORMULA),
+      JSON.stringify(formula),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const scopedLabels = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.LABELS))!,
+    );
+    const scopedFormula = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.FORMULA))!,
+    );
+    expect(scopedLabels.map((l: { id: string }) => l.id)).toEqual([
+      'attendance',
+    ]);
+    expect(scopedFormula.weights.map((w: { labelId: string }) => w.labelId)).toEqual([
+      'attendance',
+    ]);
   });
 });
