@@ -3,7 +3,10 @@ import type { ComplianceRequirement, Player, PlayerRanking } from '../types';
 import {
   applyEligibilityToAdjustedRanks,
   isEligibleToPlay,
+  isEligibleToPractice,
   missingBlockingRequirements,
+  missingPracticeBlockingRequirements,
+  missingRequirements,
   specialtyAdjustedRankings,
 } from './eligibility';
 
@@ -13,6 +16,7 @@ const reqs: ComplianceRequirement[] = [
     name: 'Sports Physical',
     kind: 'paperwork',
     blocksPlay: true,
+    blocksPractice: true,
     sortOrder: 1,
   },
   {
@@ -20,7 +24,16 @@ const reqs: ComplianceRequirement[] = [
     name: 'Season Fee',
     kind: 'fee',
     blocksPlay: false,
+    blocksPractice: false,
     sortOrder: 2,
+  },
+  {
+    id: 'req_red_card',
+    name: 'Red card sit-out',
+    kind: 'disciplinary',
+    blocksPlay: true,
+    blocksPractice: false,
+    sortOrder: 3,
   },
 ];
 
@@ -58,9 +71,7 @@ function stubRanking(
 describe('isEligibleToPlay', () => {
   it('is true when no blocking requirements', () => {
     expect(isEligibleToPlay('p1', [], {})).toBe(true);
-    expect(
-      isEligibleToPlay('p1', [reqs[1]], {}),
-    ).toBe(true);
+    expect(isEligibleToPlay('p1', [reqs[1]], {})).toBe(true);
   });
 
   it('is false when a blocksPlay item is incomplete', () => {
@@ -70,6 +81,28 @@ describe('isEligibleToPlay', () => {
   it('is true when all blocksPlay items are complete', () => {
     expect(
       isEligibleToPlay('p1', reqs, {
+        p1: {
+          req_physical: { complete: true, completedAt: '2026-01-01' },
+          req_red_card: { complete: true, completedAt: '2026-01-01' },
+        },
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('isEligibleToPractice', () => {
+  it('is true when no practice-blocking requirements', () => {
+    expect(isEligibleToPractice('p1', [], {})).toBe(true);
+    expect(isEligibleToPractice('p1', [reqs[1], reqs[2]], {})).toBe(true);
+  });
+
+  it('is false when a blocksPractice item is incomplete', () => {
+    expect(isEligibleToPractice('p1', reqs, {})).toBe(false);
+  });
+
+  it('is true when all blocksPractice items are complete', () => {
+    expect(
+      isEligibleToPractice('p1', reqs, {
         p1: { req_physical: { complete: true, completedAt: '2026-01-01' } },
       }),
     ).toBe(true);
@@ -77,9 +110,38 @@ describe('isEligibleToPlay', () => {
 });
 
 describe('missingBlockingRequirements', () => {
-  it('lists incomplete blocking items only', () => {
+  it('lists incomplete play or practice blockers', () => {
     const missing = missingBlockingRequirements('p1', reqs, {});
+    expect(missing.map((r) => r.id)).toEqual(['req_physical', 'req_red_card']);
+  });
+});
+
+describe('missingPracticeBlockingRequirements', () => {
+  it('lists incomplete practice blockers only', () => {
+    const missing = missingPracticeBlockingRequirements('p1', reqs, {});
     expect(missing.map((r) => r.id)).toEqual(['req_physical']);
+  });
+});
+
+describe('missingRequirements', () => {
+  it('lists all incomplete items including soft', () => {
+    const missing = missingRequirements('p1', reqs, {});
+    expect(missing.map((r) => r.id)).toEqual([
+      'req_physical',
+      'req_fee',
+      'req_red_card',
+    ]);
+  });
+
+  it('omits completed items', () => {
+    const missing = missingRequirements('p1', reqs, {
+      p1: {
+        req_physical: { complete: true, completedAt: '2026-01-01' },
+        req_fee: { complete: true, completedAt: '2026-01-01' },
+        req_red_card: { complete: true, completedAt: '2026-01-01' },
+      },
+    });
+    expect(missing).toEqual([]);
   });
 });
 

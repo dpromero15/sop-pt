@@ -47,6 +47,9 @@ import {
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
+import { ensureAttendanceFormulaWeight } from '../../utils/formulaWeights';
+import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
+import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
   canApplyBump,
   createBumpTransaction,
@@ -625,11 +628,17 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getFormula(): ScoringFormulaConfig {
-    return this.readJson(STORAGE_KEYS.FORMULA, DEFAULT_FORMULA_CONFIG);
+    const stored = this.readJson(STORAGE_KEYS.FORMULA, DEFAULT_FORMULA_CONFIG);
+    const { formula, changed } = ensureAttendanceFormulaWeight(stored);
+    if (changed) {
+      this.writeJson(STORAGE_KEYS.FORMULA, formula);
+    }
+    return formula;
   }
 
   saveFormula(formula: ScoringFormulaConfig) {
-    this.writeJson(STORAGE_KEYS.FORMULA, formula);
+    const { formula: ensured } = ensureAttendanceFormulaWeight(formula);
+    this.writeJson(STORAGE_KEYS.FORMULA, ensured);
     this.notify();
   }
 
@@ -794,13 +803,17 @@ export class LocalJsonAdapter implements StorageRepository {
 
   getComplianceRequirements(): ComplianceRequirement[] {
     const hadKey =
+      this.store.getItem(this.scoped(STORAGE_KEYS.COMPLIANCE_REQUIREMENTS)) !=
+        null ||
       this.store.getItem(STORAGE_KEYS.COMPLIANCE_REQUIREMENTS) != null;
-    const list = this.readJson(
-      STORAGE_KEYS.COMPLIANCE_REQUIREMENTS,
-      DEFAULT_COMPLIANCE_REQUIREMENTS,
+    const list = normalizeComplianceRequirements(
+      this.readJson(
+        STORAGE_KEYS.COMPLIANCE_REQUIREMENTS,
+        DEFAULT_COMPLIANCE_REQUIREMENTS,
+      ),
     );
     // First seed: mark current roster complete for blocking items so Adjusted
-    // ranks do not empty out until coaches edit checklists.
+    // ranks / practice eligibility do not empty out until coaches edit checklists.
     if (!hadKey) {
       const players = this.getPlayers();
       const compliance = this.getPlayerCompliance();
@@ -810,7 +823,7 @@ export class LocalJsonAdapter implements StorageRepository {
         for (const p of players) {
           seeded[p.id] = {};
           for (const req of list) {
-            if (!req.blocksPlay) continue;
+            if (!req.blocksPlay && !req.blocksPractice) continue;
             seeded[p.id][req.id] = { complete: true, completedAt: now };
           }
         }
@@ -1016,19 +1029,14 @@ export class LocalJsonAdapter implements StorageRepository {
       STORAGE_KEYS.RANKING_BOUNDARIES,
       DEFAULT_RANKING_BOUNDARIES,
     );
-    return {
-      primaryCut: Math.max(1, Math.floor(raw.primaryCut ?? 18)),
-      secondaryCut: Math.max(1, Math.floor(raw.secondaryCut ?? 36)),
-      specialtyCuts: { GK: 4, ...(raw.specialtyCuts ?? {}) },
-    };
+    return normalizeRankingBoundaries(raw);
   }
 
   saveRankingBoundaries(config: RankingBoundariesConfig) {
-    this.writeJson(STORAGE_KEYS.RANKING_BOUNDARIES, {
-      primaryCut: Math.max(1, Math.floor(config.primaryCut)),
-      secondaryCut: Math.max(1, Math.floor(config.secondaryCut)),
-      specialtyCuts: config.specialtyCuts ?? {},
-    });
+    this.writeJson(
+      STORAGE_KEYS.RANKING_BOUNDARIES,
+      normalizeRankingBoundaries(config),
+    );
     this.notify();
   }
 

@@ -6,7 +6,7 @@ import {
   runLocalMigrations,
   SCHEMA_VERSION_KEY,
 } from './index';
-import { STORAGE_KEYS, scopedStorageKey } from '../storage/storageKeys';
+import { STORAGE_KEYS, scopedStorageKey, ACTIVE_TEAM_KEY } from '../storage/storageKeys';
 
 function memoryStorage() {
   const map = new Map<string, string>();
@@ -122,5 +122,103 @@ describe('runLocalMigrations', () => {
     const metrics = JSON.parse(store.getItem(STORAGE_KEYS.METRICS)!);
     expect(Array.isArray(metrics)).toBe(true);
     expect(metrics[0].id).toBe('m_dash');
+  });
+
+  it('backfills blocksPractice and seeds red-card sit-out via v5', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(4));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const legacyReqs = [
+      {
+        id: 'req_sports_physical',
+        name: 'Sports Physical',
+        kind: 'paperwork',
+        blocksPlay: true,
+        sortOrder: 1,
+      },
+    ];
+    store.setItem(
+      STORAGE_KEYS.COMPLIANCE_REQUIREMENTS,
+      JSON.stringify(legacyReqs),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.COMPLIANCE_REQUIREMENTS),
+      JSON.stringify(legacyReqs),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYER_COMPLIANCE),
+      JSON.stringify({
+        p1: {
+          req_sports_physical: {
+            complete: true,
+            completedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+      }),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const scoped = JSON.parse(
+      store.getItem(
+        scopedStorageKey('t1', STORAGE_KEYS.COMPLIANCE_REQUIREMENTS),
+      )!,
+    );
+    expect(scoped.find((r: { id: string }) => r.id === 'req_sports_physical'))
+      .toMatchObject({ blocksPractice: false });
+    expect(
+      scoped.some((r: { id: string }) => r.id === 'req_red_card_sitout'),
+    ).toBe(true);
+    expect(
+      scoped.find((r: { id: string }) => r.id === 'req_red_card_sitout'),
+    ).toMatchObject({
+      kind: 'disciplinary',
+      blocksPlay: true,
+      blocksPractice: false,
+    });
+
+    const compliance = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYER_COMPLIANCE))!,
+    );
+    expect(compliance.p1.req_red_card_sitout.complete).toBe(true);
+  });
+
+  it('ensures Attendance formula weight via v6', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(5));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const brokenFormula = {
+      id: 'default_formula',
+      name: 'No attendance',
+      weights: [{ labelId: 'speed', weightPercent: 100, enabled: true }],
+    };
+    store.setItem(STORAGE_KEYS.FORMULA, JSON.stringify(brokenFormula));
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.FORMULA),
+      JSON.stringify(brokenFormula),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const scoped = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.FORMULA))!,
+    );
+    expect(scoped.weights[0]).toMatchObject({
+      labelId: 'attendance',
+      enabled: true,
+    });
+    expect(scoped.weights[0].weightPercent).toBeGreaterThan(0);
   });
 });

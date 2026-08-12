@@ -29,6 +29,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - Hydrate **once** on team enter (`GET /v1/teams/:id/snapshot`).
 - Dirty collections flush after ~10s debounce, on `online`, or when the tab hides. One PUT per dirty collection. Empty squad clears (`players` / `sessions` / `entries` = `[]`) flush immediately; pending outbox also flushes at end of hydrate.
 - `applySnapshot` persists empty arrays (so releasing `holdSeeds` does not reseed sample Thunder FC).
+- Ranking cut lines: overall `primaryCut`/`secondaryCut` plus optional `categoryCuts` / `metricCuts` maps (resolved specialty → metric → category → global).
 - If cloud is empty and this device has a roster (e.g. JSON import), the first enter **pushes** that squad.
 - Simulated auth / missing `VITE_API_BASE_URL` stays local-only.
 - SPA never talks to Firestore; Cloud Run Admin SDK remains the write path.
@@ -48,12 +49,14 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - On create, seed `metricIds = [attendanceMetricId]`. Match sessions may additionally suggest a default game pack (`m_goals`, `m_assists`, `m_tackles`).
 - **Migration:** if a stored session lacks `metricIds`, derive the set from distinct `metricId` values in that session’s entries, ensure the attendance metric id is included first, then persist.
 - **Versioned runner:** `src/services/migrations` (`stm_schema_version_v1`). Boot + Admin “Data migrations” + post-import/hydrate. See `.cursor/skills/data-migrations/SKILL.md`.
+- **Compliance (v5):** requirements gain `blocksPractice` (default false) and may include `kind: 'disciplinary'` (e.g. red-card sit-out). Migration backfills missing `blocksPractice` and seeds `req_red_card_sitout` when absent.
+- **Formula (v6):** Attendance is always enabled in the scoring formula with a positive weight (default 20% if missing/disabled). Season attendance rate feeds that weight directly.
 
 ### Metric definition fields
 
 `id`, `name`, `labelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
 
-- **`aggregationMode`:** `sum` | `best` | `latest` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)).
+- **`aggregationMode`:** `sum` | `best` | `latest` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)). Attendance always averages present/late/absent regardless of stored mode.
 - **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`).
 
 ### Calculated fields

@@ -28,6 +28,20 @@ export function isEligibleToPlay(
   return blocking.every((r) => isRequirementComplete(state, playerId, r.id));
 }
 
+/**
+ * Eligible for practice when every requirement with blocksPractice is complete.
+ * No practice-blocking requirements ⇒ everyone eligible.
+ */
+export function isEligibleToPractice(
+  playerId: string,
+  requirements: ComplianceRequirement[],
+  state: PlayerComplianceState,
+): boolean {
+  const blocking = requirements.filter((r) => r.blocksPractice);
+  if (blocking.length === 0) return true;
+  return blocking.every((r) => isRequirementComplete(state, playerId, r.id));
+}
+
 export function eligiblePlayerIdSet(
   playerIds: string[],
   requirements: ComplianceRequirement[],
@@ -38,14 +52,37 @@ export function eligiblePlayerIdSet(
   );
 }
 
-/** Blocking requirements that are still incomplete for a player. */
+/** Play- or practice-blocking requirements that are still incomplete. */
 export function missingBlockingRequirements(
   playerId: string,
   requirements: ComplianceRequirement[],
   state: PlayerComplianceState,
 ): ComplianceRequirement[] {
   return requirements
-    .filter((r) => r.blocksPlay)
+    .filter((r) => r.blocksPlay || r.blocksPractice)
+    .filter((r) => !isRequirementComplete(state, playerId, r.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** Practice-blocking requirements that are still incomplete for a player. */
+export function missingPracticeBlockingRequirements(
+  playerId: string,
+  requirements: ComplianceRequirement[],
+  state: PlayerComplianceState,
+): ComplianceRequirement[] {
+  return requirements
+    .filter((r) => r.blocksPractice)
+    .filter((r) => !isRequirementComplete(state, playerId, r.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** Any requirements still incomplete for a player (blocking and soft). */
+export function missingRequirements(
+  playerId: string,
+  requirements: ComplianceRequirement[],
+  state: PlayerComplianceState,
+): ComplianceRequirement[] {
+  return requirements
     .filter((r) => !isRequirementComplete(state, playerId, r.id))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }

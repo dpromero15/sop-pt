@@ -60,7 +60,9 @@ Legacy metrics missing these flags are migrated on load to `true`.
 | Absent | 0 | Counted (worst recorded) |
 | Excused | −1 | **Unscored** — omitted from Statistical; 0 in Adjusted |
 
-Attendance rate on cards uses Statistical rules (present/late/absent only).
+Attendance **aggregates as a season rate** (mean of present/late/absent). That rate (0–100) feeds the Attendance category in the weighted formula directly — not a squad pool percentile — so the Attendance weight reflects reliability.
+
+Attendance rate on cards uses the same Statistical rules (present/late/absent only).
 
 Never-scored players sort last under an **Unscored** divider when ranking by Statistical Rank (or any mode where the value is null).
 
@@ -83,7 +85,7 @@ Rules:
 
 Config → Measured Metrics: add or **edit** name, category, type, unit, direction, aggregation, expected min/max, and Adjusted flags (Include in Adjusted total / Treat no score as 0).  
 Config → Calculated Fields: toggle each catalog field on/off.  
-Config → Formula: Attendance category weight is system-locked (visible, not editable).
+Config → Formula: Attendance stays **always on** as a system default (cannot disable); coaches can change its weight percent.
 
 ## Touchpoints
 

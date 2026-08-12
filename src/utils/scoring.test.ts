@@ -386,6 +386,102 @@ describe('calculatePlayerRankings', () => {
     expect(ranking.attendanceRate).toBe(75);
   });
 
+  it('feeds season attendance rate into the weighted formula score', () => {
+    const attFormula: ScoringFormulaConfig = {
+      id: 'f-att',
+      name: 'Attendance heavy',
+      weights: [
+        { labelId: 'attendance', weightPercent: 50, enabled: true },
+        { labelId: 'speed', weightPercent: 50, enabled: true },
+      ],
+    };
+    const twoPlayers: Player[] = [player('p1', 'Alex'), player('p2', 'Pat')];
+    const entries: MetricEntry[] = [
+      // Spotty: present, absent, present → ~66.7%
+      {
+        id: 'a1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'a2',
+        sessionId: 's2',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 0,
+        timestamp: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        id: 'a3',
+        sessionId: 's3',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-03T00:00:00.000Z',
+      },
+      // Reliable: all present → 100% (latest alone would look identical)
+      {
+        id: 'b1',
+        sessionId: 's1',
+        playerId: 'p2',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'b2',
+        sessionId: 's2',
+        playerId: 'p2',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-02T00:00:00.000Z',
+      },
+      {
+        id: 'b3',
+        sessionId: 's3',
+        playerId: 'p2',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-03T00:00:00.000Z',
+      },
+      // Identical speed so only attendance should separate them
+      {
+        id: 's1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_40m',
+        value: 5.2,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 's2',
+        sessionId: 's1',
+        playerId: 'p2',
+        metricId: 'm_40m',
+        value: 5.2,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const rankings = calculatePlayerRankings(
+      twoPlayers,
+      entries,
+      metrics,
+      labels,
+      attFormula,
+    );
+    const byId = Object.fromEntries(rankings.map((r) => [r.player.id, r]));
+
+    expect(byId.p1.labelScores.attendance.score).toBe(66.7);
+    expect(byId.p2.labelScores.attendance.score).toBe(100);
+    expect(byId.p2.totalScore!).toBeGreaterThan(byId.p1.totalScore!);
+    expect(byId.p2.overallRank).toBe(1);
+    expect(byId.p1.overallRank).toBe(2);
+  });
+
   it('exempt metric does not gap-penalize unscored players in Adjusted', () => {
     const defenseLabel: LabelDefinition = {
       id: 'defense',

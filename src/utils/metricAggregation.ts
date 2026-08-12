@@ -92,6 +92,9 @@ export function migrateMetricsAggregation(
 /**
  * Roll up a player's entries for one metric per aggregationMode.
  * Returns null when there are no valid (non-excused) entries.
+ *
+ * Attendance is always the mean of present/late/absent (excused omitted),
+ * matching the displayed attendance rate — not latest-only.
  */
 export function aggregateMetricValue(
   playerEntries: MetricEntry[],
@@ -100,6 +103,9 @@ export function aggregateMetricValue(
   const valid = playerEntries.filter(
     (e) => e.metricId === metric.id && e.value >= 0,
   );
+  if (metric.type === 'attendance') {
+    return averageMetricValue(valid);
+  }
   return aggregateMetricValueForEntries(valid, metric);
 }
 

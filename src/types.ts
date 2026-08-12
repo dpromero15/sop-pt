@@ -103,7 +103,12 @@ export interface Player {
 }
 
 /** Configurable paperwork / fee / eligibility checklist item. */
-export type RequirementKind = 'paperwork' | 'fee' | 'eligibility' | 'other';
+export type RequirementKind =
+  | 'paperwork'
+  | 'fee'
+  | 'eligibility'
+  | 'disciplinary'
+  | 'other';
 
 export interface ComplianceRequirement {
   id: string;
@@ -111,6 +116,8 @@ export interface ComplianceRequirement {
   kind: RequirementKind;
   /** Incomplete + blocksPlay ⇒ ineligible for Adjusted / specialty ranks. */
   blocksPlay: boolean;
+  /** Incomplete + blocksPractice ⇒ flagged as unable to attend practice. */
+  blocksPractice: boolean;
   description?: string;
   sortOrder: number;
 }
@@ -146,11 +153,23 @@ export interface EquipmentItem {
   notes?: string;
 }
 
-/** Cut lines for Adjusted / specialty ranking lists. */
-export interface RankingBoundariesConfig {
+/** One primary + secondary cut pair (1-based rank places). */
+export interface RankingCutPair {
   primaryCut: number;
   secondaryCut: number;
+}
+
+/** Cut lines for Adjusted / specialty / category / metric ranking lists. */
+export interface RankingBoundariesConfig {
+  /** Overall (all rankings) primary cut. */
+  primaryCut: number;
+  /** Overall (all rankings) secondary cut. */
+  secondaryCut: number;
   specialtyCuts: Partial<Record<PlayerPosition, number>>;
+  /** Optional cuts keyed by category label id. */
+  categoryCuts?: Record<string, RankingCutPair>;
+  /** Optional cuts keyed by metric or calculated-field id. */
+  metricCuts?: Record<string, RankingCutPair>;
 }
 
 /** Training / testing / drill days are `session`; competitive games are `match`. */
@@ -220,7 +239,7 @@ export interface PlayerLabelScore {
     /** Value after applying the metric's aggregationMode. */
     aggregatedValue: number;
     unit: string;
-    /** Pool percentile vs squad (100 = best among players with this metric). */
+    /** Pool percentile vs squad (100 = best), or season rate for attendance. */
     poolScore: number;
   }[];
 }

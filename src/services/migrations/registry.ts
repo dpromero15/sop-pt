@@ -3,6 +3,8 @@ import { migration001ConsolidateLegacyShapes } from './migrations/001_consolidat
 import { migration002SopPtWorkspaceDefaults } from './migrations/002_sop_pt_workspace_defaults';
 import { migration003RepairMetricsBlob } from './migrations/003_repair_metrics_blob';
 import { migration004PerTeamLocalCache } from './migrations/004_per_team_local_cache';
+import { migration005ComplianceBlocksPractice } from './migrations/005_compliance_blocks_practice';
+import { migration006AttendanceFormulaWeight } from './migrations/006_attendance_formula_weight';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -36,5 +38,19 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Namespace local JSON blobs by team id so devices do not share one cache.',
     up: migration004PerTeamLocalCache,
+  },
+  {
+    id: 5,
+    name: 'compliance_blocks_practice',
+    description:
+      'Backfill blocksPractice on compliance requirements; seed red-card sit-out.',
+    up: migration005ComplianceBlocksPractice,
+  },
+  {
+    id: 6,
+    name: 'attendance_formula_weight',
+    description:
+      'Ensure Attendance is enabled with a positive weight in the scoring formula.',
+    up: migration006AttendanceFormulaWeight,
   },
 ];

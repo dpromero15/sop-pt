@@ -12,6 +12,7 @@ const KIND_OPTIONS: { value: RequirementKind; label: string }[] = [
   { value: 'paperwork', label: 'Paperwork' },
   { value: 'fee', label: 'Fee' },
   { value: 'eligibility', label: 'Eligibility' },
+  { value: 'disciplinary', label: 'Disciplinary' },
   { value: 'other', label: 'Other' },
 ];
 
@@ -24,6 +25,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
   const [name, setName] = useState('');
   const [kind, setKind] = useState<RequirementKind>('paperwork');
   const [blocksPlay, setBlocksPlay] = useState(true);
+  const [blocksPractice, setBlocksPractice] = useState(false);
   const [description, setDescription] = useState('');
 
   const openAdd = () => {
@@ -31,6 +33,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     setName('');
     setKind('paperwork');
     setBlocksPlay(true);
+    setBlocksPractice(false);
     setDescription('');
     setIsOpen(true);
   };
@@ -40,6 +43,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     setName(req.name);
     setKind(req.kind);
     setBlocksPlay(req.blocksPlay);
+    setBlocksPractice(req.blocksPractice);
     setDescription(req.description ?? '');
     setIsOpen(true);
   };
@@ -53,6 +57,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         name: trimmed,
         kind,
         blocksPlay,
+        blocksPractice,
         description: description.trim() || undefined,
       });
     } else {
@@ -64,6 +69,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         name: trimmed,
         kind,
         blocksPlay,
+        blocksPractice,
         description: description.trim() || undefined,
         sortOrder: maxOrder + 1,
       });
@@ -97,9 +103,11 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         </button>
       </div>
       <p className="text-sm text-slate-400">
-        Define paperwork, fees, and eligibility items. Toggle{' '}
-        <span className="text-slate-200">Blocks play</span> so incomplete items
-        remove a player from Adjusted ranking.
+        Define paperwork, fees, eligibility, and disciplinary items. Toggle{' '}
+        <span className="text-slate-200">Blocks play</span> /{' '}
+        <span className="text-slate-200">Blocks practice</span> so incomplete
+        items remove a player from match eligibility or practice. For a red card,
+        leave the sit-out incomplete until they have served the next match.
       </p>
       <ul className="space-y-2">
         {requirements.map((req) => (
@@ -116,6 +124,11 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
                 {req.blocksPlay && (
                   <span className="text-[11px] uppercase tracking-wide text-rose-300 border border-rose-500/40 rounded px-1.5 py-0.5">
                     Blocks play
+                  </span>
+                )}
+                {req.blocksPractice && (
+                  <span className="text-[11px] uppercase tracking-wide text-amber-300 border border-amber-500/40 rounded px-1.5 py-0.5">
+                    Blocks practice
                   </span>
                 )}
               </div>
@@ -166,7 +179,14 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
               <span className="text-xs text-slate-400">Kind</span>
               <select
                 value={kind}
-                onChange={(e) => setKind(e.target.value as RequirementKind)}
+                onChange={(e) => {
+                  const next = e.target.value as RequirementKind;
+                  setKind(next);
+                  if (next === 'disciplinary' && !editing) {
+                    setBlocksPlay(true);
+                    setBlocksPractice(false);
+                  }
+                }}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
                 {KIND_OPTIONS.map((o) => (
@@ -184,6 +204,15 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
                 className="rounded border-slate-600"
               />
               Blocks play when incomplete
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={blocksPractice}
+                onChange={(e) => setBlocksPractice(e.target.checked)}
+                className="rounded border-slate-600"
+              />
+              Blocks practice when incomplete
             </label>
             <label className="block space-y-1">
               <span className="text-xs text-slate-400">Description</span>

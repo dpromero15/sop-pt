@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Sliders, Check, RotateCcw } from 'lucide-react';
+import { X, Sliders, Lock } from 'lucide-react';
 import { LabelDefinition, ScoringFormulaConfig } from '../types';
 import { StorageService } from '../services/storage';
 
@@ -20,10 +20,15 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
+  const isAttendance = (labelId: string) => labelId === 'attendance';
+
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
     const map: Record<string, { weightPercent: number; enabled: boolean }> = {};
     formula.weights.forEach(w => {
-      map[w.labelId] = { weightPercent: w.weightPercent, enabled: w.enabled };
+      map[w.labelId] = {
+        weightPercent: w.weightPercent,
+        enabled: isAttendance(w.labelId) ? true : w.enabled,
+      };
     });
     labels.forEach(l => {
       if (!map[l.id]) {
@@ -41,6 +46,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
   };
 
   const handleToggleEnabled = (labelId: string) => {
+    if (isAttendance(labelId)) return;
     setWeightsMap(prev => ({
       ...prev,
       [labelId]: { ...prev[labelId], enabled: !prev[labelId]?.enabled }
@@ -51,7 +57,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
     const updatedWeights = Object.entries(weightsMap).map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
       labelId,
       weightPercent: item.weightPercent,
-      enabled: item.enabled
+      enabled: isAttendance(labelId) ? true : item.enabled,
     }));
 
     StorageService.saveFormula({
@@ -82,12 +88,13 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
         </div>
 
         <p className="text-xs text-slate-400">
-          Adjust category weightings to change how Total Player Scores are calculated across the team.
+          Adjust category weightings to change how Total Player Scores are calculated across the team. Attendance stays on as a system default.
         </p>
 
         <div className="space-y-3">
           {labels.map(lbl => {
             const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
+            const locked = isAttendance(lbl.id);
             return (
               <div
                 key={lbl.id}
@@ -99,9 +106,16 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
                       type="checkbox"
                       checked={item.enabled}
                       onChange={() => handleToggleEnabled(lbl.id)}
-                      className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700"
+                      disabled={locked}
+                      className="w-4 h-4 rounded text-emerald-500 focus:ring-emerald-500 bg-slate-900 border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     <span className="font-bold text-white">{lbl.name}</span>
+                    {locked && (
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">
+                        <Lock className="w-2.5 h-2.5" />
+                        Always on
+                      </span>
+                    )}
                   </div>
 
                   <span className="font-extrabold text-emerald-400">
@@ -112,7 +126,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
                 {item.enabled && (
                   <input
                     type="range"
-                    min={0}
+                    min={locked ? 5 : 0}
                     max={50}
                     step={5}
                     value={item.weightPercent}
