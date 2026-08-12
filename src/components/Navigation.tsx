@@ -11,6 +11,7 @@ import {
 import type { Team } from '../types';
 import { useAccess } from '../access/AccessProvider';
 import { ProfileMenu } from './ProfileMenu';
+import { SyncStatusChip } from './SyncStatusChip';
 
 export type TabRoute =
   | 'rankings'
@@ -134,6 +135,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <SyncStatusChip />
             {can('dataEntry') && (
               <button
                 onClick={onOpenQuickSession}

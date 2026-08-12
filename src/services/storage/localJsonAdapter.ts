@@ -53,7 +53,11 @@ import {
   netBumpsFromTransactions,
   parseStoredBumpTransactions,
 } from '../../utils/adjustedBumps';
-import { STORAGE_KEYS } from './storageKeys';
+import {
+  ACTIVE_TEAM_KEY,
+  STORAGE_KEYS,
+  scopedStorageKey,
+} from './storageKeys';
 import {
   runLocalMigrations,
   writeStoredSchemaVersion,
@@ -61,7 +65,7 @@ import {
 
 export { STORAGE_KEYS } from './storageKeys';
 
-type StorageChangeListener = () => void;
+export type StorageChangeListener = (key?: string) => void;
 
 export type LocalStorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -81,11 +85,42 @@ function createMemoryStorage(): LocalStorageLike {
 export class LocalJsonAdapter implements StorageRepository {
   private listeners = new Set<StorageChangeListener>();
   private store: LocalStorageLike;
+  private teamScopeId: string;
+  /** When true, missing keys return empty/fallback without seeding sample data. */
+  private holdSeeds = false;
+  private silent = 0;
 
   constructor(store?: LocalStorageLike) {
     this.store =
       store ??
       (typeof localStorage !== 'undefined' ? localStorage : createMemoryStorage());
+    this.teamScopeId = this.resolveInitialScope();
+  }
+
+  getTeamScopeId(): string {
+    return this.teamScopeId;
+  }
+
+  /**
+   * Switch the local cache namespace. `holdSeeds` avoids writing Thunder FC
+   * sample data while a cloud hydrate is in flight.
+   */
+  setTeamScope(teamId: string, opts?: { holdSeeds?: boolean }): void {
+    const next = teamId.trim();
+    if (!next) return;
+    const changed = next !== this.teamScopeId;
+    this.teamScopeId = next;
+    this.holdSeeds = opts?.holdSeeds ?? false;
+    try {
+      this.store.setItem(ACTIVE_TEAM_KEY, next);
+    } catch {
+      /* ignore */
+    }
+    if (changed) this.notify();
+  }
+
+  setHoldSeeds(value: boolean): void {
+    this.holdSeeds = value;
   }
 
   subscribe(listener: StorageChangeListener): () => void {
@@ -93,16 +128,32 @@ export class LocalJsonAdapter implements StorageRepository {
     return () => this.listeners.delete(listener);
   }
 
-  private notify() {
-    this.listeners.forEach((fn) => fn());
+  private resolveInitialScope(): string {
+    try {
+      const remembered = this.store.getItem(ACTIVE_TEAM_KEY)?.trim();
+      if (remembered) return remembered;
+      const raw = this.store.getItem(STORAGE_KEYS.TEAM);
+      if (raw) {
+        const team = JSON.parse(raw) as { id?: string };
+        if (team?.id) return team.id;
+      }
+    } catch {
+      /* ignore */
+    }
+    return DEFAULT_TEAM.id;
   }
 
-  private readJson<T>(key: string, fallback: T): T {
-    const raw = this.store.getItem(key);
-    if (!raw) {
-      this.writeJson(key, fallback);
-      return fallback;
-    }
+  private scoped(key: string): string {
+    return scopedStorageKey(this.teamScopeId, key);
+  }
+
+  private notify(key?: string) {
+    if (this.silent > 0) return;
+    this.listeners.forEach((fn) => fn(key));
+  }
+
+  private parseJson<T>(raw: string | null, fallback: T): T {
+    if (raw == null) return fallback;
     try {
       return JSON.parse(raw) as T;
     } catch {
@@ -110,8 +161,85 @@ export class LocalJsonAdapter implements StorageRepository {
     }
   }
 
+  private emptyWhenHolding<T>(key: string, fallback: T): T {
+    if (Array.isArray(fallback)) return [] as T;
+    if (key === STORAGE_KEYS.TEAM) {
+      return {
+        ...(fallback as Team),
+        id: this.teamScopeId,
+        name: '',
+        shortName: '',
+      } as T;
+    }
+    if (key === STORAGE_KEYS.PLAYER_COMPLIANCE) {
+      return {} as T;
+    }
+    return fallback;
+  }
+
+  private readJson<T>(key: string, fallback: T): T {
+    const scopedRaw = this.store.getItem(this.scoped(key));
+    if (scopedRaw != null) return this.parseJson(scopedRaw, fallback);
+
+    const legacyRaw = this.store.getItem(key);
+    if (legacyRaw != null) return this.parseJson(legacyRaw, fallback);
+
+    if (this.holdSeeds) return this.emptyWhenHolding(key, fallback);
+
+    this.writeJson(key, fallback);
+    return fallback;
+  }
+
   private writeJson(key: string, value: unknown) {
-    this.store.setItem(key, JSON.stringify(value));
+    this.store.setItem(this.scoped(key), JSON.stringify(value));
+    this.notify(key);
+  }
+
+  /** Apply a cloud/backup snapshot without marking every write dirty. */
+  applySnapshot(snapshot: TeamSnapshot, opts?: { migrate?: boolean }): void {
+    this.silent += 1;
+    try {
+      if (snapshot.team) this.saveTeam(snapshot.team);
+      if (snapshot.players) this.savePlayers(snapshot.players);
+      if (snapshot.sessions) this.saveSessions(snapshot.sessions);
+      if (snapshot.entries) this.saveEntries(snapshot.entries);
+      if (snapshot.metrics) this.saveMetrics(snapshot.metrics);
+      if (snapshot.labels) this.saveLabels(snapshot.labels);
+      if (snapshot.formula) this.saveFormula(snapshot.formula);
+      if (snapshot.calculatedFields) {
+        this.saveCalculatedFields(snapshot.calculatedFields);
+      }
+      if (snapshot.coaches) this.saveCoaches(snapshot.coaches);
+      if (snapshot.coachBallots) this.saveCoachBallots(snapshot.coachBallots);
+      if (Array.isArray(snapshot.bumpTransactions)) {
+        this.saveBumpTransactions(snapshot.bumpTransactions);
+      } else if (snapshot.adjustedBumps) {
+        this.saveAdjustedBumps(snapshot.adjustedBumps);
+      }
+      if (snapshot.bumpBudget) this.saveBumpBudget(snapshot.bumpBudget);
+      if (snapshot.complianceRequirements) {
+        this.saveComplianceRequirements(snapshot.complianceRequirements);
+      }
+      if (snapshot.playerCompliance) {
+        this.savePlayerCompliance(snapshot.playerCompliance);
+      }
+      if (snapshot.equipmentGroups) {
+        this.saveEquipmentGroups(snapshot.equipmentGroups);
+      }
+      if (snapshot.equipmentItems) {
+        this.saveEquipmentItems(snapshot.equipmentItems);
+      }
+      if (snapshot.rankingBoundaries) {
+        this.saveRankingBoundaries(snapshot.rankingBoundaries);
+      }
+      if (opts?.migrate !== false) {
+        writeStoredSchemaVersion(this.store, 0);
+        runLocalMigrations(this.store);
+      }
+    } finally {
+      this.silent -= 1;
+      this.notify();
+    }
   }
 
   getTeam(): Team {

@@ -77,7 +77,7 @@ export function migration00NExample(ctx: MigrationContext): MigrationResult {
 
 ## Cloud / Firestore (follow-up contract)
 
-Today the SPA is local-first; Firestore sync covers a subset of keys.
+Today the SPA is local-first; JIT Cloud Run sync hydrates/flushes the team snapshot (core collections + config blobs).
 When changing cloud shapes:
 
 1. Still add a **local** migration (hydrate writes local keys).

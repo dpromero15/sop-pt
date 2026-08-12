@@ -23,7 +23,7 @@
     "providers": {
       "googleSignIn": {
         "oAuthBrandDisplayName": "SOP PT",
-        "supportEmail": "dprestonromero@gmail.com"
+        "supportEmail": "dromero@sop-network.com"
       }
     }
   }

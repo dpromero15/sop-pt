@@ -1,0 +1,449 @@
+# API Gateway OpenAPI 2.0 config for sop-pt-api.
+# Backend address is substituted by scripts/deploy-api-gateway.sh via BACKEND_URL.
+# GATEWAY_HOST is substituted to the live gateway hostname (CORS allowCors).
+# Clients call the gateway hostname only — never the Cloud Run URL.
+swagger: "2.0"
+info:
+  title: sop-pt-api
+  description: SOP-PT Cloud Run API fronted by API Gateway (Firebase JWT on /v1).
+  version: "2.9.0"
+host: "GATEWAY_HOST"
+schemes:
+  - https
+produces:
+  - application/json
+consumes:
+  - application/json
+
+# Pass CORS preflight through to Cloud Run (Express cors). JWT must NOT
+# apply to OPTIONS — browsers omit Authorization on preflight.
+x-google-endpoints:
+  - name: "GATEWAY_HOST"
+    allowCors: True
+
+# Cheap abuse cap: shared request quota (per project).
+x-google-management:
+  metrics:
+    - name: "request-count"
+      displayName: "Request count"
+      valueType: INT64
+      metricKind: DELTA
+  quota:
+    limits:
+      - name: "requests-per-minute"
+        metric: "request-count"
+        unit: "1/min/{project}"
+        values:
+          STANDARD: 120
+
+securityDefinitions:
+  firebase:
+    authorizationUrl: ""
+    flow: implicit
+    type: oauth2
+    x-google-issuer: "https://securetoken.google.com/sop-pt-2"
+    x-google-jwks_uri: "https://www.googleapis.com/service_accounts/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+    x-google-audiences: "sop-pt-2"
+
+x-google-backend:
+  address: "BACKEND_URL"
+  pathTranslation: APPEND_PATH_TO_ADDRESS
+  # Gateway SA (api-gateway@…) authenticates to private Cloud Run.
+  disable_auth: false
+
+paths:
+  /health:
+    get:
+      operationId: health
+      summary: Liveness (no auth)
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsHealth
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/me:
+    get:
+      operationId: getMe
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsMe
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/status:
+    get:
+      operationId: getStatus
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsStatus
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams:
+    get:
+      operationId: listTeams
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    post:
+      operationId: createTeam
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsTeams
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getTeam
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putTeam
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsTeamById
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/members:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: listMembers
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsMembers
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/members/{email}:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+      - name: email
+        in: path
+        required: true
+        type: string
+    put:
+      operationId: putMember
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    delete:
+      operationId: deleteMember
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsMemberByEmail
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/players:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getPlayers
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putPlayers
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsPlayers
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/sessions:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getSessions
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putSessions
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsSessions
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/entries:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getEntries
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putEntries
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsEntries
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/config/{name}:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+      - name: name
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getConfig
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    put:
+      operationId: putConfig
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsConfig
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/snapshot:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    get:
+      operationId: getSnapshot
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsSnapshot
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight
+
+  /v1/teams/{teamId}/bootstrap:
+    parameters:
+      - name: teamId
+        in: path
+        required: true
+        type: string
+    post:
+      operationId: bootstrapTeam
+      security:
+        - firebase: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "200":
+          description: OK
+    options:
+      operationId: corsBootstrap
+      security: []
+      x-google-quota:
+        metricCosts:
+          request-count: 1
+      responses:
+        "204":
+          description: CORS preflight

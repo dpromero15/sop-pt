@@ -185,7 +185,23 @@ for (const name of ['players', 'sessions', 'entries'] as const) {
   );
 }
 
-for (const name of ['metrics', 'labels', 'formula'] as const) {
+const EXTRA_CONFIG = [
+  'calculatedFields',
+  'coaches',
+  'coachBallots',
+  'bumpTransactions',
+  'bumpBudget',
+  'complianceRequirements',
+  'playerCompliance',
+  'equipmentGroups',
+  'equipmentItems',
+  'rankingBoundaries',
+] as const;
+
+function registerConfigRoutes(
+  name: string,
+  writeRole: 'dataEntry' | 'teamAdmin',
+) {
   teamsRouter.get(
     `/:teamId/config/${name}`,
     requireTeamRole('viewer'),
@@ -200,7 +216,7 @@ for (const name of ['metrics', 'labels', 'formula'] as const) {
 
   teamsRouter.put(
     `/:teamId/config/${name}`,
-    requireTeamRole('teamAdmin'),
+    requireTeamRole(writeRole),
     async (req, res) => {
       const data = req.body?.data ?? req.body;
       await teamRef(req.params.teamId)
@@ -210,6 +226,13 @@ for (const name of ['metrics', 'labels', 'formula'] as const) {
       res.json({ ok: true });
     },
   );
+}
+
+for (const name of ['metrics', 'labels', 'formula'] as const) {
+  registerConfigRoutes(name, 'teamAdmin');
+}
+for (const name of EXTRA_CONFIG) {
+  registerConfigRoutes(name, 'dataEntry');
 }
 
 teamsRouter.get(
@@ -229,35 +252,50 @@ teamsRouter.get(
       listCollection(teamId, 'entries'),
     ]);
 
-    const metrics = (
-      await teamRef(teamId).collection('config').doc('metrics').get()
-    ).data()?.data;
-    const labels = (
-      await teamRef(teamId).collection('config').doc('labels').get()
-    ).data()?.data;
-    const formula = (
-      await teamRef(teamId).collection('config').doc('formula').get()
-    ).data()?.data;
+    const configDocs = await Promise.all(
+      (
+        [
+          'metrics',
+          'labels',
+          'formula',
+          ...EXTRA_CONFIG,
+        ] as const
+      ).map(async (name) => {
+        const snap = await teamRef(teamId).collection('config').doc(name).get();
+        return [name, snap.exists ? snap.data()?.data ?? snap.data() : null] as const;
+      }),
+    );
+    const config = Object.fromEntries(configDocs);
 
     res.json({
       team: teamSnap.data(),
       players,
       sessions,
       entries,
-      metrics: metrics ?? [],
-      labels: labels ?? [],
-      formula: formula ?? null,
+      metrics: config.metrics ?? [],
+      labels: config.labels ?? [],
+      formula: config.formula ?? null,
+      calculatedFields: config.calculatedFields ?? [],
+      coaches: config.coaches ?? [],
+      coachBallots: config.coachBallots ?? [],
+      bumpTransactions: config.bumpTransactions ?? [],
+      bumpBudget: config.bumpBudget ?? null,
+      complianceRequirements: config.complianceRequirements ?? [],
+      playerCompliance: config.playerCompliance ?? {},
+      equipmentGroups: config.equipmentGroups ?? [],
+      equipmentItems: config.equipmentItems ?? [],
+      rankingBoundaries: config.rankingBoundaries ?? null,
     });
   },
 );
 
 teamsRouter.post(
   '/:teamId/bootstrap',
-  requireSystemAdmin,
+  requireTeamRole('teamAdmin'),
   async (req, res) => {
     const teamId = req.params.teamId;
-    const { team, players, sessions, entries, metrics, labels, formula } =
-      req.body ?? {};
+    const body = req.body ?? {};
+    const { team, players, sessions, entries, metrics, labels, formula } = body;
 
     if (
       !team ||
@@ -276,18 +314,25 @@ teamsRouter.post(
     await replaceCollection(teamId, 'players', players);
     await replaceCollection(teamId, 'sessions', sessions);
     await replaceCollection(teamId, 'entries', entries);
-    await teamRef(teamId)
-      .collection('config')
-      .doc('metrics')
-      .set({ data: metrics ?? [] });
-    await teamRef(teamId)
-      .collection('config')
-      .doc('labels')
-      .set({ data: labels ?? [] });
-    await teamRef(teamId)
-      .collection('config')
-      .doc('formula')
-      .set({ data: formula ?? null });
+
+    const configWrites: Array<[string, unknown]> = [
+      ['metrics', metrics ?? []],
+      ['labels', labels ?? []],
+      ['formula', formula ?? null],
+      ['calculatedFields', body.calculatedFields ?? []],
+      ['coaches', body.coaches ?? []],
+      ['coachBallots', body.coachBallots ?? []],
+      ['bumpTransactions', body.bumpTransactions ?? body.adjustedBumps ?? []],
+      ['bumpBudget', body.bumpBudget ?? null],
+      ['complianceRequirements', body.complianceRequirements ?? []],
+      ['playerCompliance', body.playerCompliance ?? {}],
+      ['equipmentGroups', body.equipmentGroups ?? []],
+      ['equipmentItems', body.equipmentItems ?? []],
+      ['rankingBoundaries', body.rankingBoundaries ?? null],
+    ];
+    for (const [name, data] of configWrites) {
+      await teamRef(teamId).collection('config').doc(name).set({ data });
+    }
 
     res.json({ ok: true, teamId });
   },

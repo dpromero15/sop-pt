@@ -84,39 +84,22 @@ export async function checkConnectionStatus(): Promise<ConnectionStatus> {
       userEmail: null,
       forceLocal,
       lastCheckedAt,
-      message: 'Sign in as admin to use cloud storage.',
+      message: 'Sign in to sync with the cloud.',
     };
   }
 
-  try {
-    const status = await api.status(auth.idToken);
-    const mode: StorageMode = status.firestoreReachable ? 'cloud' : 'local-fallback';
-    return {
-      mode,
-      apiConfigured: true,
-      apiHealthy: true,
-      firestoreReachable: status.firestoreReachable,
-      authConfigured,
-      signedIn: true,
-      userEmail: auth.email,
-      forceLocal,
-      lastCheckedAt,
-      message: status.firestoreReachable
-        ? 'Connected to Cloud Run + Firestore.'
-        : 'API up but Firestore unreachable. Using local fallback.',
-    };
-  } catch (err) {
-    return {
-      mode: 'local-fallback',
-      apiConfigured: true,
-      apiHealthy: true,
-      firestoreReachable: false,
-      authConfigured,
-      signedIn: true,
-      userEmail: auth.email,
-      forceLocal,
-      lastCheckedAt,
-      message: err instanceof Error ? err.message : 'Status check failed.',
-    };
-  }
+  // Coaches are not allowed on /v1/status (systemAdmin). /health + a token
+  // is enough to enable JIT sync without an extra privileged ping.
+  return {
+    mode: 'cloud',
+    apiConfigured: true,
+    apiHealthy: true,
+    firestoreReachable: null,
+    authConfigured,
+    signedIn: true,
+    userEmail: auth.email,
+    forceLocal,
+    lastCheckedAt,
+    message: 'API reachable. Team data syncs when you are online.',
+  };
 }

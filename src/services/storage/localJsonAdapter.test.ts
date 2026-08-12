@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { LocalJsonAdapter, STORAGE_KEYS } from './localJsonAdapter';
+import { scopedStorageKey } from './storageKeys';
 import { DEFAULT_TEAM } from '../../data/initialData';
+
+function scoped(key: string) {
+  return scopedStorageKey(DEFAULT_TEAM.id, key);
+}
 
 function memoryStore() {
   const map = new Map<string, string>();
@@ -28,7 +33,7 @@ describe('LocalJsonAdapter', () => {
   it('seeds and persists separated team blob', () => {
     const team = adapter.getTeam();
     expect(team.name).toBe(DEFAULT_TEAM.name);
-    expect(store.map.has(STORAGE_KEYS.TEAM)).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.TEAM))).toBe(true);
 
     adapter.saveTeam({ ...team, name: 'Storm United' });
     expect(adapter.getTeam().name).toBe('Storm United');
@@ -43,13 +48,13 @@ describe('LocalJsonAdapter', () => {
     adapter.getFormula();
     adapter.getTeam();
 
-    expect(store.map.has(STORAGE_KEYS.PLAYERS)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.SESSIONS)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.ENTRIES)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.METRICS)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.LABELS)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.FORMULA)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.TEAM)).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.PLAYERS))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.SESSIONS))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.ENTRIES))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.METRICS))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.LABELS))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.FORMULA))).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.TEAM))).toBe(true);
   });
 
   it('updateTeam merges fields and bumps updatedAt', () => {
@@ -192,7 +197,7 @@ describe('LocalJsonAdapter', () => {
     );
     const labels = adapter.getLabels();
     expect(labels.find((l) => l.id === 'attendance')?.system).toBe(true);
-    const persisted = JSON.parse(store.map.get(STORAGE_KEYS.LABELS)!);
+    const persisted = JSON.parse(store.map.get(scoped(STORAGE_KEYS.LABELS))!);
     expect(persisted.find((l: { id: string }) => l.id === 'attendance').system).toBe(
       true,
     );
@@ -240,7 +245,7 @@ describe('LocalJsonAdapter', () => {
   it('persists coaches, ballots, bumps, and bump budget', () => {
     const coach = adapter.addCoach({ name: 'Test Coach' });
     expect(adapter.getCoaches().some((c) => c.id === coach.id)).toBe(true);
-    expect(store.map.has(STORAGE_KEYS.COACHES)).toBe(true);
+    expect(store.map.has(scoped(STORAGE_KEYS.COACHES))).toBe(true);
 
     adapter.saveCoachBallot({
       coachId: coach.id,
