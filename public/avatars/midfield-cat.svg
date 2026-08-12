@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Midfielder cat outline">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#f5f2e8"/>
+      <stop offset="100%" stop-color="#dcd6c5"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="128" fill="url(#bg)"/>
+  <!-- compass / box-to-box arrows -->
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
+    d="M64 128h128M128 64v128M84 84l88 88M172 84l-88 88"/>
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M96 138c0-24 14-44 32-44s32 20 32 44c0 20-12 36-32 36s-32-16-32-36z"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linejoin="round"
+    d="M108 108l-6-20 20 10M148 108l6-20-20 10"/>
+  <circle cx="116" cy="132" r="3" fill="#0f172a"/>
+  <circle cx="140" cy="132" r="3" fill="#0f172a"/>
+  <path fill="none" stroke="#0f172a" stroke-width="3" stroke-linecap="round"
+    d="M124 142c3 4 6 4 9 0"/>
+</svg>

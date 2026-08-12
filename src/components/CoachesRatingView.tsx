@@ -10,9 +10,7 @@ import type {
 } from '../types';
 import { StorageService } from '../services/storage';
 import { activePlayers, isCompleteBallot } from '../utils/coachesRating';
-
-const FALLBACK_AVATAR =
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128';
+import { defaultAvatarFor } from '../constants/avatars';
 
 interface CoachesRatingViewProps {
   coaches: Coach[];
@@ -117,7 +115,7 @@ const RankRow: React.FC<RankRowProps> = ({
       </span>
 
       <img
-        src={player.avatarUrl || FALLBACK_AVATAR}
+        src={player.avatarUrl || defaultAvatarFor(player.id || player.jerseyNumber)}
         alt=""
         draggable={false}
         className="w-11 h-11 self-center rounded-xl object-cover ring-2 ring-slate-800 shrink-0 pointer-events-none"

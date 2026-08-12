@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Captain cat outline">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#f5efe8"/>
+      <stop offset="100%" stop-color="#dccfc5"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="128" fill="url(#bg)"/>
+  <!-- captain armband -->
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linecap="round"
+    d="M44 140h40M44 152h40M44 164h40"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"
+    d="M58 146c6-2 10 0 12 6 2 6-2 12-10 12"/>
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M92 150c0-28 16-50 36-50s36 22 36 50c0 24-14 42-36 42s-36-18-36-42z"/>
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M104 114l-8-26 26 14M152 114l8-26-26 14"/>
+  <circle cx="116" cy="142" r="3.5" fill="#0f172a"/>
+  <circle cx="140" cy="142" r="3.5" fill="#0f172a"/>
+  <path fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round"
+    d="M122 152c4 5 8 5 12 0M100 156c-12 2-20-2-26-8M156 156c12 2 20-2 26-8"/>
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M100 192c8-14 18-22 28-22s20 8 28 22"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" d="M188 176l22-10M198 168v28"/>
+</svg>

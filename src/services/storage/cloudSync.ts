@@ -129,7 +129,15 @@ function markDirty(teamId: string, bucket: SyncBucket) {
   if (status !== 'syncing' && status !== 'hydrating') {
     emit('pending');
   }
-  scheduleFlush();
+  const data = payloadFor(bucket, StorageService.getSnapshot());
+  const emptySquad =
+    (bucket === 'players' ||
+      bucket === 'sessions' ||
+      bucket === 'entries') &&
+    Array.isArray(data) &&
+    data.length === 0;
+  if (emptySquad) scheduleFlushSoon();
+  else scheduleFlush();
 }
 
 function clearDirty(teamId: string, buckets: SyncBucket[]) {
@@ -204,6 +212,87 @@ function payloadFor(bucket: SyncBucket, snap: TeamSnapshot): unknown {
   }
 }
 
+/** Prefer local snapshot values for every dirty outbox bucket. */
+function overlayDirtyLocal(
+  remoteMerged: TeamSnapshot,
+  dirty: Set<SyncBucket>,
+): TeamSnapshot {
+  if (dirty.size === 0) return remoteMerged;
+  const local = StorageService.getSnapshot();
+  const next: TeamSnapshot = { ...remoteMerged };
+  for (const bucket of dirty) {
+    const data = payloadFor(bucket, local);
+    switch (bucket) {
+      case 'team':
+        if (data) next.team = data as TeamSnapshot['team'];
+        break;
+      case 'players':
+        next.players = data as TeamSnapshot['players'];
+        break;
+      case 'sessions':
+        next.sessions = data as TeamSnapshot['sessions'];
+        break;
+      case 'entries':
+        next.entries = data as TeamSnapshot['entries'];
+        break;
+      case 'metrics':
+        next.metrics = data as TeamSnapshot['metrics'];
+        break;
+      case 'labels':
+        next.labels = data as TeamSnapshot['labels'];
+        break;
+      case 'formula':
+        if (data != null) next.formula = data as TeamSnapshot['formula'];
+        break;
+      case 'calculatedFields':
+        next.calculatedFields = data as TeamSnapshot['calculatedFields'];
+        break;
+      case 'coaches':
+        next.coaches = data as TeamSnapshot['coaches'];
+        break;
+      case 'coachBallots':
+        next.coachBallots = data as TeamSnapshot['coachBallots'];
+        break;
+      case 'bumpTransactions':
+        next.bumpTransactions = data as TeamSnapshot['bumpTransactions'];
+        break;
+      case 'bumpBudget':
+        if (data != null) next.bumpBudget = data as TeamSnapshot['bumpBudget'];
+        break;
+      case 'complianceRequirements':
+        next.complianceRequirements =
+          data as TeamSnapshot['complianceRequirements'];
+        break;
+      case 'playerCompliance':
+        next.playerCompliance = data as TeamSnapshot['playerCompliance'];
+        break;
+      case 'equipmentGroups':
+        next.equipmentGroups = data as TeamSnapshot['equipmentGroups'];
+        break;
+      case 'equipmentItems':
+        next.equipmentItems = data as TeamSnapshot['equipmentItems'];
+        break;
+      case 'rankingBoundaries':
+        if (data != null) {
+          next.rankingBoundaries = data as TeamSnapshot['rankingBoundaries'];
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  return next;
+}
+
+function ensureSquadArrays(snap: TeamSnapshot): TeamSnapshot {
+  return {
+    ...snap,
+    players: Array.isArray(snap.players) ? snap.players : [],
+    sessions: Array.isArray(snap.sessions) ? snap.sessions : [],
+    entries: Array.isArray(snap.entries) ? snap.entries : [],
+  };
+}
+
 async function flushTeam(teamId: string): Promise<void> {
   if (!cloudEnabled() || flushing) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -275,6 +364,26 @@ function scheduleFlush() {
   }, DEBOUNCE_MS);
 }
 
+/** Cancel debounce and flush now (destructive clears, tab hide, tests). */
+export async function flushNow(teamId?: string): Promise<void> {
+  const id = teamId ?? boundTeamId;
+  if (!id || !cloudEnabled()) return;
+  if (debounceTimer) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+  await flushTeam(id);
+}
+
+function scheduleFlushSoon() {
+  if (!boundTeamId || !cloudEnabled()) return;
+  if (debounceTimer) clearTimeout(debounceTimer);
+  // Let synchronous multi-bucket clears (e.g. clearAllPlayers) mark dirty first.
+  debounceTimer = setTimeout(() => {
+    if (boundTeamId) void flushTeam(boundTeamId);
+  }, 0);
+}
+
 function ensureBrowserHooks() {
   if (startedBrowserHooks || typeof window === 'undefined') return;
   startedBrowserHooks = true;
@@ -309,7 +418,7 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
   StorageService.setTeamScope(teamId, { holdSeeds: cloudEnabled() });
 
   unsubStorage = StorageService.subscribe((key) => {
-    if (!key || !boundTeamId) return;
+    if (!key || !boundTeamId || flushing) return;
     const bucket = KEY_TO_BUCKET[key];
     if (bucket) markDirty(boundTeamId, bucket);
   });
@@ -354,23 +463,22 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
     }
 
     if (remoteHasSquadData(remote) || remote.team) {
-      const next: TeamSnapshot = { ...StorageService.getSnapshot(), ...remote };
-      if (!next.players) next.players = [];
-      if (!next.sessions) next.sessions = [];
-      if (!next.entries) next.entries = [];
-      if (dirty.has('players')) next.players = StorageService.getPlayers();
-      if (dirty.has('sessions')) next.sessions = StorageService.getSessions();
-      if (dirty.has('entries')) next.entries = StorageService.getEntries();
+      let next: TeamSnapshot = ensureSquadArrays({
+        ...StorageService.getSnapshot(),
+        ...remote,
+      });
+      next = ensureSquadArrays(overlayDirtyLocal(next, dirty));
+      // Always persist squad arrays (incl. []) before releasing holdSeeds.
       StorageService.applySnapshot(next, { migrate: true });
     } else {
       // Persist empties so getPlayers() does not seed sample Thunder FC.
       StorageService.applySnapshot(
-        {
+        ensureSquadArrays({
           ...StorageService.getSnapshot(),
           players: [],
           sessions: [],
           entries: [],
-        },
+        }),
         { migrate: false },
       );
     }
@@ -378,7 +486,7 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
     StorageService.setHoldSeeds(false);
     if (dirty.size > 0) {
       emit('pending');
-      scheduleFlush();
+      await flushNow(teamId);
     } else {
       emit('synced');
     }

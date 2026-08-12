@@ -236,6 +236,47 @@ describe('LocalJsonAdapter', () => {
     }
   });
 
+  it('applySnapshot persists empty players so holdSeeds release does not seed samples', () => {
+    adapter.setTeamScope('team_empty_cloud', { holdSeeds: true });
+    expect(adapter.getPlayers()).toEqual([]);
+
+    adapter.applySnapshot(
+      {
+        team: {
+          id: 'team_empty_cloud',
+          name: 'Empty FC',
+          shortName: 'EFC',
+          season: '2026',
+          ageGroup: 'U16',
+          clubName: '',
+          homeVenue: '',
+          primaryColor: '#000',
+          secondaryColor: '#fff',
+          timezone: 'UTC',
+          updatedAt: 't',
+        },
+        players: [],
+        sessions: [],
+        entries: [],
+        metrics: [],
+        labels: [],
+        formula: adapter.getFormula(),
+        calculatedFields: [],
+        coaches: [],
+        coachBallots: [],
+        adjustedBumps: {},
+        bumpBudget: adapter.getBumpBudget(),
+      },
+      { migrate: false },
+    );
+    adapter.setHoldSeeds(false);
+
+    expect(adapter.getPlayers()).toEqual([]);
+    expect(
+      store.map.get(scopedStorageKey('team_empty_cloud', STORAGE_KEYS.PLAYERS)),
+    ).toBe('[]');
+  });
+
   it('clearAllPlayers empties the roster', () => {
     expect(adapter.getPlayers().length).toBeGreaterThan(0);
     adapter.clearAllPlayers();

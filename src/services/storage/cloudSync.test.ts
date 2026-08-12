@@ -87,6 +87,109 @@ describe('cloudSync', () => {
     __resetCloudSyncForTests();
   });
 
+  it('hydrate with empty remote squad leaves local empty (no sample seed / PUT)', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            team: { id: 'team_empty', name: 'Empty FC', updatedAt: 't' },
+            players: [],
+            sessions: [],
+            entries: [],
+            metrics: [],
+            labels: [],
+            formula: null,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const { enterTeamCloudSync, getCloudSyncStatus, __resetCloudSyncForTests } =
+      await import('./cloudSync');
+    const { StorageService } = await import('../storage');
+
+    await enterTeamCloudSync('team_empty');
+    expect(StorageService.getPlayers()).toEqual([]);
+    expect(getCloudSyncStatus().status).toBe('synced');
+    const writeUrls = fetchMock.mock.calls
+      .filter((c) => (c[1] as RequestInit | undefined)?.method === 'PUT')
+      .map((c) => String(c[0]));
+    expect(writeUrls.some((u) => u.includes('/players'))).toBe(false);
+    __resetCloudSyncForTests();
+  });
+
+  it('hydrate keeps dirty empty local players over remote roster then flushes', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.includes('/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            team: { id: 'team_clear', name: 'Clear FC', updatedAt: 't' },
+            players: [
+              {
+                id: 'p1',
+                name: 'ShouldNotKeep',
+                jerseyNumber: 9,
+                position: 'ST',
+                preferredFoot: 'R',
+                joinedDate: '2026-01-01',
+                status: 'active',
+              },
+            ],
+            sessions: [],
+            entries: [],
+            metrics: [],
+            labels: [],
+            formula: null,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, count: 0 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    vi.stubGlobal('localStorage', memoryLocalStorage());
+    localStorage.setItem(
+      'stm_cloud_outbox_v1',
+      JSON.stringify({ team_clear: ['players'] }),
+    );
+
+    const { enterTeamCloudSync, getCloudSyncStatus, __resetCloudSyncForTests } =
+      await import('./cloudSync');
+    const { StorageService } = await import('../storage');
+    const { scopedStorageKey, STORAGE_KEYS } = await import('./storageKeys');
+
+    StorageService.setTeamScope('team_clear', { holdSeeds: true });
+    localStorage.setItem(
+      scopedStorageKey('team_clear', STORAGE_KEYS.PLAYERS),
+      '[]',
+    );
+
+    await enterTeamCloudSync('team_clear');
+    expect(StorageService.getPlayers()).toEqual([]);
+    expect(getCloudSyncStatus().status).toBe('synced');
+    const putPlayers = fetchMock.mock.calls.find(
+      (c) =>
+        String(c[0]).includes('/players') &&
+        (c[1] as RequestInit | undefined)?.method === 'PUT',
+    );
+    expect(putPlayers).toBeTruthy();
+    const body = JSON.parse(String((putPlayers?.[1] as RequestInit).body));
+    expect(body.items).toEqual([]);
+    __resetCloudSyncForTests();
+  });
+
   it('maps storage keys to dirty outbox buckets', () => {
     const adapter = new LocalJsonAdapter();
     adapter.setTeamScope('team_x');

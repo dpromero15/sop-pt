@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Cucurella cat outline">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#e8eef5"/>
+      <stop offset="100%" stop-color="#c5d0dc"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="128" fill="url(#bg)"/>
+  <!-- bushy curly wig mass -->
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"
+    d="M48 150c-6-38 18-78 56-92 8-22 28-36 48-34 20-2 40 12 48 34 38 14 62 54 56 92"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"
+    d="M62 118c8-10 14-8 18 2M78 96c10-12 18-8 20 4M98 78c8-14 18-10 22 2M128 70c0-14 12-18 18-6M148 78c6-14 18-12 24 0M170 96c4-14 16-12 22 2M188 118c2-12 12-12 18 0"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"
+    d="M70 140c12-6 20 4 18 16M90 156c10-2 14 8 8 16M110 166c8 0 12 8 6 14M146 166c-8 0-12 8-6 14M166 156c-10-2-14 8-8 16M186 140c-12-6-20 4-18 16"/>
+  <!-- cat face -->
+  <path fill="none" stroke="#0f172a" stroke-width="5" stroke-linejoin="round"
+    d="M96 138c0-22 14-40 32-40s32 18 32 40c0 18-10 34-32 34s-32-16-32-34z"/>
+  <path fill="none" stroke="#0f172a" stroke-width="4" stroke-linecap="round"
+    d="M112 108l-10-18M144 108l10-18"/>
+  <circle cx="116" cy="132" r="3.5" fill="#0f172a"/>
+  <circle cx="140" cy="132" r="3.5" fill="#0f172a"/>
+  <path fill="none" stroke="#0f172a" stroke-width="3.5" stroke-linecap="round"
+    d="M124 140c2 4 6 4 8 0M108 144c-10 2-18 0-24-4M108 150c-10 4-16 8-20 14M148 144c10 2 18 0 24-4M148 150c10 4 16 8 20 14"/>
+  <!-- tiny ball accent -->
+  <circle cx="198" cy="196" r="16" fill="none" stroke="#0f172a" stroke-width="4"/>
+  <path fill="none" stroke="#0f172a" stroke-width="3" d="M198 180v32M182 196h32M188 186l20 20M208 186l-20 20"/>
+</svg>

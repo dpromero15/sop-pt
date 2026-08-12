@@ -57,6 +57,7 @@ import {
   selectionAfterCategoryChange,
   totalForMode,
 } from '../utils/rankingsFilter';
+import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
 
 const SPECIALTY_POSITIONS: PlayerPosition[] = [
   'GK',
@@ -1049,7 +1050,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         {!scopeHasData ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center overflow-hidden">
             <img
-              src="/cucurella-cat.jpg"
+              src={CUCURELLA_CAT_PHOTO_URL}
               alt="Cat wearing a Cucurella curly wig"
               className="mx-auto mb-5 w-full max-w-xs rounded-2xl object-cover border border-slate-700 shadow-lg"
             />
@@ -1352,7 +1353,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     <img
                       src={
                         item.player.avatarUrl ||
-                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=128'
+                        defaultAvatarFor(item.player.id || item.player.jerseyNumber)
                       }
                       alt={item.player.name}
                       className="w-12 h-12 rounded-xl object-cover ring-2 ring-slate-800 group-hover:ring-emerald-500/50 transition-all"
