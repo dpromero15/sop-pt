@@ -8,7 +8,6 @@ import {
   Upload, 
   Layers,
   Pencil,
-  Calculator,
   Award,
   Trash2,
   Lock,
@@ -19,7 +18,6 @@ import {
   ScoringFormulaConfig, 
   MetricType,
   MetricAggregationMode,
-  CalculatedFieldDefinition,
   AdjustedBumpConfig,
   ComplianceRequirement,
   EquipmentGroup,
@@ -33,12 +31,16 @@ import { ComplianceConfigPanel } from './ComplianceConfigPanel';
 import { EquipmentConfigPanel } from './EquipmentConfigPanel';
 import { RankingBoundariesPanel } from './RankingBoundariesPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
+import { metricLabelPayload } from '../utils/metricLabels';
+import {
+  ATTENDANCE_LABEL,
+  DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+} from '../utils/formulaWeights';
 
 interface ConfigViewProps {
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
   formula: ScoringFormulaConfig;
-  calculatedFields: CalculatedFieldDefinition[];
   bumpBudget: AdjustedBumpConfig;
   complianceRequirements: ComplianceRequirement[];
   equipmentGroups: EquipmentGroup[];
@@ -51,6 +53,7 @@ interface ConfigViewProps {
 const AGGREGATION_OPTIONS: { value: MetricAggregationMode; label: string }[] = [
   { value: 'sum', label: 'Season total (add all entries)' },
   { value: 'best', label: 'All-time best (min or max by direction)' },
+  { value: 'average', label: 'Average of all entries' },
   { value: 'latest', label: 'Latest entry only' },
 ];
 
@@ -58,7 +61,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   labels,
   metrics,
   formula,
-  calculatedFields,
   bumpBudget,
   complianceRequirements,
   equipmentGroups,
@@ -70,16 +72,35 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
     const map: Record<string, { weightPercent: number; enabled: boolean }> = {};
     formula.weights.forEach(w => {
-      map[w.labelId] = { weightPercent: w.weightPercent, enabled: w.enabled };
+      map[w.labelId] = {
+        weightPercent: w.weightPercent,
+        enabled: w.labelId === 'attendance' ? true : w.enabled,
+      };
     });
-    // Ensure all labels exist in map
     labels.forEach(l => {
       if (!map[l.id]) {
-        map[l.id] = { weightPercent: 10, enabled: true };
+        map[l.id] = {
+          weightPercent: l.id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+          enabled: true,
+        };
       }
     });
+    if (!map.attendance) {
+      map.attendance = {
+        weightPercent: DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+        enabled: true,
+      };
+    }
     return map;
   });
+
+  // Labels for weight sliders: Attendance always first and always present.
+  const weightLabels = (() => {
+    const withoutAtt = labels.filter((l) => l.id !== 'attendance');
+    const attendance =
+      labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+    return [attendance, ...withoutAtt];
+  })();
 
   // Keep weightsMap in sync when labels change (add/remove/clear)
   useEffect(() => {
@@ -91,14 +112,26 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
           { weightPercent: w.weightPercent, enabled: w.enabled },
         ]),
       );
-      labels.forEach((l) => {
-        const fromFormula = formulaById.get(l.id);
-        next[l.id] =
-          prev[l.id] ??
+      const ensureId = (id: string) => {
+        const fromFormula = formulaById.get(id);
+        next[id] =
+          prev[id] ??
           (fromFormula
-            ? { weightPercent: fromFormula.weightPercent, enabled: fromFormula.enabled }
-            : { weightPercent: 10, enabled: true });
-      });
+            ? {
+                weightPercent: fromFormula.weightPercent,
+                enabled: id === 'attendance' ? true : fromFormula.enabled,
+              }
+            : {
+                weightPercent:
+                  id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+                enabled: true,
+              });
+        if (id === 'attendance') {
+          next[id] = { ...next[id], enabled: true };
+        }
+      };
+      ensureId('attendance');
+      labels.forEach((l) => ensureId(l.id));
       return next;
     });
   }, [labels, formula.weights]);
@@ -114,7 +147,12 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
   const [editingMetricId, setEditingMetricId] = useState<string | null>(null);
   const [metricName, setMetricName] = useState('');
-  const [metricLabelId, setMetricLabelId] = useState(labels[0]?.id || 'speed');
+  const [metricLabelIds, setMetricLabelIds] = useState<string[]>([
+    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed',
+  ]);
+  const [metricPrimaryLabelId, setMetricPrimaryLabelId] = useState(
+    labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed',
+  );
   const [metricType, setMetricType] = useState<MetricType>('count');
   const [metricUnit, setMetricUnit] = useState('reps');
   const [metricHigherIsBetter, setMetricHigherIsBetter] = useState(true);
@@ -152,7 +190,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const resetMetricForm = () => {
     setEditingMetricId(null);
     setMetricName('');
-    setMetricLabelId(labels[0]?.id || 'speed');
+    const defaultLabel =
+      labels.find((l) => l.id !== 'attendance')?.id || labels[0]?.id || 'speed';
+    setMetricLabelIds([defaultLabel]);
+    setMetricPrimaryLabelId(defaultLabel);
     setMetricType('count');
     setMetricUnit('reps');
     setMetricHigherIsBetter(true);
@@ -172,7 +213,14 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const openEditMetric = (m: MetricDefinition) => {
     setEditingMetricId(m.id);
     setMetricName(m.name);
-    setMetricLabelId(m.labelId);
+    const ids =
+      m.labelIds?.length > 0
+        ? m.labelIds
+        : [m.primaryLabelId || 'speed'];
+    setMetricLabelIds(ids);
+    setMetricPrimaryLabelId(
+      ids.includes(m.primaryLabelId) ? m.primaryLabelId : ids[0],
+    );
     setMetricType(m.type);
     setMetricUnit(m.unit);
     setMetricHigherIsBetter(m.higherIsBetter);
@@ -362,7 +410,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const handleClearNonSystemMetrics = () => {
     if (
       !confirm(
-        'Clear all non-attendance metrics? Session attendance is kept; calculated fields and session metric plans will be scrubbed.',
+        'Clear all non-attendance metrics? Session attendance is kept; session metric plans will be scrubbed.',
       )
     ) {
       return;
@@ -379,9 +427,16 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
     const isAttendanceMetric =
       metricType === 'attendance' || editingMetricId === 'm_attendance';
+    if (!isAttendanceMetric && metricLabelIds.length === 0) return;
+
+    const labelsPayload = metricLabelPayload(
+      metricLabelIds,
+      metricPrimaryLabelId,
+      { attendance: isAttendanceMetric },
+    );
     const payload: Omit<MetricDefinition, 'id'> = {
       name: metricName.trim(),
-      labelId: metricLabelId,
+      ...labelsPayload,
       type: metricType,
       unit: metricUnit.trim() || 'units',
       higherIsBetter: metricHigherIsBetter,
@@ -408,19 +463,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     resetMetricForm();
     setIsMetricModalOpen(false);
     onRefreshData();
-  };
-
-  const handleToggleCalculatedField = (field: CalculatedFieldDefinition) => {
-    StorageService.updateCalculatedField({
-      ...field,
-      enabled: !field.enabled,
-    });
-    onRefreshData();
-    showToast(
-      field.enabled
-        ? `✓ ${field.name} disabled`
-        : `✓ ${field.name} enabled for rankings`,
-    );
   };
 
   // Export / Reset
@@ -492,7 +534,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         boundaries={rankingBoundaries}
         labels={labels}
         metrics={metrics}
-        calculatedFields={calculatedFields}
         onRefreshData={onRefreshData}
       />
 
@@ -614,8 +655,12 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
         {/* Sliders Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {labels.map(lbl => {
-            const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
+          {weightLabels.map(lbl => {
+            const item = weightsMap[lbl.id] || {
+              weightPercent:
+                lbl.id === 'attendance' ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+              enabled: true,
+            };
             const toggleLocked = isWeightToggleLocked(lbl);
             return (
               <div
@@ -778,7 +823,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {metrics.map(m => {
-              const labelDef = labels.find(l => l.id === m.labelId);
+              const primaryDef = labels.find((l) => l.id === m.primaryLabelId);
+              const secondaryNames = (m.labelIds || [])
+                .filter((id) => id !== m.primaryLabelId)
+                .map((id) => labels.find((l) => l.id === id)?.name || id);
               const mode = m.aggregationMode ?? defaultAggregationMode(m);
               return (
                 <div
@@ -789,7 +837,18 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     <span className="font-bold text-white">{m.name}</span>
                     <span className="text-slate-400 text-[11px] ml-2">({m.unit})</span>
                     <p className="text-slate-400 text-[10px] mt-0.5">
-                      Label: <strong className="text-blue-300">{labelDef?.name || m.labelId}</strong>
+                      Primary:{' '}
+                      <strong className="text-blue-300">
+                        {primaryDef?.name || m.primaryLabelId}
+                      </strong>
+                      {secondaryNames.length > 0 && (
+                        <>
+                          {' · Also: '}
+                          <span className="text-slate-300">
+                            {secondaryNames.join(', ')}
+                          </span>
+                        </>
+                      )}
                       {' · '}
                       {m.higherIsBetter ? 'Higher better' : 'Lower better'}
                       {' · '}
@@ -813,56 +872,6 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               );
             })}
           </div>
-        </div>
-      </div>
-
-      {/* SECTION 2b: CALCULATED FIELDS */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
-        <div>
-          <h3 className="text-base font-bold text-white flex items-center gap-2">
-            <Calculator className="w-4 h-4 text-cyan-400" />
-            <span>Calculated Fields</span>
-          </h3>
-          <p className="text-slate-400 text-xs mt-1">
-            Pre-built derived stats — <strong className="text-slate-300">average</strong>,
-            per-match rate, and percentile — for existing metrics. Enable only what you
-            need (e.g. 40m Average); disabled fields are not computed.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          {calculatedFields.map((field) => {
-            const base = metrics.find((m) => m.id === field.baseMetricId);
-            return (
-              <div
-                key={field.id}
-                className={`bg-slate-950 border rounded-xl p-3 flex items-center justify-between gap-3 text-xs ${
-                  field.enabled ? 'border-cyan-500/30' : 'border-slate-800/80'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-white">{field.name}</span>
-                  <p className="text-slate-400 text-[10px] mt-0.5">
-                    {field.kind} · base:{' '}
-                    <strong className="text-cyan-300">
-                      {base?.name || field.baseMetricId}
-                    </strong>
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer shrink-0">
-                  <span className="text-slate-400 text-[10px] font-semibold uppercase">
-                    {field.enabled ? 'On' : 'Off'}
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={field.enabled}
-                    onChange={() => handleToggleCalculatedField(field)}
-                    className="w-4 h-4 rounded text-cyan-500 focus:ring-cyan-500 bg-slate-900 border-slate-700"
-                  />
-                </label>
-              </div>
-            );
-          })}
         </div>
       </div>
 
@@ -975,16 +984,83 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-slate-400 font-semibold mb-1">Tied Category Label *</label>
-                <select
-                  value={metricLabelId}
-                  onChange={(e) => setMetricLabelId(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-                >
-                  {labels.map(l => (
-                    <option key={l.id} value={l.id}>{l.name}</option>
-                  ))}
-                </select>
+                <label className="block text-slate-400 font-semibold mb-1">
+                  Categories *
+                </label>
+                {metricType === 'attendance' ||
+                editingMetricId === 'm_attendance' ? (
+                  <p className="text-[11px] text-slate-400 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2">
+                    Attendance is locked to the Attendance category.
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2 bg-slate-950 border border-slate-800 rounded-xl p-3">
+                      {labels
+                        .filter((l) => l.id !== 'attendance')
+                        .map((l) => {
+                          const checked = metricLabelIds.includes(l.id);
+                          return (
+                            <label
+                              key={l.id}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-blue-500/50 bg-blue-500/15 text-blue-200'
+                                  : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                className="sr-only"
+                                checked={checked}
+                                onChange={() => {
+                                  setMetricLabelIds((prev) => {
+                                    const next = checked
+                                      ? prev.filter((id) => id !== l.id)
+                                      : [...prev, l.id];
+                                    if (
+                                      !next.includes(metricPrimaryLabelId) &&
+                                      next.length > 0
+                                    ) {
+                                      setMetricPrimaryLabelId(next[0]);
+                                    }
+                                    return next;
+                                  });
+                                }}
+                              />
+                              {l.name}
+                            </label>
+                          );
+                        })}
+                    </div>
+                    <label className="block text-slate-400 font-semibold mb-1 mt-3">
+                      Primary category (formula standing) *
+                    </label>
+                    <select
+                      value={
+                        metricLabelIds.includes(metricPrimaryLabelId)
+                          ? metricPrimaryLabelId
+                          : metricLabelIds[0] || ''
+                      }
+                      onChange={(e) => setMetricPrimaryLabelId(e.target.value)}
+                      required
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                    >
+                      {metricLabelIds.map((id) => {
+                        const name =
+                          labels.find((l) => l.id === id)?.name || id;
+                        return (
+                          <option key={id} value={id}>
+                            {name}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Metric appears under every selected category; only the
+                      primary feeds that category&apos;s formula standing.
+                    </p>
+                  </>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">

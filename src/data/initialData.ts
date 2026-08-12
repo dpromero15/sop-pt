@@ -116,7 +116,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_attendance',
     name: 'Session Attendance',
-    labelId: 'attendance',
+    labelIds: ['attendance'],
+    primaryLabelId: 'attendance',
     type: 'attendance',
     unit: 'status',
     higherIsBetter: true,
@@ -126,7 +127,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_40m_dash',
     name: '40 Meter Dash',
-    labelId: 'speed',
+    labelIds: ['speed'],
+    primaryLabelId: 'speed',
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
@@ -138,7 +140,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_shuttle_run',
     name: '5-10-5 Agility Shuttle',
-    labelId: 'agility',
+    labelIds: ['agility'],
+    primaryLabelId: 'agility',
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
@@ -150,7 +153,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_juggling',
     name: 'Consecutive Juggles',
-    labelId: 'technical',
+    labelIds: ['technical'],
+    primaryLabelId: 'technical',
     type: 'count',
     unit: 'reps',
     higherIsBetter: true,
@@ -162,7 +166,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_pass_acc',
     name: 'Pass Completion Rate',
-    labelId: 'technical',
+    labelIds: ['technical'],
+    primaryLabelId: 'technical',
     type: 'percentage',
     unit: '%',
     higherIsBetter: true,
@@ -174,7 +179,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_goals',
     name: 'Goals Scored',
-    labelId: 'offense',
+    labelIds: ['offense'],
+    primaryLabelId: 'offense',
     type: 'count',
     unit: 'goals',
     higherIsBetter: true,
@@ -186,7 +192,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_assists',
     name: 'Key Assists',
-    labelId: 'offense',
+    labelIds: ['offense'],
+    primaryLabelId: 'offense',
     type: 'count',
     unit: 'assists',
     higherIsBetter: true,
@@ -198,7 +205,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_tackles',
     name: 'Tackles Won',
-    labelId: 'defense',
+    labelIds: ['defense'],
+    primaryLabelId: 'defense',
     type: 'count',
     unit: 'tackles',
     higherIsBetter: true,
@@ -210,7 +218,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_beep_test',
     name: 'Beep Test Level',
-    labelId: 'fitness',
+    labelIds: ['fitness'],
+    primaryLabelId: 'fitness',
     type: 'count',
     unit: 'level',
     higherIsBetter: true,
@@ -222,7 +231,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   {
     id: 'm_coach_rating',
     name: 'Work Ethic & Focus',
-    labelId: 'character',
+    labelIds: ['character'],
+    primaryLabelId: 'character',
     type: 'rating_10',
     unit: '/10',
     higherIsBetter: true,
@@ -233,36 +243,8 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
   }
 ];
 
-/** Optional derived stats — disabled by default; only computed when enabled. */
-export const DEFAULT_CALCULATED_FIELDS: CalculatedFieldDefinition[] = [
-  {
-    id: 'cf_40m_avg',
-    name: '40m Average',
-    kind: 'average',
-    baseMetricId: 'm_40m_dash',
-    enabled: false,
-    higherIsBetter: false,
-    unit: 's',
-  },
-  {
-    id: 'cf_40m_percentile',
-    name: '40m Percentile',
-    kind: 'percentile',
-    baseMetricId: 'm_40m_dash',
-    enabled: false,
-    higherIsBetter: true,
-    unit: '%',
-  },
-  {
-    id: 'cf_goals_per_match',
-    name: 'Goals per Match',
-    kind: 'per_session',
-    baseMetricId: 'm_goals',
-    enabled: false,
-    higherIsBetter: true,
-    unit: 'goals/match',
-  },
-];
+/** Calculated fields removed from product; keep empty for snapshot shape. */
+export const DEFAULT_CALCULATED_FIELDS: CalculatedFieldDefinition[] = [];
 
 export const INITIAL_PLAYERS: Player[] = [
   {

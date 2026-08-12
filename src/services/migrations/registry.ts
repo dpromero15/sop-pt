@@ -5,6 +5,9 @@ import { migration003RepairMetricsBlob } from './migrations/003_repair_metrics_b
 import { migration004PerTeamLocalCache } from './migrations/004_per_team_local_cache';
 import { migration005ComplianceBlocksPractice } from './migrations/005_compliance_blocks_practice';
 import { migration006AttendanceFormulaWeight } from './migrations/006_attendance_formula_weight';
+import { migration007AttendanceLabel } from './migrations/007_attendance_label';
+import { migration008ClearCalculatedFields } from './migrations/008_clear_calculated_fields';
+import { migration009MetricMultiLabels } from './migrations/009_metric_multi_labels';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -52,5 +55,26 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Ensure Attendance is enabled with a positive weight in the scoring formula.',
     up: migration006AttendanceFormulaWeight,
+  },
+  {
+    id: 7,
+    name: 'attendance_label',
+    description:
+      'Ensure Attendance system category label exists for Active Weights UI.',
+    up: migration007AttendanceLabel,
+  },
+  {
+    id: 8,
+    name: 'clear_calculated_fields',
+    description:
+      'Clear calculated-fields catalog; average is a metric aggregation mode.',
+    up: migration008ClearCalculatedFields,
+  },
+  {
+    id: 9,
+    name: 'metric_multi_labels',
+    description:
+      'Map legacy metric labelId → labelIds + primaryLabelId (multi-category).',
+    up: migration009MetricMultiLabels,
   },
 ];

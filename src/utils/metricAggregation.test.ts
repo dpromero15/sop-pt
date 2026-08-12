@@ -12,7 +12,8 @@ import type { MetricAggregationMode, MetricDefinition, MetricEntry } from '../ty
 const dash: MetricDefinition = {
   id: 'm_40m',
   name: '40m',
-  labelId: 'speed',
+  labelIds: ['speed'],
+    primaryLabelId: 'speed',
   type: 'time_seconds',
   unit: 's',
   higherIsBetter: false,
@@ -22,7 +23,8 @@ const dash: MetricDefinition = {
 const goals: MetricDefinition = {
   id: 'm_goals',
   name: 'Goals',
-  labelId: 'offense',
+  labelIds: ['offense'],
+    primaryLabelId: 'offense',
   type: 'count',
   unit: 'goals',
   higherIsBetter: true,
@@ -151,11 +153,24 @@ describe('aggregateMetricValue', () => {
     expect(aggregateMetricValue(entries, rating)).toBe(9);
   });
 
+  it('averages when mode is average', () => {
+    const dashAvg: MetricDefinition = {
+      ...dash,
+      aggregationMode: 'average',
+    };
+    const entries = [
+      entry('m_40m', 5.0, '2026-01-01T10:00:00Z'),
+      entry('m_40m', 6.0, '2026-01-08T10:00:00Z'),
+    ];
+    expect(aggregateMetricValue(entries, dashAvg)).toBe(5.5);
+  });
+
   it('averages attendance across sessions (ignores stored latest mode)', () => {
     const attendance: MetricDefinition = {
       id: 'm_attendance',
       name: 'Attendance',
-      labelId: 'attendance',
+      labelIds: ['attendance'],
+    primaryLabelId: 'attendance',
       type: 'attendance',
       unit: 'status',
       higherIsBetter: true,

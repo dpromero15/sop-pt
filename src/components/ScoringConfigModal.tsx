@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { X, Sliders, Lock } from 'lucide-react';
 import { LabelDefinition, ScoringFormulaConfig } from '../types';
 import { StorageService } from '../services/storage';
+import {
+  ATTENDANCE_LABEL,
+  DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+} from '../utils/formulaWeights';
 
 interface ScoringConfigModalProps {
   isOpen: boolean;
@@ -22,6 +26,13 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
 
   const isAttendance = (labelId: string) => labelId === 'attendance';
 
+  const weightLabels = (() => {
+    const withoutAtt = labels.filter((l) => l.id !== 'attendance');
+    const attendance =
+      labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+    return [attendance, ...withoutAtt];
+  })();
+
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
     const map: Record<string, { weightPercent: number; enabled: boolean }> = {};
     formula.weights.forEach(w => {
@@ -30,11 +41,20 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
         enabled: isAttendance(w.labelId) ? true : w.enabled,
       };
     });
-    labels.forEach(l => {
+    weightLabels.forEach(l => {
       if (!map[l.id]) {
-        map[l.id] = { weightPercent: 10, enabled: true };
+        map[l.id] = {
+          weightPercent: isAttendance(l.id) ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+          enabled: true,
+        };
       }
     });
+    if (!map.attendance) {
+      map.attendance = {
+        weightPercent: DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+        enabled: true,
+      };
+    }
     return map;
   });
 
@@ -92,8 +112,11 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
         </p>
 
         <div className="space-y-3">
-          {labels.map(lbl => {
-            const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
+          {weightLabels.map(lbl => {
+            const item = weightsMap[lbl.id] || {
+              weightPercent: isAttendance(lbl.id) ? DEFAULT_ATTENDANCE_WEIGHT_PERCENT : 10,
+              enabled: true,
+            };
             const locked = isAttendance(lbl.id);
             return (
               <div

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Scissors } from 'lucide-react';
 import type {
-  CalculatedFieldDefinition,
   LabelDefinition,
   MetricDefinition,
   RankingBoundariesConfig,
@@ -9,6 +8,7 @@ import type {
 } from '../types';
 import { StorageService } from '../services/storage';
 import { normalizeRankingBoundaries } from '../utils/rankingBoundaries';
+import { metricInCategory } from '../utils/metricLabels';
 
 type CutConfigMode = 'all' | 'scoped';
 
@@ -16,7 +16,6 @@ interface RankingBoundariesPanelProps {
   boundaries: RankingBoundariesConfig;
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
-  calculatedFields: CalculatedFieldDefinition[];
   onRefreshData: () => void;
 }
 
@@ -38,7 +37,6 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
   boundaries,
   labels,
   metrics,
-  calculatedFields,
   onRefreshData,
 }) => {
   const normalized = useMemo(
@@ -75,15 +73,10 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
     }
   }, [categoryId, categoryOptions]);
 
-  const measuresForCategory = useMemo(() => {
-    if (!categoryId) return { metrics: [] as MetricDefinition[], calculated: [] as CalculatedFieldDefinition[] };
-    const catMetrics = metrics.filter((m) => m.labelId === categoryId);
-    const catMetricIds = new Set(catMetrics.map((m) => m.id));
-    const catCalculated = calculatedFields.filter((f) =>
-      catMetricIds.has(f.baseMetricId),
-    );
-    return { metrics: catMetrics, calculated: catCalculated };
-  }, [categoryId, metrics, calculatedFields]);
+  const metricsForCategoryList = useMemo(() => {
+    if (!categoryId) return [] as MetricDefinition[];
+    return metrics.filter((m) => metricInCategory(m, categoryId));
+  }, [categoryId, metrics]);
 
   useEffect(() => {
     if (!categoryId) return;
@@ -176,8 +169,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
       <p className="text-sm text-slate-400">
         Visual cut lines on rankings. Use <strong className="text-slate-300">All rankings</strong> for
         overall Adjusted cuts (defaults 18 / 36), or{' '}
-        <strong className="text-slate-300">By category / metric</strong> for scoped lists
-        (including calculated averages when enabled).
+        <strong className="text-slate-300">By category / metric</strong> for scoped lists.
       </p>
 
       <div className="inline-flex rounded-xl border border-slate-700 bg-slate-950 p-0.5 text-xs font-semibold">
@@ -272,24 +264,16 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
               </select>
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-slate-400">
-                Metric / calculated field (optional)
-              </span>
+              <span className="text-xs text-slate-400">Metric (optional)</span>
               <select
                 value={measureId}
                 onChange={(e) => setMeasureId(e.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
                 <option value="">Entire category</option>
-                {measuresForCategory.metrics.map((m) => (
+                {metricsForCategoryList.map((m) => (
                   <option key={m.id} value={m.id}>
-                    Metric: {m.name}
-                  </option>
-                ))}
-                {measuresForCategory.calculated.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    Calculated{f.enabled ? '' : ' (off)'}: {f.name}
-                    {f.kind === 'average' ? ' · average' : ''}
+                    {m.name}
                   </option>
                 ))}
               </select>
@@ -317,7 +301,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
           </div>
           <p className="text-[11px] text-slate-500">
             {measureId
-              ? 'Saving applies when Rankings is sorted by this metric or calculated field.'
+              ? 'Saving applies when Rankings is sorted by this metric.'
               : 'Saving applies when Rankings is filtered to this category (no specific metric).'}
             {scopedSaved ? ' · Override saved for this scope.' : ''}
           </p>

@@ -6,7 +6,7 @@
 export const SCHEMA_VERSION_KEY = 'stm_schema_version_v1';
 
 /** Monotonic integer. Bump when adding a migration in `registry.ts`. */
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 9;
 
 export type MigrationStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 

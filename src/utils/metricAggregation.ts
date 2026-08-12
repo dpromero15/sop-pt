@@ -3,6 +3,7 @@ import type {
   MetricDefinition,
   MetricEntry,
 } from '../types';
+import { normalizeMetricLabels } from './metricLabels';
 
 type MetricAggregationHints = Pick<
   MetricDefinition,
@@ -24,31 +25,58 @@ export function defaultAggregationMode(
   return 'latest';
 }
 
-type MetricMigrationInput = MetricDefinition & {
+type MetricMigrationInput = Omit<
+  MetricDefinition,
+  'labelIds' | 'primaryLabelId' | 'aggregationMode'
+> & {
+  labelId?: string;
+  labelIds?: string[];
+  primaryLabelId?: string;
   aggregationMode?: MetricAggregationMode;
   includeInAdjustedTotal?: boolean;
   treatNoScoreAsZero?: boolean;
 };
 
-/** Ensure aggregationMode and Adjusted flags are set (returns a shallow copy when needed). */
+function sameLabelIds(a: string[], b: string[] | undefined): boolean {
+  if (!b || a.length !== b.length) return false;
+  return a.every((id, i) => id === b[i]);
+}
+
+/** Ensure labels, aggregationMode, and Adjusted flags (shallow copy when needed). */
 export function normalizeMetricDefinition(
   metric: MetricMigrationInput,
 ): MetricDefinition {
+  const withLabels = normalizeMetricLabels(metric);
   const aggregationMode =
-    metric.aggregationMode ?? defaultAggregationMode(metric);
-  const includeInAdjustedTotal = metric.includeInAdjustedTotal ?? true;
-  const treatNoScoreAsZero = metric.treatNoScoreAsZero ?? true;
+    withLabels.aggregationMode ?? defaultAggregationMode(withLabels);
+  const includeInAdjustedTotal = withLabels.includeInAdjustedTotal ?? true;
+  const treatNoScoreAsZero = withLabels.treatNoScoreAsZero ?? true;
 
-  if (
-    metric.aggregationMode === aggregationMode &&
-    metric.includeInAdjustedTotal === includeInAdjustedTotal &&
-    metric.treatNoScoreAsZero === treatNoScoreAsZero
-  ) {
-    return metric as MetricDefinition;
-  }
+  const {
+    labelId: _omit,
+    labelIds: _l,
+    primaryLabelId: _p,
+    aggregationMode: _a,
+    includeInAdjustedTotal: _i,
+    treatNoScoreAsZero: _t,
+    ...base
+  } = withLabels as MetricMigrationInput & {
+    labelId?: string;
+    labelIds: string[];
+    primaryLabelId: string;
+  };
 
   return {
-    ...metric,
+    ...(base as Omit<
+      MetricDefinition,
+      | 'labelIds'
+      | 'primaryLabelId'
+      | 'aggregationMode'
+      | 'includeInAdjustedTotal'
+      | 'treatNoScoreAsZero'
+    >),
+    labelIds: withLabels.labelIds,
+    primaryLabelId: withLabels.primaryLabelId,
     aggregationMode,
     includeInAdjustedTotal,
     treatNoScoreAsZero,
@@ -75,12 +103,17 @@ export function migrateMetricsAggregation(
 
   let changed = false;
   const next = metrics.map((m) => {
-    const normalized = normalizeMetricDefinition(m as MetricMigrationInput);
     const original = m as MetricMigrationInput;
+    const normalized = normalizeMetricDefinition(original);
+    const hadLegacy =
+      typeof (original as { labelId?: unknown }).labelId === 'string';
     if (
       normalized.aggregationMode !== original.aggregationMode ||
       normalized.includeInAdjustedTotal !== original.includeInAdjustedTotal ||
-      normalized.treatNoScoreAsZero !== original.treatNoScoreAsZero
+      normalized.treatNoScoreAsZero !== original.treatNoScoreAsZero ||
+      !sameLabelIds(normalized.labelIds, original.labelIds) ||
+      normalized.primaryLabelId !== original.primaryLabelId ||
+      hadLegacy
     ) {
       changed = true;
     }
@@ -129,6 +162,10 @@ export function aggregateMetricValueForEntries(
     return higherIsBetter ? Math.max(...values) : Math.min(...values);
   }
 
+  if (mode === 'average') {
+    return averageMetricValue(valid);
+  }
+
   // latest
   const sorted = [...valid].sort(
     (a, b) =>
@@ -137,7 +174,7 @@ export function aggregateMetricValueForEntries(
   return sorted[0].value;
 }
 
-/** Mean of valid entry values (for calculated average fields). */
+/** Mean of valid entry values. */
 export function averageMetricValue(validEntries: MetricEntry[]): number | null {
   const valid = validEntries.filter((e) => e.value >= 0);
   if (valid.length === 0) return null;

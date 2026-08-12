@@ -1,12 +1,23 @@
-# Metrics, aggregation, and calculated fields
+# Metrics, aggregation, and categories
 
 ## What
 
-Measurable metrics are coach-defined stats logged in sessions. Each metric has a **direction** (higher vs lower is better) and an **aggregation mode** that controls how entries roll up for rankings. Optional **calculated fields** are pre-built derived stats (average, per-session rate, percentile) that can be toggled on without being logged.
+Measurable metrics are coach-defined stats logged in sessions. Each metric has a **direction** (higher vs lower is better), an **aggregation mode** that controls how entries roll up for rankings, and one or more **category labels**.
 
 ## Why
 
-Coaches need season totals for goals, all-time best times for combine tests, and the ability to optionally surface averages or rates without changing how the primary metric ranks.
+Coaches need season totals for goals, all-time best times for combine tests, season averages (e.g. mean 40m) without a separate calculated-fields catalog, and the ability to show the same metric under multiple category tabs without double-counting it in the overall formula.
+
+## Categories (multi-membership)
+
+| Field | Role |
+|---|---|
+| `labelIds` | Categories where the metric appears (Rankings filters, Config) |
+| `primaryLabelId` | Category that owns **formula standing** (must be in `labelIds`) |
+
+Secondary categories are browse/org only. Example: 40m under Speed **and** Fitness appears on both tabs, but only the primary feeds formula standing.
+
+Attendance is locked to the Attendance system label.
 
 ## Aggregation modes
 
@@ -14,13 +25,16 @@ Coaches need season totals for goals, all-time best times for combine tests, and
 |---|---|---|
 | `sum` | Goals, assists, tackles | Add all logged values (season total) |
 | `best` | 40m dash, shuttle, max juggles | Best value — **min** if lower-is-better, **max** if higher-is-better |
+| `average` | Mean across logged entries (e.g. 40m average) | Arithmetic mean of valid entries |
 | `latest` | Ratings, latest % | Most recent entry by timestamp |
 
 Legacy metrics without `aggregationMode` are migrated on load via `defaultAggregationMode` (time → `best`, goals/assists/tackles → `sum`, else `latest`).
 
+Set aggregation under Config → Measured Metrics → **How to use (aggregation)**.
+
 ## Rankings display
 
-When a specific measurable metric tag is selected, the leaderboard shows the **aggregated raw value** with unit (e.g. `5.12s`, `14 goals`), sorted by that value and direction.
+When a specific measurable metric tag is selected, the leaderboard shows the **aggregated raw value** with unit (e.g. `5.12s`, `14 goals`), sorted by that value and direction. An informational **Team** strip shows squad average, best, and how many players have scored that metric.
 
 ### Statistical Rank vs Adjusted Rank
 
@@ -36,7 +50,7 @@ A global **Rankings** toggle (not part of Rank by) applies to every category and
 
 Formula label weights still mix categories into the standing score that is then ranked. Primary display on the board is the **pool place** (`#1`, `#2`…), with standing score as secondary detail.
 
-**Rank by** only lists measurable metrics and calculated fields. With none selected, the board ranks by formula standing (All Categories) or category standing — using whichever Rankings mode is active. Tap a selected metric again to clear it.
+**Rank by** lists measurable metrics only. With none selected, the board ranks by formula standing (All Categories) or category standing — using whichever Rankings mode is active. Tap a selected metric again to clear it.
 
 #### Adjusted metric flags
 
@@ -66,31 +80,18 @@ Attendance rate on cards uses the same Statistical rules (present/late/absent on
 
 Never-scored players sort last under an **Unscored** divider when ranking by Statistical Rank (or any mode where the value is null).
 
-## Calculated fields
-
-Stored separately (`stm_calculated_fields_v1`). Catalog seeds include:
-
-- **40m Average** (`average` of 40m entries)
-- **40m Percentile** (share of squad with a worse aggregated 40m)
-- **Goals per Match** (`sum` / distinct sessions with goals)
-
-Rules:
-
-- Not logged in Quick Insert / sessions
-- Only **enabled** fields are computed
-- Appear as optional ranking tags when enabled
-- Primary base metric still uses its aggregation mode
-
 ## Config
 
-Config → Measured Metrics: add or **edit** name, category, type, unit, direction, aggregation, expected min/max, and Adjusted flags (Include in Adjusted total / Treat no score as 0).  
-Config → Calculated Fields: toggle each catalog field on/off.  
+Config → Measured Metrics: add or **edit** name, **categories** (multi-select) + **primary** category, type, unit, direction, aggregation, expected min/max, and Adjusted flags (Include in Adjusted total / Treat no score as 0).  
 Config → Formula: Attendance stays **always on** as a system default (cannot disable); coaches can change its weight percent.
+
+Calculated fields were removed (schema v8); use aggregation mode **average** instead of a separate “40m Average” field. Multi-category metrics use schema v9 (`labelIds` / `primaryLabelId`).
 
 ## Touchpoints
 
 - Types: `src/types.ts`
+- Labels helpers: `src/utils/metricLabels.ts`
 - Aggregation: `src/utils/metricAggregation.ts`
-- Calculated: `src/utils/calculatedFields.ts`
 - Scoring: `src/utils/scoring.ts`
-- UI: `ConfigView.tsx`, `RankingsView.tsx`, `PlayersView.tsx`, `PlayerProfileModal.tsx`
+- Rankings filter / team summary: `src/utils/rankingsFilter.ts`
+- UI: `ConfigView.tsx`, `RankingsView.tsx`

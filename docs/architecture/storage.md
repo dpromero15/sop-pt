@@ -51,17 +51,22 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Versioned runner:** `src/services/migrations` (`stm_schema_version_v1`). Boot + Admin “Data migrations” + post-import/hydrate. See `.cursor/skills/data-migrations/SKILL.md`.
 - **Compliance (v5):** requirements gain `blocksPractice` (default false) and may include `kind: 'disciplinary'` (e.g. red-card sit-out). Migration backfills missing `blocksPractice` and seeds `req_red_card_sitout` when absent.
 - **Formula (v6):** Attendance is always enabled in the scoring formula with a positive weight (default 20% if missing/disabled). Season attendance rate feeds that weight directly.
+- **Labels (v7):** Attendance category label is always restored as `system: true` so Active Weights and Config always show it.
+- **Calculated fields (v8):** Stored calculated-fields catalog cleared; use metric `aggregationMode: 'average'` instead.
+- **Metrics (v9):** `labelId` → `labelIds[]` + `primaryLabelId` (multi-category membership; primary owns formula standing).
 
 ### Metric definition fields
 
-`id`, `name`, `labelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
+`id`, `name`, `labelIds`, `primaryLabelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
 
-- **`aggregationMode`:** `sum` | `best` | `latest` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)). Attendance always averages present/late/absent regardless of stored mode.
-- **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`).
+- **`labelIds`:** Categories where the metric appears in Rankings / Config filters (non-empty).
+- **`primaryLabelId`:** Category that receives formula standing contribution (must be in `labelIds`). Secondary memberships are browse-only.
+- **`aggregationMode`:** `sum` | `best` | `latest` | `average` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)). Attendance always averages present/late/absent regardless of stored mode.
+- **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`). Legacy `labelId` is mapped to `labelIds` / `primaryLabelId` on load and via schema v9.
 
 ### Calculated fields
 
-Pre-built derived stats (`average`, `per_session`, `percentile`) with `enabled` toggles. Not session-logged. See [sop/metrics.md](../sop/metrics.md).
+Legacy catalog cleared in schema v8. Prefer metric aggregation modes (including `average`) instead of separate calculated-field definitions.
 
 ### Write policy
 
