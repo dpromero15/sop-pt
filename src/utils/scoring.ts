@@ -113,7 +113,9 @@ export function assignCompetitionRanks(
 /**
  * Calculates complete player rankings based on current metric entries and formula weights.
  *
- * Standing scores use **squad pool percentiles** per metric (not absolute min/max).
+ * Standing scores use **squad pool percentiles** per metric (not absolute min/max),
+ * except **Attendance**, which uses the season attendance rate (0–100) directly so
+ * the Attendance formula weight reflects reliability.
  * - **Statistical** omits unscored / excused values.
  * - **Adjusted** uses metrics with `includeInAdjustedTotal !== false`; missing
  *   values count as 0 when `treatNoScoreAsZero !== false`, otherwise omitted.
@@ -182,12 +184,16 @@ export function calculatePlayerRankings(
       labelMetrics.forEach((m) => {
         const aggregated = playerAgg.get(m.id) ?? null;
         if (aggregated !== null) {
-          const squad = squadByMetric.get(m.id) ?? [];
-          const poolScore = percentileAmong(
-            aggregated,
-            squad,
-            m.higherIsBetter,
-          );
+          // Attendance is already a 0–100 reliability rate; use it directly
+          // in the formula blend so the Attendance weight reflects season rate.
+          const poolScore =
+            m.type === 'attendance'
+              ? Math.min(100, Math.max(0, aggregated))
+              : percentileAmong(
+                  aggregated,
+                  squadByMetric.get(m.id) ?? [],
+                  m.higherIsBetter,
+                );
           metricDetails.push({
             metricId: m.id,
             metricName: m.name,

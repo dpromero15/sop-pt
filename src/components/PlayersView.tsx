@@ -10,6 +10,7 @@ import {
   Download,
   Upload,
   Award,
+  ClipboardList,
 } from 'lucide-react';
 import {
   Player,
@@ -27,7 +28,9 @@ import {
   applyEligibilityToAdjustedRanks,
   eligiblePlayerIdSet,
   isEligibleToPlay,
+  isEligibleToPractice,
   missingBlockingRequirements,
+  missingPracticeBlockingRequirements,
 } from '../utils/eligibility';
 import {
   buildPlayerCsvTemplate,
@@ -35,10 +38,11 @@ import {
   parseAndValidatePlayerCsv,
 } from '../utils/playerCsv';
 import { CoachesRatingView } from './CoachesRatingView';
+import { ComplianceBoardView } from './ComplianceBoardView';
 import { defaultAvatarFor } from '../constants/avatars';
 import { flushNow } from '../services/storage/cloudSync';
 
-type PlayersPane = 'roster' | 'coaches';
+type PlayersPane = 'roster' | 'coaches' | 'compliance';
 
 interface PlayersViewProps {
   players: Player[];
@@ -92,6 +96,20 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   useEffect(() => {
     if (!allowCoachesRating && pane === 'coaches') setPane('roster');
   }, [allowCoachesRating, pane]);
+
+  const paneTitle =
+    pane === 'roster'
+      ? `Registered Players (${players.length})`
+      : pane === 'coaches'
+        ? 'Coaches Rating'
+        : 'Compliance';
+
+  const paneSubtitle =
+    pane === 'roster'
+      ? 'Manage your squad roster, positions, and individual score sheets.'
+      : pane === 'coaches'
+        ? 'Add coaches and submit ordinal ballots — complete ballots feed Rankings → Coaches Rank.'
+        : 'See who is out of compliance and update paperwork for the whole squad.';
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -261,14 +279,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
               <span>Squad</span>
             </div>
             <h2 className="text-2xl font-extrabold text-white tracking-tight">
-              {pane === 'roster'
-                ? `Registered Players (${players.length})`
-                : 'Coaches Rating'}
+              {paneTitle}
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              {pane === 'roster'
-                ? 'Manage your squad roster, positions, and individual score sheets.'
-                : 'Add coaches and submit ordinal ballots — complete ballots feed Rankings → Coaches Rank.'}
+              {paneSubtitle}
             </p>
           </div>
 
@@ -322,8 +336,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         </div>
       </div>
 
-      {/* Roster vs Coaches Rating */}
-      {allowCoachesRating && (
+      {/* Roster / Compliance / Coaches Rating */}
       <div
         className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
         role="group"
@@ -343,31 +356,63 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         </button>
         <button
           type="button"
-          onClick={() => setPane('coaches')}
+          onClick={() => setPane('compliance')}
           className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-            pane === 'coaches'
+            pane === 'compliance'
               ? 'bg-amber-500 text-slate-950 shadow-sm'
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <Award className="w-3.5 h-3.5" />
-          Coaches Rating
-          {coaches.length > 0 && (
+          <ClipboardList className="w-3.5 h-3.5" />
+          Compliance
+          {complianceRequirements.length > 0 && (
             <span
               className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
-                pane === 'coaches'
+                pane === 'compliance'
                   ? 'bg-slate-950/20 text-slate-950'
                   : 'bg-slate-800 text-slate-300'
               }`}
             >
-              {coaches.length}
+              {complianceRequirements.length}
             </span>
           )}
         </button>
+        {allowCoachesRating && (
+          <button
+            type="button"
+            onClick={() => setPane('coaches')}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              pane === 'coaches'
+                ? 'bg-violet-500 text-white shadow-sm'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            Coaches Rating
+            {coaches.length > 0 && (
+              <span
+                className={`ml-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                  pane === 'coaches'
+                    ? 'bg-slate-950/20 text-white'
+                    : 'bg-slate-800 text-slate-300'
+                }`}
+              >
+                {coaches.length}
+              </span>
+            )}
+          </button>
+        )}
       </div>
-      )}
 
-      {pane === 'coaches' && allowCoachesRating ? (
+      {pane === 'compliance' ? (
+        <ComplianceBoardView
+          players={players}
+          requirements={complianceRequirements}
+          playerCompliance={playerCompliance}
+          onRefreshData={onRefreshData}
+          readOnly={readOnlyRoster}
+        />
+      ) : pane === 'coaches' && allowCoachesRating ? (
         <CoachesRatingView
           coaches={coaches}
           ballots={coachBallots}
@@ -423,7 +468,17 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
             complianceRequirements,
             playerCompliance,
           );
+          const practiceEligible = isEligibleToPractice(
+            player.id,
+            complianceRequirements,
+            playerCompliance,
+          );
           const missing = missingBlockingRequirements(
+            player.id,
+            complianceRequirements,
+            playerCompliance,
+          );
+          const missingPractice = missingPracticeBlockingRequirements(
             player.id,
             complianceRequirements,
             playerCompliance,
@@ -460,6 +515,14 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                             title={missing.map((m) => m.name).join(', ')}
                           >
                             Ineligible
+                          </span>
+                        )}
+                        {!practiceEligible && (
+                          <span
+                            className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[11px] font-bold border border-amber-500/30"
+                            title={missingPractice.map((m) => m.name).join(', ')}
+                          >
+                            No practice
                           </span>
                         )}
                       </div>
@@ -657,6 +720,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                           {req.blocksPlay && (
                             <span className="ml-1.5 text-[10px] uppercase text-rose-300">
                               blocks play
+                            </span>
+                          )}
+                          {req.blocksPractice && (
+                            <span className="ml-1.5 text-[10px] uppercase text-amber-300">
+                              blocks practice
                             </span>
                           )}
                         </span>

@@ -43,6 +43,7 @@ import {
   isCompleteBallot,
 } from '../utils/coachesRating';
 import { specialtyAdjustedRankings } from '../utils/eligibility';
+import { resolveActiveCutLines } from '../utils/rankingBoundaries';
 import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
@@ -319,24 +320,32 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     [rankings],
   );
 
-  const activeCutLines = useMemo(() => {
-    if (specialtyPosition) {
-      const cut =
-        rankingBoundaries.specialtyCuts[specialtyPosition] ??
-        (specialtyPosition === 'GK' ? 4 : null);
-      return cut != null ? [cut] : [];
-    }
-    if (effectiveTotalMode !== 'adjusted') return [];
-    return [rankingBoundaries.primaryCut, rankingBoundaries.secondaryCut].sort(
-      (a, b) => a - b,
-    );
-  }, [
-    specialtyPosition,
-    effectiveTotalMode,
-    rankingBoundaries.primaryCut,
-    rankingBoundaries.secondaryCut,
-    rankingBoundaries.specialtyCuts,
-  ]);
+  const activeCutLines = useMemo(
+    () =>
+      resolveActiveCutLines({
+        boundaries: rankingBoundaries,
+        specialtyPosition,
+        selectedLabelId,
+        selectedMetricId,
+        totalMode: effectiveTotalMode,
+      }),
+    [
+      rankingBoundaries,
+      specialtyPosition,
+      selectedLabelId,
+      selectedMetricId,
+      effectiveTotalMode,
+    ],
+  );
+
+  const cutLinesUseListPlace = Boolean(
+    !specialtyPosition &&
+      ((selectedMetricId &&
+        rankingBoundaries.metricCuts?.[selectedMetricId]) ||
+        (selectedLabelId &&
+          selectedLabelId !== 'all' &&
+          rankingBoundaries.categoryCuts?.[selectedLabelId])),
+  );
 
   const activePlayerIds = useMemo(
     () => activePlayers(rosterPlayers).map((p) => p.id),
@@ -1138,6 +1147,31 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               idx > 0 ? rankForMode(sortedRankings[idx - 1], effectiveTotalMode) : null;
             const curDisplayRank = rankForMode(item, effectiveTotalMode);
             const crossedCuts = activeCutLines.filter((cut) => {
+              if (cutLinesUseListPlace) {
+                if (unscored || ineligible) return false;
+                let place = 0;
+                for (let i = 0; i <= idx; i++) {
+                  const row = sortedRankings[i];
+                  const rowIneligible =
+                    effectiveTotalMode === 'adjusted' &&
+                    row.eligibleToPlay === false;
+                  if (rowIneligible) continue;
+                  const rowUnscored = individualCoachOrdinals
+                    ? !individualCoachOrdinals.has(row.player.id)
+                    : isUnscoredForRankMode(
+                        row,
+                        sortBy,
+                        selectedLabelId,
+                        selectedMetricId,
+                        metrics,
+                        effectiveTotalMode,
+                      );
+                  if (rowUnscored) continue;
+                  place += 1;
+                }
+                const prevPlace = place - 1;
+                return prevPlace > 0 && prevPlace <= cut && place > cut;
+              }
               if (effectiveTotalMode !== 'adjusted' || sortBy !== 'total') {
                 return false;
               }

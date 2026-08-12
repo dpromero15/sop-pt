@@ -150,6 +150,24 @@ describe('aggregateMetricValue', () => {
     ];
     expect(aggregateMetricValue(entries, rating)).toBe(9);
   });
+
+  it('averages attendance across sessions (ignores stored latest mode)', () => {
+    const attendance: MetricDefinition = {
+      id: 'm_attendance',
+      name: 'Attendance',
+      labelId: 'attendance',
+      type: 'attendance',
+      unit: 'status',
+      higherIsBetter: true,
+      aggregationMode: 'latest',
+    };
+    const entries = [
+      entry('m_attendance', 100, '2026-01-01T10:00:00Z', 's1'),
+      entry('m_attendance', 0, '2026-01-08T10:00:00Z', 's2'),
+      entry('m_attendance', -1, '2026-01-15T10:00:00Z', 's3'),
+    ];
+    expect(aggregateMetricValue(entries, attendance)).toBe(50);
+  });
 });
 
 describe('average and per-session', () => {

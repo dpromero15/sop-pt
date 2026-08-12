@@ -121,7 +121,7 @@ export const DEFAULT_METRICS: MetricDefinition[] = [
     unit: 'status',
     higherIsBetter: true,
     aggregationMode: 'latest',
-    description: 'Present (100%), Late (50%), Absent (0%), Excused (Exempt)'
+    description: 'Present (100%), Late (50%), Absent (0%), Excused (Exempt). Season rate feeds the Attendance formula weight.',
   },
   {
     id: 'm_40m_dash',
@@ -449,6 +449,10 @@ export const DEFAULT_PLAYER_COMPLIANCE: PlayerComplianceState =
           complete: true,
           completedAt: '2026-01-01T00:00:00.000Z',
         },
+        req_red_card_sitout: {
+          complete: true,
+          completedAt: '2026-01-01T00:00:00.000Z',
+        },
       },
     ]),
   );
@@ -587,6 +591,7 @@ export const DEFAULT_COMPLIANCE_REQUIREMENTS: ComplianceRequirement[] = [
     name: 'Sports Physical',
     kind: 'paperwork',
     blocksPlay: true,
+    blocksPractice: true,
     description: 'Current sports physical on file',
     sortOrder: 1,
   },
@@ -595,6 +600,7 @@ export const DEFAULT_COMPLIANCE_REQUIREMENTS: ComplianceRequirement[] = [
     name: 'School Agreement',
     kind: 'paperwork',
     blocksPlay: true,
+    blocksPractice: true,
     description: 'School athletic participation agreement',
     sortOrder: 2,
   },
@@ -603,8 +609,19 @@ export const DEFAULT_COMPLIANCE_REQUIREMENTS: ComplianceRequirement[] = [
     name: 'Season Fee',
     kind: 'fee',
     blocksPlay: false,
+    blocksPractice: false,
     description: 'Season registration fee paid',
     sortOrder: 3,
+  },
+  {
+    id: 'req_red_card_sitout',
+    name: 'Red card sit-out',
+    kind: 'disciplinary',
+    blocksPlay: true,
+    blocksPractice: false,
+    description:
+      'Flag after a red card; leave incomplete until the player has sat out the next match',
+    sortOrder: 4,
   },
 ];
 
@@ -616,4 +633,6 @@ export const DEFAULT_RANKING_BOUNDARIES: RankingBoundariesConfig = {
   primaryCut: 18,
   secondaryCut: 36,
   specialtyCuts: { GK: 4 },
+  categoryCuts: {},
+  metricCuts: {},
 };

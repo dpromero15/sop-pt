@@ -191,8 +191,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setIsMetricModalOpen(true);
   };
 
-  const isWeightLocked = (lbl: LabelDefinition) =>
+  const isSystemLabel = (lbl: LabelDefinition) =>
     Boolean(lbl.system) || lbl.id === 'attendance';
+
+  /** Attendance stays on in the formula; coaches can still change its %. */
+  const isWeightToggleLocked = (lbl: LabelDefinition) => isSystemLabel(lbl);
 
   // Handle weight change
   const handleWeightChange = (labelId: string, val: number) => {
@@ -214,7 +217,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     const updatedWeights = Object.entries(weightsMap).map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
       labelId,
       weightPercent: item.weightPercent,
-      enabled: item.enabled
+      enabled: labelId === 'attendance' ? true : item.enabled,
     }));
 
     StorageService.saveFormula({
@@ -253,10 +256,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       updated['fitness'] = { weightPercent: 25, enabled: true };
     }
 
-    // Keep system-locked categories (e.g. Attendance) at their current weights.
+    // System categories stay enabled; preset may still update their %.
     labels.forEach((l) => {
-      if (isWeightLocked(l) && weightsMap[l.id]) {
-        updated[l.id] = { ...weightsMap[l.id] };
+      if (isWeightToggleLocked(l) && updated[l.id]) {
+        updated[l.id] = { ...updated[l.id], enabled: true };
       }
     });
 
@@ -487,6 +490,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       />
       <RankingBoundariesPanel
         boundaries={rankingBoundaries}
+        labels={labels}
+        metrics={metrics}
+        calculatedFields={calculatedFields}
         onRefreshData={onRefreshData}
       />
 
@@ -553,7 +559,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               Scoring Formula & Label Configurator
             </h2>
             <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Configure exact category label weightings to calculate total player score (e.g. Attendance + Offense + Defense + Speed).
+              Configure exact category label weightings to calculate total player score (e.g. Attendance + Offense + Defense + Speed). Attendance stays on as a system default; set its % to control how much reliability counts.
             </p>
           </div>
 
@@ -610,7 +616,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {labels.map(lbl => {
             const item = weightsMap[lbl.id] || { weightPercent: 10, enabled: true };
-            const locked = isWeightLocked(lbl);
+            const toggleLocked = isWeightToggleLocked(lbl);
             return (
               <div
                 key={lbl.id}
@@ -623,15 +629,15 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     <input
                       type="checkbox"
                       checked={item.enabled}
-                      onChange={() => !locked && handleToggleLabelEnabled(lbl.id)}
-                      disabled={locked}
+                      onChange={() => !toggleLocked && handleToggleLabelEnabled(lbl.id)}
+                      disabled={toggleLocked}
                       className="w-4 h-4 rounded text-rose-500 focus:ring-rose-500 bg-slate-900 border-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
                     />
                     <span className="font-bold text-sm text-white">{lbl.name}</span>
-                    {locked && (
+                    {toggleLocked && (
                       <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-bold">
                         <Lock className="w-2.5 h-2.5" />
-                        System
+                        Always on
                       </span>
                     )}
                   </div>
@@ -646,15 +652,14 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 {item.enabled && (
                   <input
                     type="range"
-                    min={0}
+                    min={toggleLocked ? 5 : 0}
                     max={50}
                     step={5}
                     value={item.weightPercent}
                     onChange={(e) =>
-                      !locked && handleWeightChange(lbl.id, parseInt(e.target.value))
+                      handleWeightChange(lbl.id, parseInt(e.target.value))
                     }
-                    disabled={locked}
-                    className="w-full accent-rose-500 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full accent-rose-500 cursor-pointer"
                   />
                 )}
               </div>
@@ -819,7 +824,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             <span>Calculated Fields</span>
           </h3>
           <p className="text-slate-400 text-xs mt-1">
-            Pre-built derived stats (average, per-match rate, percentile). Enable only what you need — disabled fields are not computed.
+            Pre-built derived stats — <strong className="text-slate-300">average</strong>,
+            per-match rate, and percentile — for existing metrics. Enable only what you
+            need (e.g. 40m Average); disabled fields are not computed.
           </p>
         </div>
 
