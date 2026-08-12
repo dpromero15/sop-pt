@@ -147,6 +147,40 @@ export function membershipAtLeast(
   return ROLE_RANK[role] >= ROLE_RANK[minimum];
 }
 
+/**
+ * API Gateway (x-google-backend) strips Authorization and forwards the verified
+ * JWT payload as base64url(JSON) in X-Apigateway-Api-Userinfo. Local/dev still
+ * uses Bearer ID tokens. Only the gateway SA can invoke Cloud Run, so forged
+ * userinfo from the public internet cannot reach this process.
+ */
+function identityFromGatewayUserinfo(req: AuthedRequest): {
+  uid: string;
+  email: string;
+  displayName: string | null;
+  photoURL: string | null;
+} | null {
+  const raw = req.header('x-apigateway-api-userinfo');
+  if (!raw) return null;
+  try {
+    const json = Buffer.from(raw, 'base64url').toString('utf8');
+    const payload = JSON.parse(json) as Record<string, unknown>;
+    const uid =
+      (typeof payload.user_id === 'string' && payload.user_id) ||
+      (typeof payload.sub === 'string' && payload.sub) ||
+      '';
+    const email = typeof payload.email === 'string' ? payload.email : '';
+    if (!uid || !email) return null;
+    return {
+      uid,
+      email,
+      displayName: typeof payload.name === 'string' ? payload.name : null,
+      photoURL: typeof payload.picture === 'string' ? payload.picture : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function requireAuth(
   req: AuthedRequest,
   res: Response,
@@ -158,29 +192,46 @@ export async function requireAuth(
       return;
     }
 
-    const header = req.header('authorization') || '';
-    const match = header.match(/^Bearer\s+(.+)$/i);
-    if (!match) {
-      res.status(401).json({ error: 'Missing Bearer token' });
-      return;
-    }
+    const fromGateway = identityFromGatewayUserinfo(req);
+    let uid: string;
+    let email: string;
+    let displayName: string | null;
+    let photoURL: string | null;
 
-    const decoded = await getAdmin().auth().verifyIdToken(match[1]);
-    if (!decoded.email) {
-      res.status(403).json({ error: 'Authenticated user must have an email' });
-      return;
+    if (fromGateway) {
+      uid = fromGateway.uid;
+      email = fromGateway.email;
+      displayName = fromGateway.displayName;
+      photoURL = fromGateway.photoURL;
+    } else {
+      const header = req.header('authorization') || '';
+      const match = header.match(/^Bearer\s+(.+)$/i);
+      if (!match) {
+        res.status(401).json({ error: 'Missing Bearer token' });
+        return;
+      }
+
+      const decoded = await getAdmin().auth().verifyIdToken(match[1]);
+      if (!decoded.email) {
+        res.status(403).json({ error: 'Authenticated user must have an email' });
+        return;
+      }
+      uid = decoded.uid;
+      email = decoded.email;
+      displayName = typeof decoded.name === 'string' ? decoded.name : null;
+      photoURL = typeof decoded.picture === 'string' ? decoded.picture : null;
     }
 
     const appUser = await upsertAppUser({
-      uid: decoded.uid,
-      email: decoded.email,
-      displayName: typeof decoded.name === 'string' ? decoded.name : null,
-      photoURL: typeof decoded.picture === 'string' ? decoded.picture : null,
+      uid,
+      email,
+      displayName,
+      photoURL,
     });
 
     req.user = {
-      uid: decoded.uid,
-      email: decoded.email,
+      uid,
+      email,
       displayName: appUser.displayName,
       photoURL: appUser.photoURL,
       systemAdmin: appUser.systemRole === 'systemAdmin',

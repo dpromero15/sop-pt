@@ -161,4 +161,7 @@ export interface StorageRepository {
   exportFullBackupJSON(): string;
   importFullBackupJSON(jsonString: string): boolean;
   getSnapshot(): TeamSnapshot;
+  applySnapshot(snapshot: TeamSnapshot, opts?: { migrate?: boolean }): void;
+  setTeamScope(teamId: string, opts?: { holdSeeds?: boolean }): void;
+  getTeamScopeId(): string;
 }

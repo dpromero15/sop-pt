@@ -6,7 +6,7 @@ import {
   runLocalMigrations,
   SCHEMA_VERSION_KEY,
 } from './index';
-import { STORAGE_KEYS } from '../storage/storageKeys';
+import { STORAGE_KEYS, scopedStorageKey } from '../storage/storageKeys';
 
 function memoryStorage() {
   const map = new Map<string, string>();
@@ -65,6 +65,8 @@ describe('runLocalMigrations', () => {
     expect(team.timezone).toBeTruthy();
 
     expect(getMigrationStatus(store).upToDate).toBe(true);
+
+    expect(store.getItem(scopedStorageKey('t1', STORAGE_KEYS.TEAM))).toBeTruthy();
   });
 
   it('repair re-runs from zero idempotently', () => {
@@ -115,7 +117,7 @@ describe('runLocalMigrations', () => {
 
     const report = runLocalMigrations(store);
     expect(report.error).toBeUndefined();
-    expect(report.toVersion).toBe(3);
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
 
     const metrics = JSON.parse(store.getItem(STORAGE_KEYS.METRICS)!);
     expect(Array.isArray(metrics)).toBe(true);

@@ -32,6 +32,8 @@ import {
 } from '../services/firebase';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
 import { StorageService } from '../services/storage';
+import { enterTeamCloudSync } from '../services/storage/cloudSync';
+import { ACTIVE_TEAM_KEY } from '../services/storage/storageKeys';
 import { DEFAULT_TEAM } from '../data/initialData';
 import {
   can as canRole,
@@ -111,6 +113,7 @@ function buildDebugMockUser(live: AuthState): AppUser {
 
 /** Wipe local roster so empty-coach QA is reproducible. Local simulate only. */
 function applyEmptyRosterCoachLocalData(): void {
+  StorageService.setTeamScope(DEV_EMPTY_ROSTER_TEAM_ID);
   const now = new Date().toISOString();
   StorageService.saveTeam({
     ...DEFAULT_TEAM,
@@ -157,7 +160,6 @@ interface AccessContextValue {
 
 const AccessContext = createContext<AccessContextValue | null>(null);
 
-const ACTIVE_TEAM_KEY = 'stm_active_team_id_v1';
 const WORKSPACE_READY_KEY = 'stm_workspace_ready_v1';
 /** Browser claimed a local squad (no Cloud API yet). */
 const LOCAL_SQUAD_CLAIMED_KEY = 'stm_local_squad_claimed_v1';
@@ -308,6 +310,11 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
     void refreshSession();
   }, [refreshSession]);
 
+  useEffect(() => {
+    if (!workspaceReady || !activeTeamId || !auth.signedIn) return;
+    void enterTeamCloudSync(activeTeamId);
+  }, [workspaceReady, activeTeamId, auth.signedIn]);
+
   const setActiveTeamId = (id: string | null) => {
     setActiveTeamIdState(id);
     try {
@@ -319,6 +326,11 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const enterWorkspace = (teamId: string | null) => {
+    if (teamId) {
+      StorageService.setTeamScope(teamId, {
+        holdSeeds: Boolean(getApiBaseUrl()) && !isLocalDebugMockAuth(),
+      });
+    }
     setActiveTeamId(teamId);
     setWorkspaceReady(true);
     try {

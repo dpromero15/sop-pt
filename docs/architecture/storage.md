@@ -12,14 +12,25 @@ Isolates team config from high-churn entries, simplifies sync, and mirrors clean
 
 | Collection | Shape | Local key | Firestore |
 |---|---|---|---|
-| `team` | single `Team` | `stm_team_v1` | `teams/{teamId}` |
-| `players` | `Player[]` / docs | `stm_players_v1` | `teams/{teamId}/players/{playerId}` |
-| `sessions` | `Session[]` / docs | `stm_sessions_v1` | `teams/{teamId}/sessions/{sessionId}` |
-| `entries` | `MetricEntry[]` / docs | `stm_entries_v1` | `teams/{teamId}/entries/{entryId}` |
-| `metrics` | `MetricDefinition[]` blob | `stm_metrics_v1` | `teams/{teamId}/config/metrics` |
-| `labels` | `LabelDefinition[]` blob | `stm_labels_v1` | `teams/{teamId}/config/labels` |
-| `formula` | `ScoringFormulaConfig` blob | `stm_formula_v1` | `teams/{teamId}/config/formula` |
-| `calculatedFields` | `CalculatedFieldDefinition[]` blob | `stm_calculated_fields_v1` | `teams/{teamId}/config/calculatedFields` |
+| `team` | single `Team` | `stm_t/{teamId}/stm_team_v1` | `teams/{teamId}` |
+| `players` | `Player[]` / docs | `stm_t/{teamId}/stm_players_v1` | `teams/{teamId}/players/{playerId}` |
+| `sessions` | `Session[]` / docs | `stm_t/{teamId}/stm_sessions_v1` | `teams/{teamId}/sessions/{sessionId}` |
+| `entries` | `MetricEntry[]` / docs | `stm_t/{teamId}/stm_entries_v1` | `teams/{teamId}/entries/{entryId}` |
+| `metrics` | `MetricDefinition[]` blob | `stm_t/{teamId}/stm_metrics_v1` | `teams/{teamId}/config/metrics` |
+| `labels` | `LabelDefinition[]` blob | `stm_t/{teamId}/stm_labels_v1` | `teams/{teamId}/config/labels` |
+| `formula` | `ScoringFormulaConfig` blob | `stm_t/{teamId}/stm_formula_v1` | `teams/{teamId}/config/formula` |
+| `calculatedFields` | `CalculatedFieldDefinition[]` blob | `stm_t/{teamId}/stm_calculated_fields_v1` | `teams/{teamId}/config/calculatedFields` |
+
+Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migration **004**.
+
+### JIT cloud sync (v2.9)
+
+- Local write first. UI never waits on the network.
+- Hydrate **once** on team enter (`GET /v1/teams/:id/snapshot`).
+- Dirty collections flush after ~10s debounce, on `online`, or when the tab hides. One PUT per dirty collection.
+- If cloud is empty and this device has a roster (e.g. JSON import), the first enter **pushes** that squad.
+- Simulated auth / missing `VITE_API_BASE_URL` stays local-only.
+- SPA never talks to Firestore; Cloud Run Admin SDK remains the write path.
 
 ### Team fields
 
@@ -50,5 +61,5 @@ Pre-built derived stats (`average`, `per_session`, `percentile`) with `enabled` 
 
 ### Write policy
 
-- **Local adapter:** synchronous `localStorage` JSON
-- **Cloud:** document-per-entity for players/sessions/entries; single config docs for metrics/labels/formula; team root doc for profile
+- **Local adapter:** synchronous `localStorage` JSON, namespaced per team
+- **Cloud:** document-per-entity for players/sessions/entries; config docs for metrics/labels/formula plus coaches/bumps/compliance/equipment; team root doc for profile. JIT flush via Cloud Run, not the client SDK.

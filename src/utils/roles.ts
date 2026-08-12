@@ -75,8 +75,9 @@ export function can(role: AppRole, action: AccessAction): boolean {
       return roleAtLeast(role, 'teamAdmin');
     case 'manageAllTeams':
     case 'promoteSystemAdmin':
-    case 'cloudSync':
       return role === 'systemAdmin';
+    case 'cloudSync':
+      return roleAtLeast(role, 'dataEntry');
     case 'manageTeamMembers':
       return roleAtLeast(role, 'teamAdmin');
     default:

@@ -1,4 +1,10 @@
-/** Canonical localStorage keys for SOP-PT domain blobs. */
+/** Remembered workspace team (unscoped). */
+export const ACTIVE_TEAM_KEY = 'stm_active_team_id_v1';
+
+/** Per-team cache prefix: `stm_t/{teamId}/{blobKey}`. */
+export const TEAM_SCOPE_PREFIX = 'stm_t';
+
+/** Canonical localStorage keys for SOP-PT domain blobs (legacy / unscoped). */
 export const STORAGE_KEYS = {
   TEAM: 'stm_team_v1',
   PLAYERS: 'stm_players_v1',
@@ -18,3 +24,15 @@ export const STORAGE_KEYS = {
   EQUIPMENT_ITEMS: 'stm_equipment_items_v1',
   RANKING_BOUNDARIES: 'stm_ranking_boundaries_v1',
 } as const;
+
+export type StorageBlobKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];
+
+export function sanitizeTeamId(teamId: string): string {
+  return teamId.trim().replace(/[^\w.-]+/g, '_') || 'default';
+}
+
+export function scopedStorageKey(teamId: string, key: string): string {
+  return `${TEAM_SCOPE_PREFIX}/${sanitizeTeamId(teamId)}/${key}`;
+}
+
+export const ALL_STORAGE_BLOB_KEYS: StorageBlobKey[] = Object.values(STORAGE_KEYS);

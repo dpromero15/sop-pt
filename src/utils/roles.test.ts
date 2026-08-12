@@ -38,7 +38,9 @@ describe('roles', () => {
     expect(can('dataEntry', 'adjustedBumps')).toBe(true);
     expect(can('dataEntry', 'configWrite')).toBe(false);
     expect(can('teamAdmin', 'configWrite')).toBe(true);
-    expect(can('teamAdmin', 'cloudSync')).toBe(false);
+    expect(can('teamAdmin', 'cloudSync')).toBe(true);
+    expect(can('dataEntry', 'cloudSync')).toBe(true);
+    expect(can('viewer', 'cloudSync')).toBe(false);
     expect(can('systemAdmin', 'cloudSync')).toBe(true);
     expect(can('none', 'view')).toBe(false);
   });

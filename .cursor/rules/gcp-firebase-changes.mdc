@@ -1,0 +1,13 @@
+---
+description: Gated GCP/Firebase production changes — one phase, human approval, no chain deploys
+alwaysApply: true
+---
+
+# GCP / Firebase changes
+
+Any live cloud mutation (gcloud, firebase deploy, IAM, Hosting, Cloud Run, API Gateway, secrets) must follow [gcp-firebase-changes](../skills/gcp-firebase-changes/SKILL.md).
+
+- **Code + tests first**; one **human-named phase** per cloud write; then smoke and stop.
+- Do **not** chain enable-APIs → IAM → deploy → gateway → Hosting in one turn.
+- Never open Cloud Run with `--no-invoker-iam-check` or `allUsers` invoker unless the human explicitly asks.
+- Update [WORKING.md](../../WORKING.md) Agent notes after each phase.

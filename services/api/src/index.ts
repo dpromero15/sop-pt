@@ -12,11 +12,21 @@ const corsOrigin = process.env.CORS_ORIGIN || '*';
 initFirebaseAdmin();
 
 const app = express();
-app.use(cors({ origin: corsOrigin === '*' ? true : corsOrigin.split(',') }));
+// SPA is on Firebase Hosting; API is on API Gateway (cross-origin).
+app.use(
+  cors({
+    origin:
+      corsOrigin === '*'
+        ? true
+        : corsOrigin.split(',').map((s) => s.trim()).filter(Boolean),
+    allowedHeaders: ['Authorization', 'Content-Type'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  }),
+);
 app.use(express.json({ limit: '5mb' }));
 
 app.get('/health', (_req, res) => {
-  res.json({ ok: true, service: 'sop-pt-api', version: '2.7.0' });
+  res.json({ ok: true, service: 'sop-pt-api', version: '2.9.0' });
 });
 
 app.use('/v1/me', requireAuth, meRouter);

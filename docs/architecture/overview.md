@@ -13,12 +13,12 @@ v2 focuses on editable team identity and durable storage without requiring the f
 ```
 SPA ──► StorageRepository
           ├─ LocalJsonAdapter (always available)
-          └─ ApiAdapter (when healthy + signed-in admin)
+          └─ CloudSync / ApiAdapter (JIT hydrate + debounce flush when API + signed-in)
                 │
                 ▼
-           Cloud Run API ──► Firestore
+         API Gateway ──► Cloud Run API ──► Firestore
                 ▲
-         Firebase Auth (ID token)
+         Firebase Auth (ID token → Gateway → Run)
 ```
 
 ### Modes
