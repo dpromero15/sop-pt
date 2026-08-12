@@ -12,44 +12,47 @@ _(none)_
 
 ## Ready to ship
 
-### #107 — Attendance always on Active Weights + formula score
+### #112 — Rankings shows Speed / Fitness even though they are not on the formula page
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Season attendance rate feeds formula weight (006). Attendance system label always restored (007); Active Weights / Config always show Attendance first (always-on, not removable).
-- **Touchpoints:** `formulaWeights.ts`, `scoring.ts`, `metricAggregation.ts`, `006_attendance_formula_weight.ts`, `007_attendance_label.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `ScoringConfigModal.tsx`
+- **Notes:** Rankings tabs / Active Weights / Config share one category set; orphan formula weights hidden and pruned; no `'speed'` invention.
+- **Touchpoints:** `formulaWeights.ts`, `metricLabels.ts`, `localJsonAdapter.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `ScoringConfigModal.tsx`, `010_prune_ghost_categories.ts`
 
-### #108 — Drop calculated fields; average aggregation + team metric summary
+### #113 — Default categories/metrics ghost on Rankings; hidden or empty vs formula page
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Catalog removed; `aggregationMode: 'average'`; Rankings team avg/best/scored strip; migration **008**.
-- **Touchpoints:** `metricAggregation.ts`, `rankingsFilter.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `008_clear_calculated_fields.ts`
-
-### #110 — Metrics: multi-category membership (labelIds + primary)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** `labelIds` + `primaryLabelId`; filters use membership; formula standing uses primary only; migration **009**; Attendance locked; Config multi-select + primary.
-- **Touchpoints:** `metricLabels.ts`, `scoring.ts`, `rankingsFilter.ts`, `ConfigView.tsx`, `009_metric_multi_labels.ts`, `docs/sop/metrics.md`
+- **Notes:** Fresh teams seed Attendance-only (not Thunder FC catalog). Migration **010** drops unused sample labels, orphan metrics, and orphan weights.
+- **Touchpoints:** same as #112; `docs/architecture/storage.md`
 
 **Suggested PR Closes:**
 ```
-Closes #107
-Closes #108
-Closes #110
+Closes #112
+Closes #113
 ```
 
 ## Still open (this release)
-
-### #99 — System Admin team hub + shadow mode (attribution-first)
-- Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
-- **Label:** `v2.10.0`
 
 ### #109 — Compliance: sort names, denser board, invert eligibility/red-card checks
 - Name sort, compact board columns, inverted polarity for eligibility/disciplinary.
 - **Label:** `v2.10.0`
 
+### #114 — Soft delete sessions and players (restore + 90-day purge)
+- Player/session delete flags `deletedAt` instead of hard remove; restore from trash; auto-purge after 90 days.
+- **Label:** `v2.10.0`
+
+## Deferred (next release)
+
+### #99 — System Admin team hub + shadow mode (attribution-first)
+- Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
+- **Parked for:** `v2.11.0` (too large for remaining 2.10.0 batch; GitHub label retarget pending human approval)
+
 ## Agent notes
 
 - `2.9.0` shipped via [#96](https://github.com/dpromero15/sop-pt/pull/96) + follow-up [#102](https://github.com/dpromero15/sop-pt/pull/102).
 - First `2.10.0` batch shipped via [#106](https://github.com/dpromero15/sop-pt/pull/106) (`Closes #103 #104 #105`).
+- Second `2.10.0` batch shipped via [#111](https://github.com/dpromero15/sop-pt/pull/111) (`Closes #107 #108 #110`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
+- Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` pass (165 tests) 2026-08-12.
+- **QA:** `npm run lint` + `npm test` pass (174 tests) 2026-08-12 — Phase 2 (#112+#113).
+- Next: Phase 3 (#109 Compliance).

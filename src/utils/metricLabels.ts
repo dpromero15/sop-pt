@@ -36,7 +36,8 @@ export function normalizeMetricLabels<T extends MetricLabelInput>(
     : [];
   const labelIds = Array.from(new Set(rawIds.length > 0 ? rawIds : fromLegacy));
 
-  const fallback = labelIds[0] || 'speed';
+  // Never invent a missing category id (e.g. 'speed') — fall back to Attendance.
+  const fallback = labelIds[0] || 'attendance';
   if (labelIds.length === 0) {
     labelIds.push(fallback);
   }
@@ -102,7 +103,7 @@ export function metricLabelPayload(
   const primary =
     primaryLabelId.trim() && ids.includes(primaryLabelId.trim())
       ? primaryLabelId.trim()
-      : ids[0] || 'speed';
+      : ids[0] || 'attendance';
   const nextIds = ids.length > 0 ? ids : [primary];
   if (!nextIds.includes(primary)) nextIds.unshift(primary);
   return { labelIds: nextIds, primaryLabelId: primary };

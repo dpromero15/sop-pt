@@ -74,7 +74,10 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
   };
 
   const handleSave = () => {
-    const updatedWeights = Object.entries(weightsMap).map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
+    const allowed = new Set(weightLabels.map((l) => l.id));
+    const updatedWeights = Object.entries(weightsMap)
+      .filter(([labelId]) => allowed.has(labelId))
+      .map(([labelId, item]: [string, { weightPercent: number; enabled: boolean }]) => ({
       labelId,
       weightPercent: item.weightPercent,
       enabled: isAttendance(labelId) ? true : item.enabled,

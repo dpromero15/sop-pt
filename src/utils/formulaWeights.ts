@@ -1,4 +1,9 @@
-import type { LabelDefinition, ScoringFormulaConfig } from '../types';
+import type {
+  LabelDefinition,
+  MetricDefinition,
+  ScoringFormulaConfig,
+} from '../types';
+import { normalizeMetricLabels } from './metricLabels';
 
 /** Default Attendance share of the total-score formula when missing or invalid. */
 export const DEFAULT_ATTENDANCE_WEIGHT_PERCENT = 20;
@@ -15,6 +20,173 @@ export const ATTENDANCE_LABEL: LabelDefinition = {
   iconName: 'CalendarCheck',
   system: true,
 };
+
+/**
+ * Thunder FC sample category ids. Unused ones (no metrics) are pruned so they
+ * do not ghost on Rankings when absent from Config.
+ */
+export const SAMPLE_CATEGORY_IDS = [
+  'speed',
+  'agility',
+  'technical',
+  'offense',
+  'defense',
+  'fitness',
+  'character',
+] as const;
+
+const SAMPLE_CATEGORY_ID_SET = new Set<string>(SAMPLE_CATEGORY_IDS);
+
+/** Attendance-only formula used for empty teams (not the full Thunder FC demo). */
+export function attendanceOnlyFormula(): ScoringFormulaConfig {
+  return {
+    id: 'default_formula',
+    name: 'Balanced Coach Rating',
+    weights: [
+      {
+        labelId: 'attendance',
+        weightPercent: DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+        enabled: true,
+      },
+    ],
+  };
+}
+
+/**
+ * Category tabs / formula sliders: Attendance first, then every real label.
+ * Same set Config and Rankings should show.
+ */
+export function visibleRankingLabels(
+  labels: LabelDefinition[],
+): LabelDefinition[] {
+  const withoutAtt = labels.filter((l) => l.id !== 'attendance');
+  const attendance =
+    labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+  return [attendance, ...withoutAtt];
+}
+
+/**
+ * Active Weights chips: enabled formula rows that still have a real label.
+ */
+export function visibleActiveWeights(
+  formula: ScoringFormulaConfig,
+  labels: LabelDefinition[],
+): ScoringFormulaConfig['weights'] {
+  const labelIds = new Set(labels.map((l) => l.id));
+  labelIds.add('attendance');
+  return [...formula.weights]
+    .filter(
+      (w) =>
+        w.enabled && w.weightPercent > 0 && labelIds.has(w.labelId),
+    )
+    .sort((a, b) => {
+      if (a.labelId === 'attendance') return -1;
+      if (b.labelId === 'attendance') return 1;
+      return 0;
+    });
+}
+
+/**
+ * Drop formula weights whose labelId is not in the current category list.
+ * Always re-ensures Attendance afterward.
+ */
+export function pruneFormulaWeightsToLabels(
+  formula: ScoringFormulaConfig,
+  labels: LabelDefinition[],
+): { formula: ScoringFormulaConfig; changed: boolean } {
+  const labelIds = new Set(labels.map((l) => l.id));
+  labelIds.add('attendance');
+  const pruned = formula.weights.filter((w) => labelIds.has(w.labelId));
+  const prunedChanged = pruned.length !== formula.weights.length;
+  const base = prunedChanged ? { ...formula, weights: pruned } : formula;
+  const { formula: ensured, changed: attChanged } =
+    ensureAttendanceFormulaWeight(base);
+  return { formula: ensured, changed: prunedChanged || attChanged };
+}
+
+/**
+ * Remove orphan sample categories / metrics / formula weights so Rankings and
+ * Config share one category set.
+ */
+export function pruneGhostCategories(opts: {
+  labels: LabelDefinition[];
+  metrics: MetricDefinition[];
+  formula: ScoringFormulaConfig;
+}): {
+  labels: LabelDefinition[];
+  metrics: MetricDefinition[];
+  formula: ScoringFormulaConfig;
+  changed: boolean;
+} {
+  let changed = false;
+
+  const ensuredLabels = ensureAttendanceLabel(opts.labels);
+  let labels = ensuredLabels.labels;
+  if (ensuredLabels.changed) changed = true;
+
+  const labelIdSet = new Set(labels.map((l) => l.id));
+  const metrics: MetricDefinition[] = [];
+  for (const m of opts.metrics) {
+    const normalized = normalizeMetricLabels(m);
+    if (m.type === 'attendance' || m.id === 'm_attendance') {
+      if (
+        normalized.labelIds.length !== 1 ||
+        normalized.labelIds[0] !== 'attendance' ||
+        normalized.primaryLabelId !== 'attendance'
+      ) {
+        changed = true;
+      }
+      metrics.push({
+        ...m,
+        labelIds: ['attendance'],
+        primaryLabelId: 'attendance',
+      });
+      continue;
+    }
+
+    const ids = normalized.labelIds.filter((id) => labelIdSet.has(id));
+    if (ids.length === 0) {
+      changed = true;
+      continue;
+    }
+    const primaryLabelId = ids.includes(normalized.primaryLabelId)
+      ? normalized.primaryLabelId
+      : ids[0];
+    if (
+      ids.length !== normalized.labelIds.length ||
+      primaryLabelId !== normalized.primaryLabelId ||
+      ids.some((id, i) => id !== normalized.labelIds[i])
+    ) {
+      changed = true;
+    }
+    metrics.push({ ...m, labelIds: ids, primaryLabelId });
+  }
+
+  const usedByMetrics = new Set<string>();
+  for (const m of metrics) {
+    for (const id of m.labelIds) usedByMetrics.add(id);
+  }
+
+  const filteredLabels = labels.filter((l) => {
+    if (l.id === 'attendance' || l.system) return true;
+    if (!SAMPLE_CATEGORY_ID_SET.has(l.id)) return true;
+    return usedByMetrics.has(l.id);
+  });
+  if (filteredLabels.length !== labels.length) changed = true;
+  const reEnsured = ensureAttendanceLabel(filteredLabels);
+  labels = reEnsured.labels;
+  if (reEnsured.changed) changed = true;
+
+  const prunedFormula = pruneFormulaWeightsToLabels(opts.formula, labels);
+  if (prunedFormula.changed) changed = true;
+
+  return {
+    labels,
+    metrics,
+    formula: prunedFormula.formula,
+    changed,
+  };
+}
 
 /**
  * Attendance label must exist in the category list (system, non-removable).

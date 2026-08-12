@@ -78,4 +78,15 @@ describe('metricLabelPayload', () => {
       primaryLabelId: 'attendance',
     });
   });
+
+  it('falls back to attendance when membership is empty', () => {
+    expect(normalizeMetricLabels({ type: 'count' })).toMatchObject({
+      labelIds: ['attendance'],
+      primaryLabelId: 'attendance',
+    });
+    expect(metricLabelPayload([], '')).toEqual({
+      labelIds: ['attendance'],
+      primaryLabelId: 'attendance',
+    });
+  });
 });

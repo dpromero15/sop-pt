@@ -47,7 +47,13 @@ import {
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
-import { ensureAttendanceFormulaWeight, ensureAttendanceLabel } from '../../utils/formulaWeights';
+import {
+  ATTENDANCE_LABEL,
+  attendanceOnlyFormula,
+  ensureAttendanceFormulaWeight,
+  ensureAttendanceLabel,
+  pruneFormulaWeightsToLabels,
+} from '../../utils/formulaWeights';
 import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
 import { metricInCategory } from '../../utils/metricLabels';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
@@ -177,6 +183,10 @@ export class LocalJsonAdapter implements StorageRepository {
     }
     if (key === STORAGE_KEYS.PLAYER_COMPLIANCE) {
       return {} as T;
+    }
+    // Never seed the Thunder FC demo formula into an empty workspace.
+    if (key === STORAGE_KEYS.FORMULA) {
+      return attendanceOnlyFormula() as T;
     }
     return fallback;
   }
@@ -465,12 +475,15 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getMetrics(): MetricDefinition[] {
-    const raw = this.readJson<unknown>(STORAGE_KEYS.METRICS, DEFAULT_METRICS);
+    const attendanceOnly = DEFAULT_METRICS.filter(
+      (m) => m.id === ATTENDANCE_METRIC_ID || m.type === 'attendance',
+    );
+    const raw = this.readJson<unknown>(STORAGE_KEYS.METRICS, attendanceOnly);
     const { metrics, changed } = migrateMetricsAggregation(raw);
     let next = metrics;
     let shouldWrite = changed;
     if (!Array.isArray(raw) && metrics.length === 0) {
-      next = DEFAULT_METRICS;
+      next = attendanceOnly;
       shouldWrite = true;
     }
     if (shouldWrite) {
@@ -504,7 +517,7 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getLabels(): LabelDefinition[] {
-    const labels = this.readJson(STORAGE_KEYS.LABELS, DEFAULT_LABELS);
+    const labels = this.readJson(STORAGE_KEYS.LABELS, [ATTENDANCE_LABEL]);
     const { labels: ensured, changed } = ensureAttendanceLabel(labels);
     if (changed) {
       this.writeJson(STORAGE_KEYS.LABELS, ensured);
@@ -624,8 +637,14 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getFormula(): ScoringFormulaConfig {
-    const stored = this.readJson(STORAGE_KEYS.FORMULA, DEFAULT_FORMULA_CONFIG);
-    const { formula, changed } = ensureAttendanceFormulaWeight(stored);
+    const stored = this.readJson(
+      STORAGE_KEYS.FORMULA,
+      attendanceOnlyFormula(),
+    );
+    const { formula, changed } = pruneFormulaWeightsToLabels(
+      stored,
+      this.getLabels(),
+    );
     if (changed) {
       this.writeJson(STORAGE_KEYS.FORMULA, formula);
     }
@@ -633,8 +652,11 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   saveFormula(formula: ScoringFormulaConfig) {
-    const { formula: ensured } = ensureAttendanceFormulaWeight(formula);
-    this.writeJson(STORAGE_KEYS.FORMULA, ensured);
+    const { formula: pruned } = pruneFormulaWeightsToLabels(
+      formula,
+      this.getLabels(),
+    );
+    this.writeJson(STORAGE_KEYS.FORMULA, pruned);
     this.notify();
   }
 

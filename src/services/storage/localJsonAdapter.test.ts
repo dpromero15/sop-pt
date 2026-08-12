@@ -211,9 +211,75 @@ describe('LocalJsonAdapter', () => {
   });
 
   it('refuses to delete labels still used by metrics', () => {
-    adapter.getLabels();
-    adapter.getMetrics();
+    adapter.saveLabels([
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+    ]);
+    adapter.saveMetrics([
+      {
+        id: 'm_40m',
+        name: '40m',
+        labelIds: ['speed'],
+        primaryLabelId: 'speed',
+        type: 'time_seconds',
+        unit: 's',
+        higherIsBetter: false,
+        aggregationMode: 'best',
+      },
+    ]);
     expect(() => adapter.deleteLabel('speed')).toThrow(/reassign/i);
+  });
+
+  it('does not seed Thunder FC sample categories on first read', () => {
+    const labels = adapter.getLabels();
+    expect(labels.map((l) => l.id)).toEqual(['attendance']);
+    const formula = adapter.getFormula();
+    expect(formula.weights.map((w) => w.labelId)).toEqual(['attendance']);
+    expect(adapter.getMetrics().every((m) => m.id === 'm_attendance')).toBe(
+      true,
+    );
+  });
+
+  it('getFormula drops orphan weight ids not in labels', () => {
+    adapter.saveLabels([
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+    ]);
+    store.map.set(
+      scoped(STORAGE_KEYS.FORMULA),
+      JSON.stringify({
+        id: 'f1',
+        name: 'Ghost',
+        weights: [
+          { labelId: 'attendance', weightPercent: 20, enabled: true },
+          { labelId: 'speed', weightPercent: 80, enabled: true },
+        ],
+      }),
+    );
+    const formula = adapter.getFormula();
+    expect(formula.weights.map((w) => w.labelId)).toEqual(['attendance']);
   });
 
   it('clearNonSystemLabels keeps system labels only', () => {

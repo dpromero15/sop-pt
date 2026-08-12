@@ -40,6 +40,10 @@ import { specialtyAdjustedRankings } from '../utils/eligibility';
 import { resolveActiveCutLines } from '../utils/rankingBoundaries';
 import { metricPrimaryLabelId } from '../utils/metricLabels';
 import {
+  visibleActiveWeights,
+  visibleRankingLabels,
+} from '../utils/formulaWeights';
+import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
   compareRankings,
@@ -282,6 +286,16 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   rankingBoundaries,
   allowBumps = true,
 }) => {
+  const rankingLabels = useMemo(
+    () => visibleRankingLabels(labels),
+    [labels],
+  );
+
+  const activeWeightChips = useMemo(
+    () => visibleActiveWeights(formula, labels),
+    [formula, labels],
+  );
+
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
   const [selectedMetricId, setSelectedMetricId] =
     useState<RankingsMetricSelection>('none');
@@ -629,14 +643,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
         <div className="mt-4 pt-4 border-t border-slate-800/80 flex flex-wrap items-center gap-2 text-xs">
           <span className="text-slate-400 font-medium">Active Weights:</span>
-          {[...formula.weights]
-            .filter((w) => w.enabled && w.weightPercent > 0)
-            .sort((a, b) => {
-              if (a.labelId === 'attendance') return -1;
-              if (b.labelId === 'attendance') return 1;
-              return 0;
-            })
-            .map((w) => {
+          {activeWeightChips.map((w) => {
               const labelDef = labels.find((l) => l.id === w.labelId);
               const name = labelDef?.name ?? (w.labelId === 'attendance' ? 'Attendance' : w.labelId);
               const badgeBg =
@@ -954,7 +961,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               All Categories
             </button>
 
-            {labels.map((lbl) => {
+            {rankingLabels.map((lbl) => {
               const isSelected = selectedLabelId === lbl.id;
               return (
                 <button
@@ -1455,7 +1462,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     </div>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2">
-                      {labels.map((lbl) => {
+                      {rankingLabels.map((lbl) => {
                         const lScore = labelScoreForMode(
                           item,
                           lbl.id,
