@@ -15,7 +15,6 @@ import {
   LabelDefinition,
   ScoringFormulaConfig,
   PlayerRanking,
-  CalculatedFieldDefinition,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
   Coach,
@@ -23,11 +22,6 @@ import {
   PlayerPosition,
   RankingBoundariesConfig,
 } from '../types';
-import { formatMetricValue } from '../utils/scoring';
-import {
-  calculatedFieldsForCategory,
-  formatCalculatedFieldValue,
-} from '../utils/calculatedFields';
 import {
   bumpBudgetRemaining,
   bumpUsage,
@@ -44,10 +38,12 @@ import {
 } from '../utils/coachesRating';
 import { specialtyAdjustedRankings } from '../utils/eligibility';
 import { resolveActiveCutLines } from '../utils/rankingBoundaries';
+import { metricPrimaryLabelId } from '../utils/metricLabels';
 import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
   compareRankings,
+  formatTeamMetricValue,
   isUnscoredForRankMode,
   labelScoreForMode,
   metricsForCategory,
@@ -56,6 +52,7 @@ import {
   RankingsTotalMode,
   rankForMode,
   selectionAfterCategoryChange,
+  teamMetricSummary,
   totalForMode,
 } from '../utils/rankingsFilter';
 import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
@@ -77,7 +74,6 @@ interface RankingsViewProps {
   rankings: PlayerRanking[];
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
-  calculatedFields: CalculatedFieldDefinition[];
   formula: ScoringFormulaConfig;
   /** False when no metric entries exist (e.g. all sessions deleted). */
   hasLoggedData: boolean;
@@ -268,7 +264,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   rankings,
   labels,
   metrics,
-  calculatedFields,
   formula,
   hasLoggedData,
   coaches,
@@ -378,17 +373,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     [metrics, selectedLabelId],
   );
 
-  const scopedCalculated = useMemo(
-    () =>
-      calculatedFieldsForCategory(calculatedFields, metrics, selectedLabelId),
-    [calculatedFields, metrics, selectedLabelId],
-  );
 
   const activeLabel = labels.find((l) => l.id === selectedLabelId);
   const activeMetric = metrics.find((m) => m.id === selectedMetricId);
-  const activeCalculated = calculatedFields.find(
-    (f) => f.id === selectedMetricId && f.enabled,
-  );
+
+  const teamSummary = useMemo(() => {
+    if (!activeMetric) return null;
+    return teamMetricSummary(rankingSource, activeMetric);
+  }, [activeMetric, rankingSource]);
 
   /** True when the current category / metric filter has any real logged values. */
   const scopeHasData = useMemo(() => {
@@ -402,18 +394,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     if (!hasLoggedData) return false;
 
     if (sortBy === 'metric' && activeMetric) {
+      const primaryId = metricPrimaryLabelId(activeMetric);
       return rankings.some((r) =>
-        r.labelScores[activeMetric.labelId]?.metrics.some(
+        r.labelScores[primaryId]?.metrics.some(
           (m) => m.metricId === activeMetric.id,
         ),
       );
     }
 
-    if (sortBy === 'calculated' && activeCalculated) {
-      return rankings.some(
-        (r) => r.calculatedValues[activeCalculated.id] !== undefined,
-      );
-    }
 
     if (selectedLabelId !== 'all') {
       if (totalMode === 'adjusted') {
@@ -438,7 +426,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     sortBy,
     totalMode,
     activeMetric,
-    activeCalculated,
     individualCoachOrdinals,
   ]);
 
@@ -489,7 +476,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       selectedLabelId,
       selectedMetricId,
       metrics,
-      calculatedFields,
       effectiveTotalMode,
     );
   });
@@ -499,7 +485,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       labelId,
       selectedMetricId,
       metrics,
-      calculatedFields,
     );
     setSelectedLabelId(labelId);
     setSelectedMetricId(next.selectedMetricId);
@@ -518,15 +503,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     setSortBy('metric');
   };
 
-  const selectCalculatedTag = (fieldId: string) => {
-    if (selectedMetricId === fieldId) {
-      setSelectedMetricId('none');
-      setSortBy(selectedLabelId === 'all' ? 'total' : 'label');
-      return;
-    }
-    setSelectedMetricId(fieldId);
-    setSortBy('calculated');
-  };
 
   const coachesScopeLabel =
     coachesScope === 'average'
@@ -536,17 +512,15 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const primaryScoreLabel =
     sortBy === 'metric' && activeMetric
       ? activeMetric.name
-      : sortBy === 'calculated' && activeCalculated
-        ? activeCalculated.name
-        : sortBy === 'label' && activeLabel
-          ? categoryScoreTagLabel(activeLabel)
-          : totalMode === 'adjusted'
-            ? 'Adjusted Rank'
-            : totalMode === 'coaches'
-              ? coachesScope === 'average'
-                ? 'Coaches Rank'
-                : `${coachesScopeLabel}'s Rank`
-              : 'Statistical Rank';
+      : sortBy === 'label' && activeLabel
+        ? categoryScoreTagLabel(activeLabel)
+        : totalMode === 'adjusted'
+          ? 'Adjusted Rank'
+          : totalMode === 'coaches'
+            ? coachesScope === 'average'
+              ? 'Coaches Rank'
+              : `${coachesScopeLabel}'s Rank`
+            : 'Statistical Rank';
 
   const handleExportCSV = () => {
     let csv =
@@ -1001,7 +975,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         </div>
         )}
 
-        {/* Rank by: metrics / calculated only — totals come from the Totals toggle */}
+        {/* Rank by: metrics only — totals come from the Totals toggle */}
         {totalMode !== 'coaches' && (
         <div>
           <p className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
@@ -1026,26 +1000,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               );
             })}
 
-            {scopedCalculated.map((f) => {
-              const isSelected = selectedMetricId === f.id;
-              return (
-                <button
-                  type="button"
-                  key={f.id}
-                  onClick={() => selectCalculatedTag(f.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                    isSelected
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-                      : 'bg-slate-950/80 text-slate-400 border-slate-800 hover:text-white hover:border-slate-700'
-                  }`}
-                  title="Calculated field"
-                >
-                  {f.name}
-                </button>
-              );
-            })}
-
-            {scopedMetrics.length === 0 && scopedCalculated.length === 0 ? (
+            {scopedMetrics.length === 0 ? (
               <span className="text-xs text-slate-500 px-1">
                 {selectedLabelId === 'all'
                   ? 'No metric selected — ranking by Statistical / Adjusted (see Rankings toggle).'
@@ -1063,6 +1018,35 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         </div>
         )}
       </div>
+
+      {activeMetric && teamSummary ? (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+          <span className="font-semibold text-slate-300">
+            Team · {activeMetric.name}
+          </span>
+          {teamSummary.avg != null ? (
+            <>
+              <span className="text-slate-400">
+                Avg{' '}
+                <strong className="text-emerald-300 tabular-nums">
+                  {formatTeamMetricValue(teamSummary.avg, activeMetric)}
+                </strong>
+              </span>
+              <span className="text-slate-400">
+                Best{' '}
+                <strong className="text-white tabular-nums">
+                  {formatTeamMetricValue(teamSummary.best!, activeMetric)}
+                </strong>
+              </span>
+            </>
+          ) : (
+            <span className="text-slate-500">No scored players yet</span>
+          )}
+          <span className="text-slate-500 ml-auto tabular-nums">
+            {teamSummary.scored} of {teamSummary.roster} scored
+          </span>
+        </div>
+      ) : null}
 
       {/* Leaderboard Cards Grid */}
       <div className="space-y-3">
@@ -1213,22 +1197,15 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
             let specificMetricValue: string | null = null;
             if (activeMetric) {
-              const labelScore = item.labelScores[activeMetric.labelId];
+              const labelScore =
+                item.labelScores[metricPrimaryLabelId(activeMetric)];
               const metricDetail = labelScore?.metrics.find(
                 (m) => m.metricId === activeMetric.id,
               );
               if (metricDetail) {
-                specificMetricValue = formatMetricValue(
+                specificMetricValue = formatTeamMetricValue(
                   metricDetail.aggregatedValue,
                   activeMetric,
-                );
-              }
-            } else if (activeCalculated) {
-              const calcVal = item.calculatedValues[activeCalculated.id];
-              if (calcVal !== undefined) {
-                specificMetricValue = formatCalculatedFieldValue(
-                  calcVal,
-                  activeCalculated,
                 );
               }
             }
@@ -1239,7 +1216,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 : null;
 
             const showingMeasuredValue =
-              (sortBy === 'metric' || sortBy === 'calculated') &&
+              sortBy === 'metric' &&
               specificMetricValue;
 
             // Rank badge among scored players only; unscored share the bottom tier.
@@ -1279,7 +1256,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 : sortBy === 'label'
                   ? categoryScore
                   : sortBy === 'total' ||
-                      (sortBy !== 'metric' && sortBy !== 'calculated')
+                      sortBy !== 'metric'
                     ? totalForMode(item, effectiveTotalMode)
                     : null;
 
@@ -1295,7 +1272,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               !showingMeasuredValue &&
               (sortBy === 'total' ||
                 sortBy === 'label' ||
-                (sortBy !== 'metric' && sortBy !== 'calculated'));
+                sortBy !== 'metric');
 
             const primaryDisplay = ineligible
               ? 'Ineligible'

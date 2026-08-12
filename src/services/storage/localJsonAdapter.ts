@@ -49,6 +49,7 @@ import {
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
 import { ensureAttendanceFormulaWeight, ensureAttendanceLabel } from '../../utils/formulaWeights';
 import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
+import { metricInCategory } from '../../utils/metricLabels';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
   canApplyBump,
@@ -553,7 +554,7 @@ export class LocalJsonAdapter implements StorageRepository {
     if (label.system) return;
 
     const metrics = this.getMetrics();
-    if (metrics.some((m) => m.labelId === id)) {
+    if (metrics.some((m) => metricInCategory(m, id))) {
       throw new Error(
         'Reassign or remove metrics that use this label before deleting it.',
       );
@@ -638,26 +639,15 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   getCalculatedFields(): CalculatedFieldDefinition[] {
+    // Product no longer uses calculated fields; keep empty for snapshot shape.
     const stored = this.readJson<CalculatedFieldDefinition[]>(
       STORAGE_KEYS.CALCULATED_FIELDS,
-      DEFAULT_CALCULATED_FIELDS,
+      [],
     );
-    const metricIds = new Set(this.getMetrics().map((m) => m.id));
-    // Merge in any new catalog defaults without clobbering enabled flags,
-    // but only when the base metric still exists (cleared metrics stay gone).
-    const byId = new Map(stored.map((f) => [f.id, f]));
-    let changed = false;
-    for (const def of DEFAULT_CALCULATED_FIELDS) {
-      if (!byId.has(def.id) && metricIds.has(def.baseMetricId)) {
-        byId.set(def.id, def);
-        changed = true;
-      }
+    if (stored.length > 0) {
+      this.writeJson(STORAGE_KEYS.CALCULATED_FIELDS, []);
     }
-    const merged = [...byId.values()].filter((f) => metricIds.has(f.baseMetricId));
-    if (changed || merged.length !== stored.length) {
-      this.writeJson(STORAGE_KEYS.CALCULATED_FIELDS, merged);
-    }
-    return merged;
+    return [];
   }
 
   saveCalculatedFields(fields: CalculatedFieldDefinition[]) {

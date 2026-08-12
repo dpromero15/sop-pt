@@ -39,7 +39,8 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_40m',
     name: '40m',
-    labelId: 'speed',
+    labelIds: ['speed'],
+    primaryLabelId: 'speed',
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
@@ -50,7 +51,8 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_juggle',
     name: 'Juggle',
-    labelId: 'technical',
+    labelIds: ['technical'],
+    primaryLabelId: 'technical',
     type: 'count',
     unit: 'reps',
     higherIsBetter: true,
@@ -61,7 +63,8 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_attendance',
     name: 'Attendance',
-    labelId: 'attendance',
+    labelIds: ['attendance'],
+    primaryLabelId: 'attendance',
     type: 'attendance',
     unit: '%',
     higherIsBetter: true,
@@ -497,7 +500,8 @@ describe('calculatePlayerRankings', () => {
       {
         id: 'm_sparse_def',
         name: 'Sparse Def Look',
-        labelId: 'defense',
+        labelIds: ['defense'],
+    primaryLabelId: 'defense',
         type: 'rating_10',
         unit: '/10',
         higherIsBetter: true,
@@ -576,7 +580,8 @@ describe('calculatePlayerRankings', () => {
       {
         id: 'm_40m',
         name: '40m',
-        labelId: 'speed',
+        labelIds: ['speed'],
+        primaryLabelId: 'speed',
         type: 'time_seconds',
         unit: 's',
         higherIsBetter: false,
@@ -587,7 +592,8 @@ describe('calculatePlayerRankings', () => {
       {
         id: 'm_shuttle',
         name: 'Shuttle',
-        labelId: 'speed',
+        labelIds: ['speed'],
+        primaryLabelId: 'speed',
         type: 'time_seconds',
         unit: 's',
         higherIsBetter: false,
@@ -624,5 +630,60 @@ describe('calculatePlayerRankings', () => {
     // Adjusted average is only 40m, not (100 + 0) / 2
     expect(ranking.labelScores.speed.adjustedScore).toBe(100);
     expect(ranking.adjustedTotalScore).toBe(100);
+  });
+
+  it('scores multi-category metrics only under primaryLabelId', () => {
+    const fitnessLabel = {
+      id: 'fitness',
+      name: 'Fitness',
+      description: '',
+      color: 'rose',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const dual: MetricDefinition = {
+      id: 'm_40m',
+      name: '40m',
+      labelIds: ['speed', 'fitness'],
+      primaryLabelId: 'speed',
+      type: 'time_seconds',
+      unit: 's',
+      higherIsBetter: false,
+      aggregationMode: 'best',
+    };
+    const dualFormula: ScoringFormulaConfig = {
+      id: 'f-dual',
+      name: 'Dual',
+      weights: [
+        { labelId: 'speed', weightPercent: 50, enabled: true },
+        { labelId: 'fitness', weightPercent: 50, enabled: true },
+      ],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_40m',
+        value: 5.0,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      [dual],
+      [...labels, fitnessLabel],
+      dualFormula,
+    );
+
+    expect(ranking.labelScores.speed.metrics.map((m) => m.metricId)).toEqual([
+      'm_40m',
+    ]);
+    expect(ranking.labelScores.fitness.metrics).toEqual([]);
+    expect(ranking.labelScores.fitness.score).toBeNull();
+    // Only speed category contributes (50% weight with a score)
+    expect(ranking.totalScore).toBe(100);
   });
 });

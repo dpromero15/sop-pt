@@ -150,7 +150,8 @@ describe('LocalJsonAdapter', () => {
         {
           id: 'm_40m_dash',
           name: '40 Meter Dash',
-          labelId: 'speed',
+          labelIds: ['speed'],
+    primaryLabelId: 'speed',
           type: 'time_seconds',
           unit: 's',
           higherIsBetter: false,
@@ -163,14 +164,20 @@ describe('LocalJsonAdapter', () => {
     expect(metrics[0].treatNoScoreAsZero).toBe(true);
   });
 
-  it('loads calculated fields catalog', () => {
-    const fields = adapter.getCalculatedFields();
-    expect(fields.some((f) => f.id === 'cf_40m_avg')).toBe(true);
-    expect(fields.every((f) => f.enabled === false)).toBe(true);
-    adapter.updateCalculatedField({ ...fields[0], enabled: true });
-    expect(
-      adapter.getCalculatedFields().find((f) => f.id === fields[0].id)?.enabled,
-    ).toBe(true);
+  it('returns empty calculated fields catalog', () => {
+    expect(adapter.getCalculatedFields()).toEqual([]);
+    adapter.saveCalculatedFields([
+      {
+        id: 'cf_legacy',
+        name: 'Legacy',
+        kind: 'average',
+        baseMetricId: 'm_40m_dash',
+        enabled: true,
+        higherIsBetter: false,
+        unit: 's',
+      },
+    ]);
+    expect(adapter.getCalculatedFields()).toEqual([]);
   });
 
   it('migrates attendance label to system: true', () => {

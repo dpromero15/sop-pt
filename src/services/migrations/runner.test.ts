@@ -259,4 +259,44 @@ describe('runLocalMigrations', () => {
       name: 'Attendance',
     });
   });
+
+  it('maps legacy metric labelId to labelIds via v9', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(8));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const legacyMetrics = [
+      {
+        id: 'm_40m',
+        name: '40m',
+        labelId: 'speed',
+        type: 'time_seconds',
+        unit: 's',
+        higherIsBetter: false,
+        aggregationMode: 'best',
+      },
+    ];
+    store.setItem(STORAGE_KEYS.METRICS, JSON.stringify(legacyMetrics));
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.METRICS),
+      JSON.stringify(legacyMetrics),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const scoped = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.METRICS))!,
+    );
+    expect(scoped[0]).toMatchObject({
+      id: 'm_40m',
+      labelIds: ['speed'],
+      primaryLabelId: 'speed',
+    });
+    expect(scoped[0].labelId).toBeUndefined();
+  });
 });

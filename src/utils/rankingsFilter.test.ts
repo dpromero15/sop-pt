@@ -3,13 +3,14 @@ import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
   compareRankings,
+  formatTeamMetricValue,
   isUnscoredForRankMode,
   metricsForCategory,
   selectionAfterCategoryChange,
+  teamMetricSummary,
   totalForMode,
 } from './rankingsFilter';
 import type {
-  CalculatedFieldDefinition,
   LabelDefinition,
   MetricDefinition,
   Player,
@@ -20,7 +21,8 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_40m',
     name: '40 Meter Dash',
-    labelId: 'speed',
+    labelIds: ['speed'],
+    primaryLabelId: 'speed',
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
@@ -29,7 +31,8 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_shuttle',
     name: 'Shuttle Run',
-    labelId: 'agility',
+    labelIds: ['agility'],
+    primaryLabelId: 'agility',
     type: 'time_seconds',
     unit: 's',
     higherIsBetter: false,
@@ -38,23 +41,12 @@ const metrics: MetricDefinition[] = [
   {
     id: 'm_juggle',
     name: 'Juggling',
-    labelId: 'technical',
+    labelIds: ['technical'],
+    primaryLabelId: 'technical',
     type: 'count',
     unit: 'reps',
     higherIsBetter: true,
     aggregationMode: 'best',
-  },
-];
-
-const calcFields: CalculatedFieldDefinition[] = [
-  {
-    id: 'cf_40m_avg',
-    name: '40m Average',
-    kind: 'average',
-    baseMetricId: 'm_40m',
-    enabled: true,
-    higherIsBetter: false,
-    unit: 's',
   },
 ];
 
@@ -123,6 +115,17 @@ describe('metricsForCategory', () => {
       'm_40m',
     ]);
   });
+
+  it('includes secondary category memberships', () => {
+    const dual = {
+      ...metrics[0],
+      labelIds: ['speed', 'agility'],
+      primaryLabelId: 'speed' as const,
+    };
+    expect(
+      metricsForCategory([dual, metrics[1]], 'agility').map((m) => m.id),
+    ).toEqual(['m_40m', 'm_shuttle']);
+  });
 });
 
 describe('selectionAfterCategoryChange', () => {
@@ -154,12 +157,10 @@ describe('selectionAfterCategoryChange', () => {
     });
   });
 
-  it('keeps calculated field when switching to all', () => {
-    expect(
-      selectionAfterCategoryChange('all', 'cf_40m_avg', metrics, calcFields),
-    ).toEqual({
-      selectedMetricId: 'cf_40m_avg',
-      sortBy: 'calculated',
+  it('clears unknown previous metric ids when switching to all', () => {
+    expect(selectionAfterCategoryChange('all', 'cf_40m_avg', metrics)).toEqual({
+      selectedMetricId: 'none',
+      sortBy: 'total',
     });
   });
 });
@@ -184,50 +185,40 @@ describe('compareOptionalRankValue', () => {
 });
 
 describe('compareRankings', () => {
-  const fast = ranking(
-    'fast',
-    70,
-    {
-      speed: {
-        labelId: 'speed',
-        labelName: 'Speed',
-        score: 90,
-        entryCount: 1,
-        metrics: [
-          {
-            metricId: 'm_40m',
-            metricName: '40 Meter Dash',
-            aggregatedValue: 4.9,
-            unit: 's',
-            poolScore: 90,
-          },
-        ],
-      },
+  const fast = ranking('fast', 70, {
+    speed: {
+      labelId: 'speed',
+      labelName: 'Speed',
+      score: 90,
+      entryCount: 1,
+      metrics: [
+        {
+          metricId: 'm_40m',
+          metricName: '40 Meter Dash',
+          aggregatedValue: 4.9,
+          unit: 's',
+          poolScore: 90,
+        },
+      ],
     },
-    { cf_40m_avg: 5.0 },
-  );
-  const slow = ranking(
-    'slow',
-    85,
-    {
-      speed: {
-        labelId: 'speed',
-        labelName: 'Speed',
-        score: 60,
-        entryCount: 1,
-        metrics: [
-          {
-            metricId: 'm_40m',
-            metricName: '40 Meter Dash',
-            aggregatedValue: 5.5,
-            unit: 's',
-            poolScore: 60,
-          },
-        ],
-      },
+  });
+  const slow = ranking('slow', 85, {
+    speed: {
+      labelId: 'speed',
+      labelName: 'Speed',
+      score: 60,
+      entryCount: 1,
+      metrics: [
+        {
+          metricId: 'm_40m',
+          metricName: '40 Meter Dash',
+          aggregatedValue: 5.5,
+          unit: 's',
+          poolScore: 60,
+        },
+      ],
     },
-    { cf_40m_avg: 5.8 },
-  );
+  });
   const unscored = ranking('unscored', null, {
     speed: {
       labelId: 'speed',
@@ -270,20 +261,6 @@ describe('compareRankings', () => {
   it('sorts lower-is-better metrics ascending', () => {
     expect(
       compareRankings(fast, slow, 'metric', 'speed', 'm_40m', metrics),
-    ).toBeLessThan(0);
-  });
-
-  it('sorts calculated fields by direction', () => {
-    expect(
-      compareRankings(
-        fast,
-        slow,
-        'calculated',
-        'speed',
-        'cf_40m_avg',
-        metrics,
-        calcFields,
-      ),
     ).toBeLessThan(0);
   });
 
@@ -346,7 +323,6 @@ describe('compareRankings', () => {
         'all',
         'none',
         metrics,
-        [],
         'adjusted',
       ),
     ).toBeGreaterThan(0);
@@ -358,7 +334,6 @@ describe('compareRankings', () => {
         'all',
         'none',
         metrics,
-        [],
         'overall',
       ),
     ).toBeLessThan(0);
@@ -374,7 +349,6 @@ describe('compareRankings', () => {
       adjustedBump: 0,
       eligibleToPlay: true,
     };
-    // effective: lower=83, higher=82 → lower sorts first
     expect(
       compareRankings(
         lower,
@@ -383,7 +357,6 @@ describe('compareRankings', () => {
         'all',
         'none',
         metrics,
-        [],
         'adjusted',
       ),
     ).toBeLessThan(0);
@@ -393,28 +366,23 @@ describe('compareRankings', () => {
 });
 
 describe('isUnscoredForRankMode', () => {
-  const scored = ranking(
-    'scored',
-    70,
-    {
-      speed: {
-        labelId: 'speed',
-        labelName: 'Speed',
-        score: 90,
-        entryCount: 1,
-        metrics: [
-          {
-            metricId: 'm_40m',
-            metricName: '40 Meter Dash',
-            aggregatedValue: 4.9,
-            unit: 's',
-            poolScore: 90,
-          },
-        ],
-      },
+  const scored = ranking('scored', 70, {
+    speed: {
+      labelId: 'speed',
+      labelName: 'Speed',
+      score: 90,
+      entryCount: 1,
+      metrics: [
+        {
+          metricId: 'm_40m',
+          metricName: '40 Meter Dash',
+          aggregatedValue: 4.9,
+          unit: 's',
+          poolScore: 90,
+        },
+      ],
     },
-    { cf_40m_avg: 5.0 },
-  );
+  });
   const empty = ranking('empty', null, {
     speed: {
       labelId: 'speed',
@@ -478,11 +446,67 @@ describe('compareRankings coaches mode', () => {
       coachesRank: 2,
     };
     expect(
-      compareRankings(a, b, 'total', 'all', 'none', metrics, [], 'coaches'),
+      compareRankings(a, b, 'total', 'all', 'none', metrics, 'coaches'),
     ).toBeLessThan(0);
     expect(
-      compareRankings(b, a, 'total', 'all', 'none', metrics, [], 'coaches'),
+      compareRankings(b, a, 'total', 'all', 'none', metrics, 'coaches'),
     ).toBeGreaterThan(0);
+  });
+});
+
+describe('teamMetricSummary', () => {
+  it('averages and picks best across scored players', () => {
+    const fast = ranking('fast', 70, {
+      speed: {
+        labelId: 'speed',
+        labelName: 'Speed',
+        score: 90,
+        entryCount: 1,
+        metrics: [
+          {
+            metricId: 'm_40m',
+            metricName: '40 Meter Dash',
+            aggregatedValue: 4.9,
+            unit: 's',
+            poolScore: 90,
+          },
+        ],
+      },
+    });
+    const slow = ranking('slow', 85, {
+      speed: {
+        labelId: 'speed',
+        labelName: 'Speed',
+        score: 60,
+        entryCount: 1,
+        metrics: [
+          {
+            metricId: 'm_40m',
+            metricName: '40 Meter Dash',
+            aggregatedValue: 5.5,
+            unit: 's',
+            poolScore: 60,
+          },
+        ],
+      },
+    });
+    const empty = ranking('empty', null, {
+      speed: {
+        labelId: 'speed',
+        labelName: 'Speed',
+        score: null,
+        entryCount: 0,
+        metrics: [],
+      },
+    });
+    const summary = teamMetricSummary([fast, slow, empty], metrics[0]);
+    expect(summary).toEqual({
+      avg: 5.2,
+      best: 4.9,
+      scored: 2,
+      roster: 3,
+    });
+    expect(formatTeamMetricValue(summary.avg!, metrics[0])).toBe('5.20s');
   });
 });
 

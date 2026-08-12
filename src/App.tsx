@@ -62,9 +62,6 @@ export default function App() {
   const [metrics, setMetrics] = useState(() => StorageService.getMetrics());
   const [labels, setLabels] = useState(() => StorageService.getLabels());
   const [formula, setFormula] = useState(() => StorageService.getFormula());
-  const [calculatedFields, setCalculatedFields] = useState(() =>
-    StorageService.getCalculatedFields(),
-  );
   const [coaches, setCoaches] = useState(() => StorageService.getCoaches());
   const [coachBallots, setCoachBallots] = useState(() =>
     StorageService.getCoachBallots(),
@@ -116,7 +113,6 @@ export default function App() {
     setMetrics(StorageService.getMetrics());
     setLabels(StorageService.getLabels());
     setFormula(StorageService.getFormula());
-    setCalculatedFields(StorageService.getCalculatedFields());
     setCoaches(StorageService.getCoaches());
     setCoachBallots(StorageService.getCoachBallots());
     setAdjustedBumps(StorageService.getAdjustedBumps());
@@ -241,7 +237,6 @@ export default function App() {
       metrics,
       labels,
       formula,
-      calculatedFields,
     );
     const withCoaches = attachCoachesTotals(base, players, coachBallots);
     const withBumps = applyAdjustedBumps(withCoaches, adjustedBumps);
@@ -257,7 +252,6 @@ export default function App() {
     metrics,
     labels,
     formula,
-    calculatedFields,
     coachBallots,
     adjustedBumps,
     complianceRequirements,
@@ -383,7 +377,6 @@ export default function App() {
             rankings={rankings}
             labels={labels}
             metrics={metrics}
-            calculatedFields={calculatedFields}
             formula={formula}
             hasLoggedData={entries.length > 0}
             coaches={coaches}
@@ -468,7 +461,6 @@ export default function App() {
             labels={labels}
             metrics={metrics}
             formula={formula}
-            calculatedFields={calculatedFields}
             bumpBudget={bumpBudget}
             complianceRequirements={complianceRequirements}
             equipmentGroups={equipmentGroups}

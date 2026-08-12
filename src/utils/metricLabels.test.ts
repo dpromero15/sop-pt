@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest';
+import {
+  metricInCategory,
+  metricLabelPayload,
+  metricPrimaryLabelId,
+  metricScoresInCategory,
+  normalizeMetricLabels,
+} from './metricLabels';
+
+describe('normalizeMetricLabels', () => {
+  it('maps legacy labelId to labelIds + primary', () => {
+    const next = normalizeMetricLabels({
+      id: 'm_40m',
+      labelId: 'speed',
+      type: 'time_seconds',
+    });
+    expect(next.labelIds).toEqual(['speed']);
+    expect(next.primaryLabelId).toBe('speed');
+  });
+
+  it('keeps multi membership and clamps primary', () => {
+    const next = normalizeMetricLabels({
+      labelIds: ['speed', 'fitness'],
+      primaryLabelId: 'offense',
+      type: 'count',
+    });
+    expect(next.labelIds).toEqual(['speed', 'fitness']);
+    expect(next.primaryLabelId).toBe('speed');
+  });
+
+  it('locks attendance to attendance-only', () => {
+    const next = normalizeMetricLabels({
+      id: 'm_attendance',
+      type: 'attendance',
+      labelIds: ['speed', 'attendance'],
+      primaryLabelId: 'speed',
+    });
+    expect(next.labelIds).toEqual(['attendance']);
+    expect(next.primaryLabelId).toBe('attendance');
+  });
+});
+
+describe('membership helpers', () => {
+  const metric = {
+    labelIds: ['speed', 'fitness'],
+    primaryLabelId: 'speed',
+  };
+
+  it('metricInCategory uses membership', () => {
+    expect(metricInCategory(metric, 'speed')).toBe(true);
+    expect(metricInCategory(metric, 'fitness')).toBe(true);
+    expect(metricInCategory(metric, 'offense')).toBe(false);
+  });
+
+  it('metricScoresInCategory uses primary only', () => {
+    expect(metricScoresInCategory(metric, 'speed')).toBe(true);
+    expect(metricScoresInCategory(metric, 'fitness')).toBe(false);
+  });
+
+  it('metricPrimaryLabelId returns primary', () => {
+    expect(metricPrimaryLabelId(metric)).toBe('speed');
+  });
+});
+
+describe('metricLabelPayload', () => {
+  it('builds membership with primary', () => {
+    expect(metricLabelPayload(['fitness', 'speed'], 'speed')).toEqual({
+      labelIds: ['fitness', 'speed'],
+      primaryLabelId: 'speed',
+    });
+  });
+
+  it('forces attendance lock', () => {
+    expect(
+      metricLabelPayload(['speed'], 'speed', { attendance: true }),
+    ).toEqual({
+      labelIds: ['attendance'],
+      primaryLabelId: 'attendance',
+    });
+  });
+});

@@ -42,12 +42,21 @@ export interface LabelDefinition {
 export type MetricType = 'time_seconds' | 'count' | 'percentage' | 'rating_10' | 'attendance';
 
 /** How session entries roll up for rankings / label scoring. */
-export type MetricAggregationMode = 'sum' | 'best' | 'latest';
+export type MetricAggregationMode = 'sum' | 'best' | 'latest' | 'average';
 
 export interface MetricDefinition {
   id: string;
   name: string; // e.g. "40m Sprint Dash", "Juggling Count", "Attendance Status"
-  labelId: string; // references LabelDefinition.id (e.g. 'speed', 'technical', 'attendance')
+  /**
+   * Category labels this metric appears under (rankings filters / Config).
+   * Must be non-empty. Attendance is always `['attendance']`.
+   */
+  labelIds: string[];
+  /**
+   * Category that owns formula standing contribution (must be in `labelIds`).
+   * Secondary memberships are browse-only and do not double-count overall.
+   */
+  primaryLabelId: string;
   type: MetricType;
   unit: string; // "s", "reps", "goals", "%", "/10"
   higherIsBetter: boolean; // e.g. Sprint time: false (lower seconds is better); Juggling: true
@@ -62,9 +71,13 @@ export interface MetricDefinition {
   description?: string;
 }
 
-/** Pre-built derived stats computed from a base measurable metric (not logged in sessions). */
+/**
+ * @deprecated Removed from product UI. Kept for backup / API snapshot compat.
+ * Aggregation mode `average` replaces derived average fields.
+ */
 export type CalculatedFieldKind = 'average' | 'per_session' | 'percentile';
 
+/** @deprecated Removed from product UI; snapshots may still carry an empty array. */
 export interface CalculatedFieldDefinition {
   id: string;
   name: string;

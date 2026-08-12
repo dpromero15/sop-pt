@@ -9,7 +9,7 @@ Soccer Team Manager technical and planning docs.
 | [okrs/v2.md](okrs/v2.md) | v2.0.0 Objectives and Key Results (Google OKR format) |
 | [okrs/v2.1.md](okrs/v2.1.md) | v2.1.0 Session logger OKRs |
 | [sop/session-logging.md](sop/session-logging.md) | Sideline SOP: attendance swipe + player-card scoring |
-| [sop/metrics.md](sop/metrics.md) | Metric aggregation modes, rankings values, calculated fields |
+| [sop/metrics.md](sop/metrics.md) | Metric aggregation modes, rankings values, team metric summary |
 | [sop/version-control.md](sop/version-control.md) | Semver, VERSION.md, release branches, WORKING.md handoff, and PR closing |
 | [../VERSION.md](../VERSION.md) | Canonical version / release branch quick reference |
 | [../WORKING.md](../WORKING.md) | Active release working ledger (Ready to ship / In progress) |

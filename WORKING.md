@@ -12,33 +12,26 @@ _(none)_
 
 ## Ready to ship
 
-### #103 — Ranking cut lines: overall vs category/metric modes
+### #107 — Attendance always on Active Weights + formula score
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Config mode switch All rankings vs By category/metric. Stored `categoryCuts` / `metricCuts`. Rankings resolves specialty → metric → category → global Adjusted. Calculated Fields copy confirms average option.
-- **Touchpoints:** `RankingBoundariesPanel.tsx`, `rankingBoundaries.ts`, `RankingsView.tsx`, `types.ts`, `localJsonAdapter.ts`, Config copy
+- **Notes:** Season attendance rate feeds formula weight (006). Attendance system label always restored (007); Active Weights / Config always show Attendance first (always-on, not removable).
+- **Touchpoints:** `formulaWeights.ts`, `scoring.ts`, `metricAggregation.ts`, `006_attendance_formula_weight.ts`, `007_attendance_label.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `ScoringConfigModal.tsx`
 
-### #104 — Compliance: blocks practice + disciplinary (red card sit-out)
+### #108 — Drop calculated fields; average aggregation + team metric summary
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** `blocksPractice` + `disciplinary` kind; migration 005 seeds red-card sit-out; roster/board show practice eligibility.
-- **Touchpoints:** `normalizeCompliance.ts`, `005_compliance_blocks_practice.ts`, `ComplianceConfigPanel.tsx`, `eligibility.ts`
+- **Notes:** Catalog removed; `aggregationMode: 'average'`; Rankings team avg/best/scored strip; migration **008**.
+- **Touchpoints:** `metricAggregation.ts`, `rankingsFilter.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `008_clear_calculated_fields.ts`
 
-### #105 — Players Compliance pane: triage + dense board
+### #110 — Metrics: multi-category membership (labelIds + primary)
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Players → Compliance pane with Out of compliance (who/why + quick mark) and Board (squad × requirements grid, column mark-complete). Config still defines requirements; per-player edit checklist kept as secondary.
-- **Touchpoints:** `ComplianceBoardView.tsx`, `PlayersView.tsx`, `eligibility.ts` (`missingRequirements`)
-
-### Attendance always on Active Weights + formula score
-- **Status:** implemented; **needs GitHub issue** before PR (`gh auth refresh -h github.com`, then file + label `v2.10.0`)
-- **Notes:** Season attendance rate feeds formula weight (006). Attendance system label always restored (007); Active Weights / Config always show Attendance first (always-on, not removable). Scoring uses absolute season rate for Attendance category.
-- **Touchpoints:** `formulaWeights.ts`, `scoring.ts`, `metricAggregation.ts`, `006_attendance_formula_weight.ts`, `007_attendance_label.ts`, `RankingsView.tsx`, `ConfigView.tsx`, `ScoringConfigModal.tsx`, `localJsonAdapter.ts`
-- **QA:** `npm run lint` + `npm test` pass (158 tests) 2026-08-12
+- **Notes:** `labelIds` + `primaryLabelId`; filters use membership; formula standing uses primary only; migration **009**; Attendance locked; Config multi-select + primary.
+- **Touchpoints:** `metricLabels.ts`, `scoring.ts`, `rankingsFilter.ts`, `ConfigView.tsx`, `009_metric_multi_labels.ts`, `docs/sop/metrics.md`
 
 **Suggested PR Closes:**
 ```
-Closes #103
-Closes #104
-Closes #105
-Closes #N   <!-- replace after filing Attendance issue -->
+Closes #107
+Closes #108
+Closes #110
 ```
 
 ## Still open (this release)
@@ -47,10 +40,16 @@ Closes #N   <!-- replace after filing Attendance issue -->
 - Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
 - **Label:** `v2.10.0`
 
+### #109 — Compliance: sort names, denser board, invert eligibility/red-card checks
+- Name sort, compact board columns, inverted polarity for eligibility/disciplinary.
+- **Label:** `v2.10.0`
+
 ## Agent notes
 
 - `2.9.0` shipped via [#96](https://github.com/dpromero15/sop-pt/pull/96) + follow-up [#102](https://github.com/dpromero15/sop-pt/pull/102).
-- Yes: calculated fields include **average** (`kind: 'average'`, e.g. 40m Average) under Config → Calculated Fields.
+- First `2.10.0` batch shipped via [#106](https://github.com/dpromero15/sop-pt/pull/106) (`Closes #103 #104 #105`).
+- Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
+- Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
-- Attendance system category: schema **006** (formula weight) + **007** (label). HEAD already has ranking/compliance + attendance scoring; pending commit is Active Weights label UI follow-up.
-- **Pre-PR gate:** lint/test OK; VERSION 2.10.0 synced. Blocked on filing Attendance issue until `gh auth refresh -h github.com`. Do not open PR until human approval.
+- Attendance system category: schema **006** (formula weight) + **007** (label).
+- **QA:** `npm run lint` + `npm test` pass (165 tests) 2026-08-12.

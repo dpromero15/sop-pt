@@ -1,11 +1,12 @@
 import {
-  CalculatedFieldDefinition,
   LabelDefinition,
   MetricDefinition,
   PlayerRanking,
 } from '../types';
+import { formatMetricValue } from './scoring';
+import { metricInCategory, metricPrimaryLabelId } from './metricLabels';
 
-export type RankingsSortMode = 'total' | 'label' | 'metric' | 'calculated';
+export type RankingsSortMode = 'total' | 'label' | 'metric';
 
 /**
  * How totals are ranked:
@@ -16,13 +17,13 @@ export type RankingsTotalMode = 'overall' | 'adjusted' | 'coaches';
 
 export type RankingsMetricSelection = string | 'none';
 
-/** Metrics visible for the active category tab. */
+/** Metrics visible for the active category tab (membership). */
 export function metricsForCategory(
   metrics: MetricDefinition[],
   selectedLabelId: string | 'all',
 ): MetricDefinition[] {
   if (selectedLabelId === 'all') return metrics;
-  return metrics.filter((m) => m.labelId === selectedLabelId);
+  return metrics.filter((m) => metricInCategory(m, selectedLabelId));
 }
 
 /**
@@ -33,42 +34,25 @@ export function selectionAfterCategoryChange(
   labelId: string | 'all',
   previousMetricId: RankingsMetricSelection,
   metrics: MetricDefinition[],
-  calculatedFields: CalculatedFieldDefinition[] = [],
 ): { selectedMetricId: RankingsMetricSelection; sortBy: RankingsSortMode } {
   if (labelId === 'all') {
     const stillValidMetric =
       previousMetricId === 'none' ||
       metrics.some((m) => m.id === previousMetricId);
-    const stillValidCalc =
-      previousMetricId !== 'none' &&
-      calculatedFields.some((f) => f.id === previousMetricId && f.enabled);
     if (stillValidMetric && previousMetricId !== 'none') {
       return { selectedMetricId: previousMetricId, sortBy: 'metric' };
-    }
-    if (stillValidCalc) {
-      return { selectedMetricId: previousMetricId, sortBy: 'calculated' };
     }
     return { selectedMetricId: 'none', sortBy: 'total' };
   }
 
   const inCategory =
     previousMetricId !== 'none' &&
-    metrics.some((m) => m.id === previousMetricId && m.labelId === labelId);
+    metrics.some(
+      (m) => m.id === previousMetricId && metricInCategory(m, labelId),
+    );
 
   if (inCategory) {
     return { selectedMetricId: previousMetricId, sortBy: 'metric' };
-  }
-
-  const calcInCategory =
-    previousMetricId !== 'none' &&
-    calculatedFields.some((f) => {
-      if (f.id !== previousMetricId || !f.enabled) return false;
-      const base = metrics.find((m) => m.id === f.baseMetricId);
-      return base?.labelId === labelId;
-    });
-
-  if (calcInCategory) {
-    return { selectedMetricId: previousMetricId, sortBy: 'calculated' };
   }
 
   return { selectedMetricId: 'none', sortBy: 'label' };
@@ -154,11 +138,13 @@ export function isUnscoredForRankMode(
   if (sortBy === 'metric' && selectedMetricId !== 'none') {
     const metric = metrics.find((m) => m.id === selectedMetricId);
     if (!metric) return true;
-    return metricAggregatedValue(ranking, selectedMetricId, metric.labelId) === null;
-  }
-
-  if (sortBy === 'calculated' && selectedMetricId !== 'none') {
-    return ranking.calculatedValues[selectedMetricId] === undefined;
+    return (
+      metricAggregatedValue(
+        ranking,
+        selectedMetricId,
+        metricPrimaryLabelId(metric),
+      ) === null
+    );
   }
 
   if (sortBy === 'label' && selectedLabelId !== 'all') {
@@ -181,7 +167,6 @@ export function compareRankings(
   selectedLabelId: string | 'all',
   selectedMetricId: RankingsMetricSelection,
   metrics: MetricDefinition[],
-  calculatedFields: CalculatedFieldDefinition[] = [],
   totalMode: RankingsTotalMode = 'overall',
 ): number {
   // Adjusted / specialty: ineligible players always sort to the bottom.
@@ -201,20 +186,11 @@ export function compareRankings(
 
   if (sortBy === 'metric' && selectedMetricId !== 'none') {
     const metric = metrics.find((m) => m.id === selectedMetricId);
-    const labelId = metric?.labelId ?? '';
+    const labelId = metric ? metricPrimaryLabelId(metric) : '';
     return compareOptionalRankValue(
       metricAggregatedValue(a, selectedMetricId, labelId),
       metricAggregatedValue(b, selectedMetricId, labelId),
       metric?.higherIsBetter ?? true,
-    );
-  }
-
-  if (sortBy === 'calculated' && selectedMetricId !== 'none') {
-    const field = calculatedFields.find((f) => f.id === selectedMetricId);
-    return compareOptionalRankValue(
-      a.calculatedValues[selectedMetricId],
-      b.calculatedValues[selectedMetricId],
-      field?.higherIsBetter ?? true,
     );
   }
 
@@ -227,4 +203,49 @@ export function compareRankings(
 
 export function categoryScoreTagLabel(label: LabelDefinition): string {
   return `${label.name} standing`;
+}
+
+export interface TeamMetricSummary {
+  avg: number | null;
+  best: number | null;
+  scored: number;
+  roster: number;
+}
+
+/** Squad rollup for the selected measurable metric (informational). */
+export function teamMetricSummary(
+  rankings: PlayerRanking[],
+  metric: MetricDefinition,
+): TeamMetricSummary {
+  const primaryId = metricPrimaryLabelId(metric);
+  const values: number[] = [];
+  for (const r of rankings) {
+    const v = metricAggregatedValue(r, metric.id, primaryId);
+    if (v !== null) values.push(v);
+  }
+  if (values.length === 0) {
+    return { avg: null, best: null, scored: 0, roster: rankings.length };
+  }
+  const sum = values.reduce((acc, v) => acc + v, 0);
+  const avg = Math.round((sum / values.length) * 100) / 100;
+  const best = metric.higherIsBetter
+    ? Math.max(...values)
+    : Math.min(...values);
+  return {
+    avg,
+    best,
+    scored: values.length,
+    roster: rankings.length,
+  };
+}
+
+/** Format an aggregated metric value for team / ranking display. */
+export function formatTeamMetricValue(
+  value: number,
+  metric: MetricDefinition,
+): string {
+  if (metric.type === 'attendance') {
+    return `${Math.round(value)}%`;
+  }
+  return formatMetricValue(value, metric);
 }

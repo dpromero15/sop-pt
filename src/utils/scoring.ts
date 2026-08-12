@@ -6,10 +6,9 @@ import {
   ScoringFormulaConfig,
   PlayerRanking,
   PlayerLabelScore,
-  CalculatedFieldDefinition,
 } from '../types';
 import { aggregateMetricValue, percentileAmong } from './metricAggregation';
-import { computeAllCalculatedValues } from './calculatedFields';
+import { metricScoresInCategory } from './metricLabels';
 
 /**
  * Absolute min/max normalization — kept for optional standards / benchmarks
@@ -127,7 +126,6 @@ export function calculatePlayerRankings(
   metrics: MetricDefinition[],
   labels: LabelDefinition[],
   formula: ScoringFormulaConfig,
-  calculatedFields: CalculatedFieldDefinition[] = [],
 ): PlayerRanking[] {
   const metricMap = new Map<string, MetricDefinition>();
   metrics.forEach((m) => metricMap.set(m.id, m));
@@ -138,13 +136,6 @@ export function calculatePlayerRankings(
       weightPercent: w.weightPercent,
       enabled: w.enabled,
     }),
-  );
-
-  const calculatedByPlayer = computeAllCalculatedValues(
-    players,
-    entries,
-    metrics,
-    calculatedFields,
   );
 
   // Aggregated raw value per player × metric (null = unscored).
@@ -175,7 +166,9 @@ export function calculatePlayerRankings(
     const labelScoresRecord: Record<string, PlayerLabelScore> = {};
 
     labels.forEach((label) => {
-      const labelMetrics = metrics.filter((m) => m.labelId === label.id);
+      const labelMetrics = metrics.filter((m) =>
+        metricScoresInCategory(m, label.id),
+      );
       const metricDetails: PlayerLabelScore['metrics'] = [];
       let overallSum = 0;
       let overallCount = 0;
@@ -310,7 +303,7 @@ export function calculatePlayerRankings(
       rank: 0,
       attendanceRate,
       recentTrend,
-      calculatedValues: calculatedByPlayer.get(player.id) ?? {},
+      calculatedValues: {},
     };
   });
 
