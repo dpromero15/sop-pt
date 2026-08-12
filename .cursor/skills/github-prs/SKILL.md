@@ -33,10 +33,11 @@ Copy and complete:
 ```
 Pre-PR gate:
 - [ ] 1. QA evidence — npm run lint + npm test (pass); smoke Ready-to-ship acceptance; note results for the human
-- [ ] 2. WORKING.md sync — Ready to ship + Suggested PR Closes match what will close
-- [ ] 3. Version sync — VERSION.md + package.json + README Version: all match the release (and WORKING.md Release / branch)
-- [ ] 4. Ask human — explicitly request approval to open the PR; wait for a clear yes
-- [ ] 5. Only then — push if needed + gh pr create with Summary / Test plan / Closes
+- [ ] 2. Issue capture — every Ready-to-ship / In progress / Still open row has GitHub #N + version label; no orphan ledger titles
+- [ ] 3. WORKING.md sync — Ready to ship + Suggested PR Closes match what will close (never "(none)" while Ready is non-empty)
+- [ ] 4. Version sync — VERSION.md + package.json + README Version: all match the release (and WORKING.md Release / branch)
+- [ ] 5. Ask human — explicitly request approval to open the PR; wait for a clear yes
+- [ ] 6. Only then — push if needed + gh pr create with Summary / Test plan / Closes
 ```
 
 If the human has not approved, **do not** create the PR.
@@ -50,9 +51,10 @@ Canonical version: [`VERSION.md`](../../../VERSION.md).
 When opening a release / feature PR:
 
 1. **Read `WORKING.md` first** (Ready to ship + Suggested PR Closes).
-2. Treat every **Ready to ship** issue as in-scope for this PR unless the human explicitly drops some.
-3. You may also `gh issue list` / check labels, but **do not omit** a Ready-to-ship issue without asking.
-4. After merge (or when asked to clean up), update `WORKING.md`: remove shipped rows, refresh Suggested PR Closes / header; keep `VERSION.md` accurate.
+2. **Issue gate:** every Ready-to-ship row must be `### #N — title` with a live GitHub issue. If any row lacks `#N` or Suggested PR Closes is `(none)` while Ready is non-empty → **stop**, file/label issues ([working-files](../working-files/SKILL.md) **Hard rule: capture work in GitHub issues**), update `WORKING.md`, then continue.
+3. Treat every **Ready to ship** issue as in-scope for this PR unless the human explicitly drops some.
+4. You may also `gh issue list --label vX.Y.Z` / check labels, but **do not omit** a Ready-to-ship issue without asking.
+5. After merge (or when asked to clean up), update `WORKING.md`: remove shipped rows, refresh Suggested PR Closes / header; keep `VERSION.md` accurate. Leave **Still open** issues open on their future labels.
 
 This is how multiple enhancements from different chats ship in one PR without lost context.
 
@@ -123,7 +125,8 @@ Verify with `gh pr view <pr-number> --json body -q .body` that every finished is
 
 - Run `gh issue close` for work finished by a PR
 - Open a PR because “implementation is done” without QA evidence **and** explicit human approval
-- Ship a release/feature PR that implements backlog issues without a **Closes** section
+- Ship a release/feature PR that implements backlog work without GitHub issues + a **Closes** section
+- Open a PR with Ready-to-ship ledger rows that have no `#N` / Suggested PR Closes `(none)`
 - Open a PR without reading `WORKING.md` when Ready-to-ship entries exist
 - Ship with mismatched `VERSION.md` / `package.json` / README **Version:**
 - Start next-version feature work on the current release branch while Ready-to-ship work is still unshipped — recommend PR first
