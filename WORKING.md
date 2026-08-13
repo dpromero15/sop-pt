@@ -4,7 +4,7 @@
 |---|---|
 | **Release** | `2.10.0` |
 | **Branch** | `release/v2.10.0` |
-| **Last updated** | 2026-08-12 |
+| **Last updated** | 2026-08-13 |
 
 ## In progress
 
@@ -17,9 +17,15 @@ _(none)_
 - **Notes:** Rankings Print uses the current scope (Statistical + one metric, or Coaches Rank). All players ranked; breakouts are unlabeled dotted lines (no “cut” text) on screen and print.
 - **Touchpoints:** `rankingsPrint.ts`, `RankingsView.tsx`, `rankingBoundaries.ts`, `App.tsx`
 
+### #129 — Adjusted Rank should exclude only manually marked ineligible players
+- **Status:** implemented
+- **Notes:** Compliance no longer drives Adjusted Rank. `player.rankingIneligible` (roster Mark ineligible / edit checkbox) is the only exclusion; others stay in the list and breakouts.
+- **Touchpoints:** `eligibility.ts`, `App.tsx`, `PlayersView.tsx`, `RankingsView.tsx`, `types.ts`, `storage.md`
+
 **Suggested PR Closes:**
 ```
 Closes #127
+Closes #129
 ```
 
 ## Still open (this release)
@@ -50,4 +56,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (216 tests) 2026-08-13 — #127.
+- **QA:** `npm run lint` + `npm test` (218 tests) 2026-08-13 — #129.

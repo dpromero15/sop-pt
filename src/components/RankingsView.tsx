@@ -756,7 +756,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Unscored values count as 0 — gaps lower standing; ±1 bumps apply; only eligible players ranked"
+              title="Unscored values count as 0 — gaps lower standing; ±1 bumps apply. Only players you mark Ineligible on the roster drop to the bottom."
             >
               Adjusted Rank
             </button>
@@ -817,11 +817,11 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
             {specialtyPosition
-              ? `Specialty ${specialtyPosition}: re-ranked among that position (eligible only).`
+              ? `Specialty ${specialtyPosition}: re-ranked among that position (manual Ineligible at bottom).`
               : effectiveTotalMode === 'overall'
                 ? 'Pool place from scored metrics only (gaps omitted).'
                 : effectiveTotalMode === 'adjusted'
-                  ? 'Eligible players only (missing blocks-play paperwork at bottom). Gaps count as 0; ±1 bumps apply. Cut lines mark squad boundaries.'
+                  ? 'Gaps count as 0; ±1 bumps apply. Breakout lines mark squad groups. Only a manual Ineligible mark on the player drops them to the bottom — compliance is informational.'
                   : coachesScope === 'average'
                     ? 'Competition rank from the average of complete coach ballots (lower average = better). Add ballots under Players → Coaches Rating.'
                     : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot (1 = best).`}{' '}

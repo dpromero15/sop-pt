@@ -17,7 +17,6 @@ import { attachCoachesTotals } from './utils/coachesRating';
 import { applyAdjustedBumps } from './utils/adjustedBumps';
 import {
   applyEligibilityToAdjustedRanks,
-  eligiblePlayerIdSet,
 } from './utils/eligibility';
 import { Player } from './types';
 import { useAccess } from './access/AccessProvider';
@@ -240,12 +239,7 @@ export default function App() {
     );
     const withCoaches = attachCoachesTotals(base, players, coachBallots);
     const withBumps = applyAdjustedBumps(withCoaches, adjustedBumps);
-    const eligibleIds = eligiblePlayerIdSet(
-      players.map((p) => p.id),
-      complianceRequirements,
-      playerCompliance,
-    );
-    return applyEligibilityToAdjustedRanks(withBumps, eligibleIds);
+    return applyEligibilityToAdjustedRanks(withBumps);
   }, [
     players,
     entries,
@@ -254,8 +248,6 @@ export default function App() {
     formula,
     coachBallots,
     adjustedBumps,
-    complianceRequirements,
-    playerCompliance,
   ]);
 
   const handleApplyBump = (playerId: string, delta: 1 | -1) => {

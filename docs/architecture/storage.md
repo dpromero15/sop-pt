@@ -42,9 +42,10 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 ### Player fields
 
-`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `age?`, `joinedDate`, `status`, `notes?`, `deletedAt?`
+`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `age?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
 
 - **`deletedAt`:** ISO timestamp when the player was soft-deleted. Unset = live. `getPlayers()` excludes these; snapshots/backups keep them so cloud replace-collection does not wipe trash. Restore clears the flag. Records older than **90 days** are hard-deleted on boot (bumps, compliance, equipment assignment cascade).
+- **`rankingIneligible`:** Coach-set flag. `true` excludes the player from Adjusted Rank (bottom of the list). Missing/false = included. Compliance checklist badges are informational and do not change Adjusted place.
 
 ### Session fields
 

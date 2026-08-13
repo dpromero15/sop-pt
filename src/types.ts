@@ -113,6 +113,11 @@ export interface Player {
   joinedDate: string; // YYYY-MM-DD
   status: 'active' | 'injured' | 'inactive';
   notes?: string;
+  /**
+   * Coach-set: exclude from Adjusted Rank (sort to bottom).
+   * Missing / false = included. Compliance badges are informational only.
+   */
+  rankingIneligible?: boolean;
   /** ISO timestamp when soft-deleted; omit/undefined = live. Purged after 90 days. */
   deletedAt?: string;
 }

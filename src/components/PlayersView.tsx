@@ -28,7 +28,6 @@ import { calculatePlayerRankings } from '../utils/scoring';
 import {
   applyEligibilityToAdjustedRanks,
   completeFromChecked,
-  eligiblePlayerIdSet,
   isRequirementChecked,
   isRequirementComplete,
   missingBlockingRequirements,
@@ -99,6 +98,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formAge, setFormAge] = useState<number>(15);
   const [formAvatar, setFormAvatar] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formRankingIneligible, setFormRankingIneligible] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +136,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormAge(player.age || 15);
     setFormAvatar(player.avatarUrl || '');
     setFormNotes(player.notes || '');
+    setFormRankingIneligible(player.rankingIneligible === true);
   };
 
   const handleSavePlayerForm = (e: React.FormEvent) => {
@@ -151,7 +152,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         preferredFoot: formFoot,
         age: formAge,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
-        notes: formNotes
+        notes: formNotes,
+        rankingIneligible: formRankingIneligible || undefined,
       });
       setEditingPlayer(null);
     } else {
@@ -163,7 +165,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         age: formAge,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
         status: 'active',
-        notes: formNotes
+        notes: formNotes,
+        rankingIneligible: formRankingIneligible || undefined,
       });
       onCloseAddModal();
     }
@@ -171,6 +174,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     // Reset Form
     setFormName('');
     setFormNotes('');
+    setFormRankingIneligible(false);
     onRefreshData();
   };
 
@@ -267,11 +271,6 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const formula = StorageService.getFormula();
   const rankings = applyEligibilityToAdjustedRanks(
     calculatePlayerRankings(players, entries, metrics, labels, formula),
-    eligiblePlayerIdSet(
-      players.map((p) => p.id),
-      complianceRequirements,
-      playerCompliance,
-    ),
   );
   const rankingMap = new Map(rankings.map(r => [r.player.id, r]));
 
@@ -339,6 +338,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   setFormName('');
                   setFormJersey(Math.max(1, players.length + 1));
                   setFormNotes('');
+                  setFormRankingIneligible(false);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
               >
@@ -513,6 +513,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         <span className="text-slate-400 text-xs font-medium">
                           {player.preferredFoot} Foot
                         </span>
+                        {player.rankingIneligible && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold border bg-rose-500/15 text-rose-300 border-rose-500/30">
+                            Ineligible
+                          </span>
+                        )}
                         {consequenceBadges.map((key) => (
                           <span
                             key={key}
@@ -561,6 +566,31 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 </span>
 
                 <div className="flex items-center gap-2">
+                  {!readOnlyRoster && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      StorageService.updatePlayer({
+                        ...player,
+                        rankingIneligible: player.rankingIneligible ? undefined : true,
+                      });
+                      onRefreshData();
+                    }}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all active:scale-95 ${
+                      player.rankingIneligible
+                        ? 'bg-rose-500/20 text-rose-200 border-rose-500/40'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700'
+                    }`}
+                    title={
+                      player.rankingIneligible
+                        ? 'Include on Adjusted Rank'
+                        : 'Exclude from Adjusted Rank'
+                    }
+                  >
+                    {player.rankingIneligible ? 'Clear ineligible' : 'Mark ineligible'}
+                  </button>
+                  )}
                   <button
                     onClick={(e) => handleStartEdit(player, e)}
                     className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all active:scale-95"
@@ -741,6 +771,24 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
+              <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                <span>
+                  <span className="block text-slate-200 font-semibold">
+                    Ineligible for Adjusted Rank
+                  </span>
+                  <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                    Manual only. Compliance badges stay informational and do not
+                    drop the player from Adjusted Rank.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formRankingIneligible}
+                  onChange={(e) => setFormRankingIneligible(e.target.checked)}
+                  className="mt-1 rounded border-slate-600"
+                />
+              </label>
 
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Coach Notes / Strengths</label>
