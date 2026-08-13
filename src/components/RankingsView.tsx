@@ -5,6 +5,7 @@ import {
   Search,
   ChevronRight,
   Download,
+  Printer,
   Minus,
   Plus,
   X,
@@ -21,6 +22,7 @@ import {
   CoachBallot,
   PlayerPosition,
   RankingBoundariesConfig,
+  Team,
 } from '../types';
 import {
   bumpBudgetRemaining,
@@ -37,7 +39,14 @@ import {
   isCompleteBallot,
 } from '../utils/coachesRating';
 import { specialtyAdjustedRankings } from '../utils/eligibility';
-import { resolveActiveCutLines } from '../utils/rankingBoundaries';
+import {
+  resolveActiveCutLines,
+  resolvePrintCutLines,
+} from '../utils/rankingBoundaries';
+import {
+  buildRankingsPrintDocument,
+  openRankingsPrint,
+} from '../utils/rankingsPrint';
 import { metricPrimaryLabelId } from '../utils/metricLabels';
 import {
   visibleActiveWeights,
@@ -97,6 +106,7 @@ interface RankingsViewProps {
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
   rankingBoundaries: RankingBoundariesConfig;
+  team?: Team;
   /** When false, hide Adjusted ± bump controls (Viewer). */
   allowBumps?: boolean;
 }
@@ -286,6 +296,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   onSelectPlayer,
   onOpenQuickInsert,
   rankingBoundaries,
+  team,
   allowBumps = true,
 }) => {
   const rankingLabels = useMemo(
@@ -541,6 +552,50 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     a.click();
   };
 
+  const handlePrint = () => {
+    const sorted = [...rankingSource].sort((a, b) => {
+      if (individualCoachOrdinals) {
+        return compareOptionalRankValue(
+          individualCoachOrdinals.get(a.player.id) ?? null,
+          individualCoachOrdinals.get(b.player.id) ?? null,
+          false,
+        );
+      }
+      return compareRankings(
+        a,
+        b,
+        sortBy,
+        selectedLabelId,
+        selectedMetricId,
+        metrics,
+        effectiveTotalMode,
+      );
+    });
+    openRankingsPrint(
+      buildRankingsPrintDocument({
+        teamName: team?.name ?? 'Team',
+        season: team?.season,
+        rankings: sorted,
+        sortBy,
+        selectedLabelId,
+        selectedMetricId,
+        metrics,
+        labels,
+        totalMode: effectiveTotalMode,
+        coachesScopeLabel,
+        completeBallotCount,
+        individualOrdinals: individualCoachOrdinals,
+        cutLines: resolvePrintCutLines({
+          boundaries: rankingBoundaries,
+          specialtyPosition,
+          selectedLabelId,
+          selectedMetricId,
+          totalMode: effectiveTotalMode,
+        }),
+      }),
+    );
+  };
+
   const isBoardMode =
     selectedLabelId === 'all' && selectedMetricId === 'none';
 
@@ -611,6 +666,13 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             >
               <Sliders className="w-4 h-4 text-emerald-400" />
               <span>Configure Formula</span>
+            </button>
+            <button
+              onClick={handlePrint}
+              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-all active:scale-95"
+              title="Print this ranking (pick a metric or Coaches Rank first)"
+            >
+              <Printer className="w-4 h-4" />
             </button>
             <button
               onClick={handleExportCSV}

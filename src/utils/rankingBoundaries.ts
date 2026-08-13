@@ -94,3 +94,14 @@ export function resolveActiveCutLines({
   if (totalMode !== 'adjusted') return [];
   return [b.primaryCut, b.secondaryCut].sort((a, c) => a - c);
 }
+
+/**
+ * Cut places for a print sheet. Always includes a pair: metric override,
+ * else category override, else global 18 / 36 (including Statistical and Coaches).
+ */
+export function resolvePrintCutLines(args: ResolveCutLinesArgs): number[] {
+  const scoped = resolveActiveCutLines(args);
+  if (scoped.length > 0) return scoped;
+  const b = normalizeRankingBoundaries(args.boundaries);
+  return [b.primaryCut, b.secondaryCut].sort((a, c) => a - c);
+}

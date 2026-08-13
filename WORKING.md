@@ -12,14 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #125 — Compliance shows many players Ineligible when Grade Check is not actually flagged
-- **Status:** implemented — open [PR #126](https://github.com/dpromero15/sop-pt/pull/126)
-- **Notes:** Flag kinds (eligibility / disciplinary) default to cleared when unset. Only explicit `complete: false` raises Ineligible / sit-out. Paperwork and fees still default incomplete.
-- **Touchpoints:** `eligibility.ts`, `complianceConsequences.ts`, `ComplianceBoardView.tsx`, `PlayersView.tsx`
+### #127 — Print professional rankings sheet with unlabeled metric cut lines
+- **Status:** implemented
+- **Notes:** Rankings Print uses the current scope (Statistical + one metric, or Coaches Rank). All players ranked; metric/category/global cuts as unlabeled rules. No `Cut @` labels.
+- **Touchpoints:** `rankingsPrint.ts`, `RankingsView.tsx`, `rankingBoundaries.ts`, `App.tsx`
 
 **Suggested PR Closes:**
 ```
-Closes #125
+Closes #127
 ```
 
 ## Still open (this release)
@@ -42,6 +42,7 @@ _(none)_
 - Compliance consequences shipped via [#118](https://github.com/dpromero15/sop-pt/pull/118) (`Closes #117`).
 - JIT Save + sync log + attendance board shipped via [#122](https://github.com/dpromero15/sop-pt/pull/122) (`Closes #119 #120 #121`).
 - Attendance Statistical/Adjusted standing shipped via [#124](https://github.com/dpromero15/sop-pt/pull/124) (`Closes #123`).
+- Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
@@ -49,4 +50,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (212 tests) 2026-08-12 — #123/#125.
+- **QA:** `npm run lint` + `npm test` (216 tests) 2026-08-13 — #127.
