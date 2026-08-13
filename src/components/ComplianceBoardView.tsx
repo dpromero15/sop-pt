@@ -7,8 +7,11 @@ import type {
 } from '../types';
 import { StorageService } from '../services/storage';
 import {
+  completeFromChecked,
   isEligibleToPlay,
   isEligibleToPractice,
+  isFlagRequirement,
+  isRequirementChecked,
   isRequirementComplete,
   missingBlockingRequirements,
   missingRequirements,
@@ -16,6 +19,7 @@ import {
 
 type ComplianceMode = 'triage' | 'board';
 type IncompleteScope = 'blocking' | 'all';
+type PlayerSortMode = 'name-asc' | 'name-desc' | 'jersey';
 
 interface ComplianceBoardViewProps {
   players: Player[];
@@ -36,16 +40,29 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
   const [incompleteScope, setIncompleteScope] =
     useState<IncompleteScope>('blocking');
   const [incompleteRowsOnly, setIncompleteRowsOnly] = useState(false);
+  const [playerSort, setPlayerSort] = useState<PlayerSortMode>('name-asc');
 
   const sortedRequirements = useMemo(
     () => [...requirements].sort((a, b) => a.sortOrder - b.sortOrder),
     [requirements],
   );
 
-  const sortedPlayers = useMemo(
-    () => [...players].sort((a, b) => a.jerseyNumber - b.jerseyNumber),
-    [players],
-  );
+  const sortedPlayers = useMemo(() => {
+    const next = [...players];
+    next.sort((a, b) => {
+      if (playerSort === 'jersey') {
+        const jersey = a.jerseyNumber - b.jerseyNumber;
+        if (jersey !== 0) return jersey;
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+      }
+      const name = a.name.localeCompare(b.name, undefined, {
+        sensitivity: 'base',
+      });
+      if (name !== 0) return playerSort === 'name-desc' ? -name : name;
+      return a.jerseyNumber - b.jerseyNumber;
+    });
+    return next;
+  }, [players, playerSort]);
 
   const setComplete = (
     playerId: string,
@@ -76,11 +93,16 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
     if (readOnly || playerIds.length === 0) return;
     const req = sortedRequirements.find((r) => r.id === requirementId);
     const label = req?.name ?? 'this item';
+    const flag = req ? isFlagRequirement(req) : false;
     if (
       !confirm(
-        `Mark "${label}" complete for ${playerIds.length} visible player${
-          playerIds.length === 1 ? '' : 's'
-        }?`,
+        flag
+          ? `Clear "${label}" flags for ${playerIds.length} visible player${
+              playerIds.length === 1 ? '' : 's'
+            }?`
+          : `Mark "${label}" complete for ${playerIds.length} visible player${
+              playerIds.length === 1 ? '' : 's'
+            }?`,
       )
     ) {
       return;
@@ -188,6 +210,21 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+            <span className="sr-only">Sort players</span>
+            <select
+              value={playerSort}
+              onChange={(e) =>
+                setPlayerSort(e.target.value as PlayerSortMode)
+              }
+              className="rounded-lg border border-slate-800 bg-slate-950/80 px-2 py-1.5 text-xs font-semibold text-slate-200"
+              aria-label="Sort players"
+            >
+              <option value="name-asc">Name A–Z</option>
+              <option value="name-desc">Name Z–A</option>
+              <option value="jersey">Jersey #</option>
+            </select>
+          </label>
           <div
             className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
             role="group"
@@ -299,7 +336,9 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                       }
                       className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950"
                     >
-                      Mark all complete
+                      {missing.every((r) => isFlagRequirement(r))
+                        ? 'Clear all flags'
+                        : 'Mark all complete'}
                     </button>
                   )}
                 </div>
@@ -313,7 +352,9 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                       title={
                         readOnly
                           ? req.name
-                          : `Mark ${req.name} complete`
+                          : isFlagRequirement(req)
+                            ? `Clear ${req.name} flag`
+                            : `Mark ${req.name} complete`
                       }
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                         req.blocksPlay
@@ -351,33 +392,34 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
               Compliance board
             </p>
             <p className="text-xs text-slate-500">
-              Toggle cells to update paperwork and fees for the whole squad.
-              Column headers can mark an item complete for all visible rows.
+              Paperwork and fees: checked = complete. Eligibility and red-card
+              items: checked = active flag (out of compliance). Column actions
+              clear flags or mark paperwork complete for visible rows.
             </p>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[28rem] border-collapse text-sm">
+            <table className="w-full border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/60 text-left text-[11px] uppercase tracking-wider text-slate-500">
-                  <th className="sticky left-0 z-10 bg-slate-950/95 px-3 py-2 font-semibold">
+                <tr className="border-b border-slate-800 bg-slate-950/60 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                  <th className="sticky left-0 z-10 bg-slate-950/95 px-2 py-1.5 font-semibold whitespace-nowrap">
                     Player
                   </th>
                   {sortedRequirements.map((req) => (
                     <th
                       key={req.id}
-                      className="px-2 py-2 font-semibold whitespace-nowrap align-bottom"
+                      className="px-1 py-1.5 font-semibold align-bottom max-w-[4.5rem] whitespace-normal leading-tight"
                     >
-                      <div className="flex flex-col gap-1 items-start">
-                        <span>
+                      <div className="flex flex-col gap-0.5 items-center text-center">
+                        <span className="line-clamp-2">
                           {req.name}
                           {req.blocksPlay && (
-                            <span className="ml-1 font-normal text-rose-400/80">
-                              · play
+                            <span className="ml-0.5 font-normal text-rose-400/80">
+                              ·P
                             </span>
                           )}
                           {req.blocksPractice && (
-                            <span className="ml-1 font-normal text-amber-400/80">
-                              · practice
+                            <span className="ml-0.5 font-normal text-amber-400/80">
+                              ·Pr
                             </span>
                           )}
                         </span>
@@ -392,7 +434,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                             }
                             className="normal-case tracking-normal text-[10px] font-semibold text-emerald-400 hover:text-emerald-300"
                           >
-                            Mark column ✓
+                            {isFlagRequirement(req) ? 'Clear flags' : 'Mark ✓'}
                           </button>
                         )}
                       </div>
@@ -412,11 +454,14 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                       key={player.id}
                       className="border-b border-slate-800/80 hover:bg-slate-800/40"
                     >
-                      <td className="sticky left-0 z-10 bg-slate-900/95 px-3 py-2 whitespace-nowrap">
+                      <td className="sticky left-0 z-10 bg-slate-900/95 px-2 py-1 whitespace-nowrap">
                         <div className="font-semibold text-slate-100">
-                          #{player.jerseyNumber} {player.name}
+                          {player.name}{' '}
+                          <span className="text-slate-400 font-medium">
+                            #{player.jerseyNumber}
+                          </span>
                         </div>
-                        <div className="text-[11px] text-slate-500">
+                        <div className="text-[10px] text-slate-500">
                           {player.position}
                           {!eligible && (
                             <span className="ml-1.5 text-rose-300">
@@ -441,19 +486,19 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                           req.id,
                         );
                         return (
-                          <td key={req.id} className="px-2 py-2 text-center">
+                          <td key={req.id} className="px-1 py-1 text-center w-8">
                             <input
                               type="checkbox"
-                              checked={complete}
+                              checked={isRequirementChecked(req, complete)}
                               disabled={readOnly}
                               onChange={(e) =>
                                 setComplete(
                                   player.id,
                                   req.id,
-                                  e.target.checked,
+                                  completeFromChecked(req, e.target.checked),
                                 )
                               }
-                              className="rounded border-slate-600 h-4 w-4"
+                              className="rounded border-slate-600 h-3.5 w-3.5"
                               aria-label={`${player.name}: ${req.name}`}
                             />
                           </td>

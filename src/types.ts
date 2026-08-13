@@ -113,6 +113,8 @@ export interface Player {
   joinedDate: string; // YYYY-MM-DD
   status: 'active' | 'injured' | 'inactive';
   notes?: string;
+  /** ISO timestamp when soft-deleted; omit/undefined = live. Purged after 90 days. */
+  deletedAt?: string;
 }
 
 /** Configurable paperwork / fee / eligibility checklist item. */
@@ -204,6 +206,8 @@ export interface Session {
   notes?: string;
   /** Ordered metric plan for this session; attendance metric id is always first. */
   metricIds: string[];
+  /** ISO timestamp when soft-deleted; omit/undefined = live. Purged after 90 days. */
+  deletedAt?: string;
 }
 
 export interface MetricEntry {

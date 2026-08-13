@@ -106,8 +106,9 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         Define paperwork, fees, eligibility, and disciplinary items. Toggle{' '}
         <span className="text-slate-200">Blocks play</span> /{' '}
         <span className="text-slate-200">Blocks practice</span> so incomplete
-        items remove a player from match eligibility or practice. For a red card,
-        leave the sit-out incomplete until they have served the next match.
+        items remove a player from match eligibility or practice. Paperwork and
+        fees: check when done. Eligibility and red-card sit-out: check to raise
+        a flag; uncheck after they have served.
       </p>
       <ul className="space-y-2">
         {requirements.map((req) => (

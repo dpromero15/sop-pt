@@ -410,4 +410,48 @@ describe('runLocalMigrations', () => {
       'attendance',
     ]);
   });
+
+  it('strips invalid deletedAt via v11', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(10));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', name: 'Ada', jerseyNumber: 10, deletedAt: 'not-a-date' },
+        {
+          id: 'p2',
+          name: 'Bea',
+          jerseyNumber: 7,
+          deletedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.SESSIONS),
+      JSON.stringify([
+        { id: 's1', title: 'Live', date: '2026-01-01', deletedAt: '' },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const players = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+    );
+    expect(players.find((p: { id: string }) => p.id === 'p1').deletedAt).toBeUndefined();
+    expect(players.find((p: { id: string }) => p.id === 'p2').deletedAt).toBe(
+      '2026-01-01T00:00:00.000Z',
+    );
+    const sessions = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.SESSIONS))!,
+    );
+    expect(sessions[0].deletedAt).toBeUndefined();
+  });
 });

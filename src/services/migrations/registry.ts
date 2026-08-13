@@ -9,6 +9,7 @@ import { migration007AttendanceLabel } from './migrations/007_attendance_label';
 import { migration008ClearCalculatedFields } from './migrations/008_clear_calculated_fields';
 import { migration009MetricMultiLabels } from './migrations/009_metric_multi_labels';
 import { migration010PruneGhostCategories } from './migrations/010_prune_ghost_categories';
+import { migration011SoftDeleteFields } from './migrations/011_soft_delete_fields';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -84,5 +85,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Prune unused sample categories and orphan formula weights (Rankings vs Config).',
     up: migration010PruneGhostCategories,
+  },
+  {
+    id: 11,
+    name: 'soft_delete_fields',
+    description:
+      'Optional deletedAt on players/sessions (soft delete + 90-day purge).',
+    up: migration011SoftDeleteFields,
   },
 ];

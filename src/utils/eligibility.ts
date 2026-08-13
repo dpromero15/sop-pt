@@ -5,6 +5,29 @@ import type {
 } from '../types';
 import { assignCompetitionRanks } from './scoring';
 
+/** Eligibility / disciplinary: checking the box raises a flag (out of compliance). */
+export function isFlagRequirement(
+  req: Pick<ComplianceRequirement, 'kind'>,
+): boolean {
+  return req.kind === 'eligibility' || req.kind === 'disciplinary';
+}
+
+/** Checkbox checked state: flag kinds invert stored `complete`. */
+export function isRequirementChecked(
+  req: Pick<ComplianceRequirement, 'kind'>,
+  complete: boolean,
+): boolean {
+  return isFlagRequirement(req) ? !complete : complete;
+}
+
+/** Map a checkbox toggle back to stored `complete`. */
+export function completeFromChecked(
+  req: Pick<ComplianceRequirement, 'kind'>,
+  checked: boolean,
+): boolean {
+  return isFlagRequirement(req) ? !checked : checked;
+}
+
 /** Missing completion counts as incomplete. */
 export function isRequirementComplete(
   state: PlayerComplianceState,
