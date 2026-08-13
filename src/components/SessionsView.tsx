@@ -7,6 +7,7 @@ import {
   FileText, 
   CheckCircle, 
   Trash2, 
+  RotateCcw,
   X, 
   Target, 
   Flame, 
@@ -91,7 +92,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
 
   const handleDeleteSession = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this session and all its logged metrics?')) {
+    if (
+      confirm(
+        'Move this session to trash? Logged metrics stay with it so you can restore. Sessions still in trash after 90 days are permanently removed.',
+      )
+    ) {
       StorageService.deleteSession(id);
       onRefreshData();
       if (selectedSession?.id === id) {
@@ -333,6 +338,57 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
           )}
         </div>
       </div>
+
+      {(() => {
+        const deleted = StorageService.getDeletedSessions();
+        if (deleted.length === 0) return null;
+        return (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-100">
+                Recently deleted
+              </h3>
+              <p className="text-xs text-slate-500">
+                Restore within 90 days. Logged metrics stay with the session
+                until then.
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {deleted.map((session) => (
+                <li
+                  key={session.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-100 truncate">
+                      {session.title}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {session.date}
+                      {session.deletedAt
+                        ? ` · deleted ${new Date(session.deletedAt).toLocaleDateString()}`
+                        : ''}
+                    </div>
+                  </div>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        StorageService.restoreSession(session.id);
+                        onRefreshData();
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-semibold px-2.5 py-1.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Restore
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
 
       {/* Modal Form to Create New Session */}
       {isAddModalOpen && (

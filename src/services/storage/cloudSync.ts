@@ -157,8 +157,8 @@ async function authToken(): Promise<string | null> {
 
 function localHasSquadData(): boolean {
   return (
-    StorageService.getPlayers().length > 0 ||
-    StorageService.getSessions().length > 0 ||
+    StorageService.getPlayers({ includeDeleted: true }).length > 0 ||
+    StorageService.getSessions({ includeDeleted: true }).length > 0 ||
     StorageService.getEntries().length > 0
   );
 }

@@ -11,6 +11,7 @@ import {
   Upload,
   Award,
   ClipboardList,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Player,
@@ -169,7 +170,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
   const handleDeletePlayer = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Are you sure you want to delete this player from the squad roster?')) {
+    if (
+      confirm(
+        'Move this player to trash? You can restore them from Recently deleted. Players still in trash after 90 days are permanently removed.',
+      )
+    ) {
       StorageService.deletePlayer(id);
       onRefreshData();
     }
@@ -591,6 +596,60 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           );
         })}
       </div>
+
+      {(() => {
+        const deleted = StorageService.getDeletedPlayers();
+        if (deleted.length === 0) return null;
+        return (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-100">
+                Recently deleted
+              </h3>
+              <p className="text-xs text-slate-500">
+                Restore within 90 days. After that, players are permanently
+                removed.
+              </p>
+            </div>
+            <ul className="space-y-2">
+              {deleted.map((player) => (
+                <li
+                  key={player.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-100 truncate">
+                      {player.name}{' '}
+                      <span className="text-slate-400 font-medium">
+                        #{player.jerseyNumber}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Deleted{' '}
+                      {player.deletedAt
+                        ? new Date(player.deletedAt).toLocaleDateString()
+                        : '—'}
+                    </div>
+                  </div>
+                  {!readOnlyRoster && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        StorageService.restorePlayer(player.id);
+                        onRefreshData();
+                      }}
+                      className="inline-flex items-center gap-1.5 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-semibold px-2.5 py-1.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Restore
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })()}
       </>
       )}
 

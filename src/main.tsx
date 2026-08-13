@@ -5,6 +5,7 @@ import './index.css';
 import { initFirebase } from './services/firebase';
 import { AccessProvider } from './access/AccessProvider';
 import { runLocalMigrations } from './services/migrations';
+import { StorageService } from './services/storage';
 
 // Adapt existing local data before any React state hydrates from StorageService.
 try {
@@ -16,6 +17,12 @@ try {
   }
 } catch (err) {
   console.error('[sop-pt] data migration crashed', err);
+}
+
+try {
+  StorageService.purgeExpiredDeletes();
+} catch (err) {
+  console.error('[sop-pt] soft-delete purge crashed', err);
 }
 
 try {

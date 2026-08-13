@@ -448,6 +448,73 @@ describe('LocalJsonAdapter', () => {
     );
     expect(adapter.getAdjustedBumps()).toEqual({ p2: -1 });
     adapter.deletePlayer('p2');
+    expect(adapter.getAdjustedBumps()).toEqual({ p2: -1 });
+    adapter.purgeExpiredDeletes(Date.now() + 91 * 24 * 60 * 60 * 1000);
     expect(adapter.getAdjustedBumps()).toEqual({});
+  });
+
+  it('soft-deletes players and sessions with restore and 90-day purge', () => {
+    const session = adapter.addSession({
+      date: '2026-08-01',
+      title: 'Keep me',
+      type: 'session',
+      metricIds: ['m_attendance'],
+    });
+    adapter.addOrUpdateEntry({
+      sessionId: session.id,
+      playerId: 'p1',
+      metricId: 'm_attendance',
+      value: 100,
+    });
+    const coach = adapter.addCoach({ name: 'Bump Coach' });
+    expect(adapter.applyBump('p1', 1, coach.id)).toBe(true);
+
+    adapter.deletePlayer('p1');
+    adapter.deleteSession(session.id);
+
+    expect(adapter.getPlayers().some((p) => p.id === 'p1')).toBe(false);
+    expect(adapter.getSessions().some((s) => s.id === session.id)).toBe(false);
+    expect(adapter.getDeletedPlayers().some((p) => p.id === 'p1')).toBe(true);
+    expect(adapter.getDeletedSessions().some((s) => s.id === session.id)).toBe(
+      true,
+    );
+    expect(adapter.getAdjustedBumps().p1).toBe(1);
+    expect(
+      adapter.getEntries().some((e) => e.sessionId === session.id),
+    ).toBe(true);
+    expect(
+      adapter.getSnapshot().players.some((p) => p.id === 'p1' && p.deletedAt),
+    ).toBe(true);
+
+    adapter.addPlayer({
+      name: 'New Kid',
+      jerseyNumber: 99,
+      position: 'ST',
+      preferredFoot: 'Right',
+      status: 'active',
+    });
+    expect(adapter.getDeletedPlayers().some((p) => p.id === 'p1')).toBe(true);
+
+    adapter.restorePlayer('p1');
+    adapter.restoreSession(session.id);
+    expect(adapter.getPlayers().some((p) => p.id === 'p1')).toBe(true);
+    expect(adapter.getSessions().some((s) => s.id === session.id)).toBe(true);
+    expect(adapter.getPlayers().find((p) => p.id === 'p1')?.deletedAt).toBeUndefined();
+
+    adapter.deletePlayer('p1');
+    adapter.deleteSession(session.id);
+    expect(adapter.purgeExpiredDeletes(Date.now()).players).toBe(0);
+    const purged = adapter.purgeExpiredDeletes(
+      Date.now() + 91 * 24 * 60 * 60 * 1000,
+    );
+    expect(purged.players).toBe(1);
+    expect(purged.sessions).toBe(1);
+    expect(adapter.getPlayers({ includeDeleted: true }).some((p) => p.id === 'p1')).toBe(
+      false,
+    );
+    expect(adapter.getEntries().some((e) => e.sessionId === session.id)).toBe(
+      false,
+    );
+    expect(adapter.getAdjustedBumps().p1).toBeUndefined();
   });
 });

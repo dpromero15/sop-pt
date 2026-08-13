@@ -38,9 +38,15 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 `id`, `name`, `shortName`, `season`, `ageGroup`, `clubName`, `homeVenue`, `primaryColor`, `secondaryColor`, `logoUrl?`, `coachName?`, `contactEmail?`, `timezone`, `notes?`, `updatedAt`
 
+### Player fields
+
+`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `age?`, `joinedDate`, `status`, `notes?`, `deletedAt?`
+
+- **`deletedAt`:** ISO timestamp when the player was soft-deleted. Unset = live. `getPlayers()` excludes these; snapshots/backups keep them so cloud replace-collection does not wipe trash. Restore clears the flag. Records older than **90 days** are hard-deleted on boot (bumps, compliance, equipment assignment cascade).
+
 ### Session fields
 
-`id`, `date`, `time?`, `title`, `type`, `status`, `location?`, `opponent?`, `score?`, `notes?`, `metricIds`
+`id`, `date`, `time?`, `title`, `type`, `status`, `location?`, `opponent?`, `score?`, `notes?`, `metricIds`, `deletedAt?`
 
 - **`status`:** `open` | `closed`. New sessions default to `open`. Quick Insert only resumes open sessions. Completing a session in the logger sets `closed`. Closed sessions remain in Sessions history; **Reopen & Insert** sets them back to `open`.
 - **Migration:** legacy sessions without `status` are treated as `open` so coaches can finish in-progress work.
@@ -55,6 +61,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Calculated fields (v8):** Stored calculated-fields catalog cleared; use metric `aggregationMode: 'average'` instead.
 - **Metrics (v9):** `labelId` → `labelIds[]` + `primaryLabelId` (multi-category membership; primary owns formula standing).
 - **Ghost categories (v10):** Unused Thunder FC sample labels (Speed, Fitness, …) with no metrics are removed; orphan formula weights and metrics pointing at missing labels are pruned so Rankings tabs / Active Weights match Config. Fresh teams seed Attendance-only labels/metrics/formula (not the full demo catalog).
+- **Soft delete (v11):** Optional `deletedAt` on players and sessions. Single delete is restoreable for 90 days; `clearAllPlayers` stays a permanent wipe. Purge runs after migrations on boot.
 
 ### Metric definition fields
 

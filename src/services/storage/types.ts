@@ -61,17 +61,22 @@ export interface StorageRepository {
   saveTeam(team: Team): void;
   updateTeam(partial: Partial<Team> & { id: string }): Team;
 
-  getPlayers(): Player[];
+  getPlayers(opts?: { includeDeleted?: boolean }): Player[];
+  getDeletedPlayers(): Player[];
   savePlayers(players: Player[]): void;
   addPlayer(player: Omit<Player, 'id' | 'joinedDate'>): Player;
   updatePlayer(updated: Player): void;
   deletePlayer(id: string): void;
+  restorePlayer(id: string): void;
 
-  getSessions(): Session[];
+  getSessions(opts?: { includeDeleted?: boolean }): Session[];
+  getDeletedSessions(): Session[];
   saveSessions(sessions: Session[]): void;
   addSession(session: Omit<Session, 'id' | 'status'> & { status?: Session['status'] }): Session;
   updateSession(updated: Session): void;
   deleteSession(id: string): void;
+  restoreSession(id: string): void;
+  purgeExpiredDeletes(nowMs?: number): { players: number; sessions: number };
 
   getEntries(): MetricEntry[];
   saveEntries(entries: MetricEntry[]): void;

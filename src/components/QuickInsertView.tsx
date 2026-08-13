@@ -151,7 +151,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const deleteOpenSession = (sessionId: string, title: string) => {
     if (
       !confirm(
-        `Delete "${title}"?\n\nThis open session and all of its logged attendance/scores will be permanently removed.`,
+        `Delete "${title}"?\n\nThis open session moves to trash (restore from Sessions for 90 days). Logged attendance/scores stay with it until then.`,
       )
     ) {
       return;

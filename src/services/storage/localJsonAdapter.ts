@@ -58,6 +58,11 @@ import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
 import { metricInCategory } from '../../utils/metricLabels';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
+  isPastSoftDeleteRetention,
+  isSoftDeleted,
+  withoutDeletedAt,
+} from '../../utils/softDelete';
+import {
   canApplyBump,
   createBumpTransaction,
   netBumpsFromTransactions,
@@ -280,8 +285,15 @@ export class LocalJsonAdapter implements StorageRepository {
     return next;
   }
 
-  getPlayers(): Player[] {
-    return this.readJson(STORAGE_KEYS.PLAYERS, INITIAL_PLAYERS);
+  getPlayers(opts?: { includeDeleted?: boolean }): Player[] {
+    const all = this.readJson(STORAGE_KEYS.PLAYERS, INITIAL_PLAYERS);
+    return opts?.includeDeleted ? all : all.filter((p) => !isSoftDeleted(p));
+  }
+
+  getDeletedPlayers(): Player[] {
+    return this.getPlayers({ includeDeleted: true })
+      .filter((p) => isSoftDeleted(p))
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
   }
 
   savePlayers(players: Player[]) {
@@ -290,7 +302,7 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   addPlayer(player: Omit<Player, 'id' | 'joinedDate'>): Player {
-    const players = this.getPlayers();
+    const players = this.getPlayers({ includeDeleted: true });
     const newPlayer: Player = {
       ...player,
       id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -302,11 +314,34 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   updatePlayer(updated: Player) {
-    this.savePlayers(this.getPlayers().map((p) => (p.id === updated.id ? updated : p)));
+    this.savePlayers(
+      this.getPlayers({ includeDeleted: true }).map((p) =>
+        p.id === updated.id ? updated : p,
+      ),
+    );
   }
 
   deletePlayer(id: string) {
-    this.savePlayers(this.getPlayers().filter((p) => p.id !== id));
+    const now = new Date().toISOString();
+    this.savePlayers(
+      this.getPlayers({ includeDeleted: true }).map((p) =>
+        p.id === id ? { ...p, deletedAt: now } : p,
+      ),
+    );
+  }
+
+  restorePlayer(id: string) {
+    this.savePlayers(
+      this.getPlayers({ includeDeleted: true }).map((p) =>
+        p.id === id ? (withoutDeletedAt(p) as Player) : p,
+      ),
+    );
+  }
+
+  private hardDeletePlayer(id: string) {
+    this.savePlayers(
+      this.getPlayers({ includeDeleted: true }).filter((p) => p.id !== id),
+    );
     const txs = this.getBumpTransactions();
     const next = txs.filter((tx) => tx.playerId !== id);
     if (next.length !== txs.length) {
@@ -333,7 +368,7 @@ export class LocalJsonAdapter implements StorageRepository {
     }
   }
 
-  getSessions(): Session[] {
+  getSessions(opts?: { includeDeleted?: boolean }): Session[] {
     const raw = this.readJson<LegacySession[]>(STORAGE_KEYS.SESSIONS, INITIAL_SESSIONS);
     const entries = this.readJson(STORAGE_KEYS.ENTRIES, INITIAL_ENTRIES);
     const migrated = migrateSessionsMetricIds(raw, entries);
@@ -352,7 +387,15 @@ export class LocalJsonAdapter implements StorageRepository {
     if (needsWrite) {
       this.writeJson(STORAGE_KEYS.SESSIONS, migrated);
     }
-    return migrated;
+    return opts?.includeDeleted
+      ? migrated
+      : migrated.filter((s) => !isSoftDeleted(s));
+  }
+
+  getDeletedSessions(): Session[] {
+    return this.getSessions({ includeDeleted: true })
+      .filter((s) => isSoftDeleted(s))
+      .sort((a, b) => (b.deletedAt ?? '').localeCompare(a.deletedAt ?? ''));
   }
 
   saveSessions(sessions: Session[]) {
@@ -369,7 +412,7 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   addSession(session: Omit<Session, 'id' | 'status'> & { status?: SessionStatus }): Session {
-    const sessions = this.getSessions();
+    const sessions = this.getSessions({ includeDeleted: true });
     const metricIds = ensureAttendanceFirst(
       session.metricIds?.length
         ? session.metricIds
@@ -387,12 +430,57 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   updateSession(updated: Session) {
-    this.saveSessions(this.getSessions().map((s) => (s.id === updated.id ? updated : s)));
+    this.saveSessions(
+      this.getSessions({ includeDeleted: true }).map((s) =>
+        s.id === updated.id ? updated : s,
+      ),
+    );
   }
 
   deleteSession(id: string) {
-    this.saveSessions(this.getSessions().filter((s) => s.id !== id));
+    const now = new Date().toISOString();
+    this.saveSessions(
+      this.getSessions({ includeDeleted: true }).map((s) =>
+        s.id === id ? { ...s, deletedAt: now } : s,
+      ),
+    );
+  }
+
+  restoreSession(id: string) {
+    this.saveSessions(
+      this.getSessions({ includeDeleted: true }).map((s) =>
+        s.id === id ? (withoutDeletedAt(s) as Session) : s,
+      ),
+    );
+  }
+
+  private hardDeleteSession(id: string) {
+    this.saveSessions(
+      this.getSessions({ includeDeleted: true }).filter((s) => s.id !== id),
+    );
     this.saveEntries(this.getEntries().filter((e) => e.sessionId !== id));
+  }
+
+  purgeExpiredDeletes(nowMs: number = Date.now()): {
+    players: number;
+    sessions: number;
+  } {
+    const expiredPlayers = this.getPlayers({ includeDeleted: true }).filter(
+      (p) => isPastSoftDeleteRetention(p.deletedAt, nowMs),
+    );
+    for (const player of expiredPlayers) {
+      this.hardDeletePlayer(player.id);
+    }
+    const expiredSessions = this.getSessions({ includeDeleted: true }).filter(
+      (s) => isPastSoftDeleteRetention(s.deletedAt, nowMs),
+    );
+    for (const session of expiredSessions) {
+      this.hardDeleteSession(session.id);
+    }
+    return {
+      players: expiredPlayers.length,
+      sessions: expiredSessions.length,
+    };
   }
 
   getEntries(): MetricEntry[] {
@@ -610,7 +698,7 @@ export class LocalJsonAdapter implements StorageRepository {
     );
     this.saveCalculatedFields(fields);
 
-    const sessions = this.getSessions().map((s) => ({
+    const sessions = this.getSessions({ includeDeleted: true }).map((s) => ({
       ...s,
       metricIds: ensureAttendanceFirst(
         (s.metricIds || []).filter((id) => keptIds.has(id)),
@@ -1070,8 +1158,8 @@ export class LocalJsonAdapter implements StorageRepository {
   getSnapshot(): TeamSnapshot {
     return {
       team: this.getTeam(),
-      players: this.getPlayers(),
-      sessions: this.getSessions(),
+      players: this.getPlayers({ includeDeleted: true }),
+      sessions: this.getSessions({ includeDeleted: true }),
       entries: this.getEntries(),
       metrics: this.getMetrics(),
       labels: this.getLabels(),
