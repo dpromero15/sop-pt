@@ -123,6 +123,33 @@ describe('visibleRankingLabels / visibleActiveWeights', () => {
     ]);
   });
 
+  it('hides subcategories from tabs and formula sliders', () => {
+    const labels: LabelDefinition[] = [
+      { ...ATTENDANCE_LABEL },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+      {
+        id: 'acceleration',
+        name: 'Acceleration',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+        parentLabelId: 'speed',
+      },
+    ];
+    expect(visibleRankingLabels(labels).map((l) => l.id)).toEqual([
+      'attendance',
+      'speed',
+    ]);
+  });
+
   it('hides Active Weights chips for labels that no longer exist', () => {
     const labels: LabelDefinition[] = [{ ...ATTENDANCE_LABEL }];
     const formula: ScoringFormulaConfig = {
@@ -155,6 +182,42 @@ describe('pruneFormulaWeightsToLabels', () => {
     ]);
     expect(changed).toBe(true);
     expect(next.weights.map((w) => w.labelId)).toEqual(['attendance']);
+  });
+
+  it('drops subcategory formula weights (parent-only formula)', () => {
+    const { formula: next, changed } = pruneFormulaWeightsToLabels(
+      {
+        id: 'f1',
+        name: 'Test',
+        weights: [
+          { labelId: 'attendance', weightPercent: 20, enabled: true },
+          { labelId: 'speed', weightPercent: 70, enabled: true },
+          { labelId: 'acceleration', weightPercent: 10, enabled: true },
+        ],
+      },
+      [
+        { ...ATTENDANCE_LABEL },
+        {
+          id: 'speed',
+          name: 'Speed',
+          description: '',
+          color: 'blue',
+          badgeBg: '',
+          badgeText: '',
+        },
+        {
+          id: 'acceleration',
+          name: 'Acceleration',
+          description: '',
+          color: 'blue',
+          badgeBg: '',
+          badgeText: '',
+          parentLabelId: 'speed',
+        },
+      ],
+    );
+    expect(changed).toBe(true);
+    expect(next.weights.map((w) => w.labelId)).toEqual(['attendance', 'speed']);
   });
 });
 

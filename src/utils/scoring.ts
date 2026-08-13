@@ -8,9 +8,12 @@ import {
   PlayerLabelScore,
 } from '../types';
 import { aggregateMetricValue, percentileAmong } from './metricAggregation';
-import { metricScoresInCategory } from './metricLabels';
+import { metricScoresInLabelTree, normalizeLabelForest } from './labelTree';
 import { ATTENDANCE_METRIC_ID } from './sessionMetrics';
-import { visibleRankingLabels } from './formulaWeights';
+import {
+  ensureAttendanceLabel,
+  visibleRankingLabels,
+} from './formulaWeights';
 import { rosterPlayers } from './playerStatus';
 
 /** Used when the team blob has attendance entries but no attendance metric row. */
@@ -156,6 +159,9 @@ export function calculatePlayerRankings(
 ): PlayerRanking[] {
   const roster = rosterPlayers(players);
   const rankingLabels = visibleRankingLabels(labels);
+  const { labels: scoreLabels } = ensureAttendanceLabel(
+    normalizeLabelForest(labels).labels,
+  );
   const rankingMetrics = metricsForRankings(metrics);
 
   const metricMap = new Map<string, MetricDefinition>();
@@ -196,9 +202,9 @@ export function calculatePlayerRankings(
     const playerAgg = aggByPlayer.get(player.id)!;
     const labelScoresRecord: Record<string, PlayerLabelScore> = {};
 
-    rankingLabels.forEach((label) => {
+    scoreLabels.forEach((label) => {
       const labelMetrics = rankingMetrics.filter((m) =>
-        metricScoresInCategory(m, label.id),
+        metricScoresInLabelTree(m, label.id, scoreLabels),
       );
       const metricDetails: PlayerLabelScore['metrics'] = [];
       let overallSum = 0;

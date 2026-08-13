@@ -1,4 +1,8 @@
 import type { MetricDefinition } from '../types';
+import {
+  resolveTreeMembership,
+  type LabelTreePick,
+} from './labelTree';
 
 /** Legacy single-label shape still present in older blobs / tests. */
 export type MetricLabelInput = Partial<
@@ -15,6 +19,7 @@ export type MetricLabelInput = Partial<
  */
 export function normalizeMetricLabels<T extends MetricLabelInput>(
   metric: T,
+  labels?: LabelTreePick[],
 ): T & Pick<MetricDefinition, 'labelIds' | 'primaryLabelId'> {
   const isAttendance =
     metric.type === 'attendance' || metric.id === 'm_attendance';
@@ -34,7 +39,11 @@ export function normalizeMetricLabels<T extends MetricLabelInput>(
   const rawIds = Array.isArray(metric.labelIds)
     ? metric.labelIds.map((id) => String(id).trim()).filter(Boolean)
     : [];
-  const labelIds = Array.from(new Set(rawIds.length > 0 ? rawIds : fromLegacy));
+  let labelIds = Array.from(new Set(rawIds.length > 0 ? rawIds : fromLegacy));
+
+  if (labels && labelIds.length > 0) {
+    labelIds = resolveTreeMembership(labelIds, labels).labelIds;
+  }
 
   // Never invent a missing category id (e.g. 'speed') — fall back to Attendance.
   const fallback = labelIds[0] || 'attendance';
@@ -92,14 +101,14 @@ export function metricPrimaryLabelId(
 export function metricLabelPayload(
   labelIds: string[],
   primaryLabelId: string,
-  options?: { attendance?: boolean },
+  options?: { attendance?: boolean; labels?: LabelTreePick[] },
 ): Pick<MetricDefinition, 'labelIds' | 'primaryLabelId'> {
   if (options?.attendance) {
     return { labelIds: ['attendance'], primaryLabelId: 'attendance' };
   }
-  const ids = Array.from(
-    new Set(labelIds.map((id) => id.trim()).filter(Boolean)),
-  );
+  const ids = options?.labels
+    ? resolveTreeMembership(labelIds, options.labels).labelIds
+    : Array.from(new Set(labelIds.map((id) => id.trim()).filter(Boolean)));
   const primary =
     primaryLabelId.trim() && ids.includes(primaryLabelId.trim())
       ? primaryLabelId.trim()

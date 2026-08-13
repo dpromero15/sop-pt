@@ -55,7 +55,13 @@ import {
   pruneFormulaWeightsToLabels,
 } from '../../utils/formulaWeights';
 import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
-import { metricInCategory } from '../../utils/metricLabels';
+import { normalizeMetricLabels } from '../../utils/metricLabels';
+import {
+  allocateLabelId,
+  canParentHaveChildren,
+  deleteLabelBlockReason,
+  normalizeLabelForest,
+} from '../../utils/labelTree';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
   isPastSoftDeleteRetention,
@@ -574,7 +580,23 @@ export class LocalJsonAdapter implements StorageRepository {
       next = attendanceOnly;
       shouldWrite = true;
     }
-    if (shouldWrite) {
+    const labels = this.getLabels();
+    next = next.map((m) => {
+      const { labelId: _legacy, ...rest } = normalizeMetricLabels(
+        m,
+        labels,
+      ) as MetricDefinition & { labelId?: string };
+      return rest;
+    });
+    const normalizedChanged = next.some((m, i) => {
+      const prev = metrics[i];
+      return (
+        !prev ||
+        m.labelIds.join(',') !== (prev.labelIds || []).join(',') ||
+        m.primaryLabelId !== prev.primaryLabelId
+      );
+    });
+    if (shouldWrite || normalizedChanged) {
       this.writeJson(STORAGE_KEYS.METRICS, next);
     }
     return next;
@@ -586,9 +608,11 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   addMetric(metric: Omit<MetricDefinition, 'id'>): MetricDefinition {
+    const labels = this.getLabels();
+    const normalized = normalizeMetricLabels(metric, labels);
     const metrics = this.getMetrics();
     const newMetric: MetricDefinition = {
-      ...metric,
+      ...normalized,
       id: `m_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
     };
     metrics.push(newMetric);
@@ -597,7 +621,11 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   updateMetric(updated: MetricDefinition) {
-    this.saveMetrics(this.getMetrics().map((m) => (m.id === updated.id ? updated : m)));
+    const labels = this.getLabels();
+    const normalized = normalizeMetricLabels(updated, labels);
+    this.saveMetrics(
+      this.getMetrics().map((m) => (m.id === updated.id ? { ...normalized, id: updated.id } : m)),
+    );
   }
 
   deleteMetric(id: string) {
@@ -607,10 +635,11 @@ export class LocalJsonAdapter implements StorageRepository {
   getLabels(): LabelDefinition[] {
     const labels = this.readJson(STORAGE_KEYS.LABELS, [ATTENDANCE_LABEL]);
     const { labels: ensured, changed } = ensureAttendanceLabel(labels);
-    if (changed) {
-      this.writeJson(STORAGE_KEYS.LABELS, ensured);
+    const forest = normalizeLabelForest(ensured);
+    if (changed || forest.changed) {
+      this.writeJson(STORAGE_KEYS.LABELS, forest.labels);
     }
-    return ensured;
+    return forest.labels;
   }
 
   saveLabels(labels: LabelDefinition[]) {
@@ -620,17 +649,44 @@ export class LocalJsonAdapter implements StorageRepository {
 
   addLabel(label: Omit<LabelDefinition, 'id'>): LabelDefinition {
     const labels = this.getLabels();
+    const parentLabelId = label.parentLabelId?.trim() || undefined;
+    if (parentLabelId) {
+      const parent = labels.find((l) => l.id === parentLabelId);
+      if (!parent || !canParentHaveChildren(parent)) {
+        throw new Error(
+          'Subcategories can only be added under a non-system parent category.',
+        );
+      }
+    }
     const newLabel: LabelDefinition = {
       ...label,
-      id: label.name.toLowerCase().replace(/[^a-z0-9]/g, '_') || `lbl_${Date.now()}`,
+      id: allocateLabelId(
+        label.name,
+        labels.map((l) => l.id),
+      ),
+      parentLabelId,
     };
+    if (parentLabelId) {
+      const parent = labels.find((l) => l.id === parentLabelId);
+      if (parent) {
+        newLabel.color = newLabel.color || parent.color;
+        newLabel.badgeBg = newLabel.badgeBg || parent.badgeBg;
+        newLabel.badgeText = newLabel.badgeText || parent.badgeText;
+      }
+    }
     labels.push(newLabel);
     this.saveLabels(labels);
 
-    const formula = this.getFormula();
-    if (!formula.weights.some((w) => w.labelId === newLabel.id)) {
-      formula.weights.push({ labelId: newLabel.id, weightPercent: 10, enabled: true });
-      this.saveFormula(formula);
+    if (!parentLabelId) {
+      const formula = this.getFormula();
+      if (!formula.weights.some((w) => w.labelId === newLabel.id)) {
+        formula.weights.push({
+          labelId: newLabel.id,
+          weightPercent: 10,
+          enabled: true,
+        });
+        this.saveFormula(formula);
+      }
     }
 
     return newLabel;
@@ -652,13 +708,9 @@ export class LocalJsonAdapter implements StorageRepository {
     const labels = this.getLabels();
     const label = labels.find((l) => l.id === id);
     if (!label) return;
-    if (label.system) return;
-
-    const metrics = this.getMetrics();
-    if (metrics.some((m) => metricInCategory(m, id))) {
-      throw new Error(
-        'Reassign or remove metrics that use this label before deleting it.',
-      );
+    const block = deleteLabelBlockReason(id, labels, this.getMetrics());
+    if (block) {
+      throw new Error(block);
     }
 
     this.saveLabels(labels.filter((l) => l.id !== id));

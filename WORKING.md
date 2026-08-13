@@ -1,9 +1,9 @@
-# Working ledger — release v2.10.0
+# Working ledger — release v2.11.0
 
 | Field | Value |
 |---|---|
-| **Release** | `2.10.0` |
-| **Branch** | `release/v2.10.0` |
+| **Release** | `2.11.0` |
+| **Branch** | `release/v2.11.0` |
 | **Last updated** | 2026-08-13 |
 
 ## In progress
@@ -12,39 +12,35 @@ _(none)_
 
 ## Ready to ship
 
-_(none)_
+### #139 — Category parents with subcategories (no double metric relation)
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** One-level `parentLabelId`; parents hold metrics + children; tree uniqueness (prefer subcategory); parent-only formula weights; Rankings parent tabs + All/Direct/sub chips. Schema **v14**.
+- **Touchpoints:** `src/utils/labelTree.ts`, `metricLabels.ts`, `formulaWeights.ts`, `scoring.ts`, `rankingsFilter.ts`, `ConfigView.tsx`, `RankingsView.tsx`, `014_label_parent.ts`
+
+**Suggested PR Closes:**
+```
+Closes #139
+```
 
 ## Still open (this release)
 
 _(none)_
 
-## Deferred (next release)
+## Deferred (later)
 
 ### #99 — System Admin team hub + shadow mode (attribution-first)
 - Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
-- **Parked for:** `v2.11.0` (too large for remaining 2.10.0 batch; GitHub label retarget pending human approval)
+- **Parked for:** `v2.12.0` (backlog; not on the 2.11 line)
 
 ## Agent notes
 
-- `2.9.0` shipped via [#96](https://github.com/dpromero15/sop-pt/pull/96) + follow-up [#102](https://github.com/dpromero15/sop-pt/pull/102).
-- First `2.10.0` batch shipped via [#106](https://github.com/dpromero15/sop-pt/pull/106) (`Closes #103 #104 #105`).
-- Second `2.10.0` batch shipped via [#111](https://github.com/dpromero15/sop-pt/pull/111) (`Closes #107 #108 #110`).
-- Ghost categories shipped via [#115](https://github.com/dpromero15/sop-pt/pull/115) (`Closes #112 #113`).
-- Compliance invert + soft delete shipped via [#116](https://github.com/dpromero15/sop-pt/pull/116) (`Closes #109 #114`).
-- Compliance consequences shipped via [#118](https://github.com/dpromero15/sop-pt/pull/118) (`Closes #117`).
-- JIT Save + sync log + attendance board shipped via [#122](https://github.com/dpromero15/sop-pt/pull/122) (`Closes #119 #120 #121`).
-- Attendance Statistical/Adjusted standing shipped via [#124](https://github.com/dpromero15/sop-pt/pull/124) (`Closes #123`).
-- Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
-- Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
-- Manual Adjusted ineligible shipped via [#130](https://github.com/dpromero15/sop-pt/pull/130) (`Closes #129`).
-- Session logger cockpit shipped via [#132](https://github.com/dpromero15/sop-pt/pull/132) (`Closes #131`).
-- Session rename + inactive roster + birth year/grade + one-page print shipped via [#134](https://github.com/dpromero15/sop-pt/pull/134) (`Closes #133 #135 #136 #137`).
-- Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
-- Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
+- `2.10.0` shipped via [#138](https://github.com/dpromero15/sop-pt/pull/138) (includes #134 batch).
+- Label hierarchy: schema **v14** (`014_label_parent`).
+- Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing). Parent standing now also includes child primaries.
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - Soft delete: schema **v11** (`011_soft_delete_fields`).
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - Player birth year + grade: schema **v13** (`013_player_birth_year_grade`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (236 tests) 2026-08-13 — #133 #135 #136 #137.
+- **QA:** `npm run lint` + `npm test` (254 tests) 2026-08-13 — #139.

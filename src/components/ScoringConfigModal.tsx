@@ -4,8 +4,8 @@ import { LabelDefinition, ScoringFormulaConfig } from '../types';
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
 import {
-  ATTENDANCE_LABEL,
   DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+  visibleRankingLabels,
 } from '../utils/formulaWeights';
 
 interface ScoringConfigModalProps {
@@ -27,12 +27,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
 
   const isAttendance = (labelId: string) => labelId === 'attendance';
 
-  const weightLabels = (() => {
-    const withoutAtt = labels.filter((l) => l.id !== 'attendance');
-    const attendance =
-      labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
-    return [attendance, ...withoutAtt];
-  })();
+  const weightLabels = visibleRankingLabels(labels);
 
   const [weightsMap, setWeightsMap] = useState<Record<string, { weightPercent: number; enabled: boolean }>>(() => {
     const map: Record<string, { weightPercent: number; enabled: boolean }> = {};

@@ -245,6 +245,52 @@ describe('LocalJsonAdapter', () => {
     expect(() => adapter.deleteLabel('speed')).toThrow(/reassign/i);
   });
 
+  it('adds subcategories without formula weights and blocks deleting a parent with children', () => {
+    adapter.saveLabels([
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+    ]);
+    adapter.saveFormula({
+      id: 'f1',
+      name: 'Test',
+      weights: [
+        { labelId: 'attendance', weightPercent: 20, enabled: true },
+        { labelId: 'speed', weightPercent: 80, enabled: true },
+      ],
+    });
+    const child = adapter.addLabel({
+      name: 'Acceleration',
+      description: 'First steps',
+      color: 'blue',
+      badgeBg: '',
+      badgeText: '',
+      parentLabelId: 'speed',
+    });
+    expect(child.parentLabelId).toBe('speed');
+    expect(child.id).toBe('acceleration');
+    expect(
+      adapter.getFormula().weights.some((w) => w.labelId === child.id),
+    ).toBe(false);
+    expect(() => adapter.deleteLabel('speed')).toThrow(/subcategor/i);
+    adapter.deleteLabel(child.id);
+    expect(adapter.getLabels().some((l) => l.id === child.id)).toBe(false);
+  });
+
   it('does not seed Thunder FC sample categories on first read', () => {
     const labels = adapter.getLabels();
     expect(labels.map((l) => l.id)).toEqual(['attendance']);

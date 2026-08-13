@@ -10,7 +10,7 @@ import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { normalizeRankingBoundaries } from '../utils/rankingBoundaries';
-import { metricInCategory } from '../utils/metricLabels';
+import { labelPathName, metricInLabelTree } from '../utils/labelTree';
 
 type CutConfigMode = 'all' | 'scoped';
 
@@ -77,8 +77,8 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
 
   const metricsForCategoryList = useMemo(() => {
     if (!categoryId) return [] as MetricDefinition[];
-    return metrics.filter((m) => metricInCategory(m, categoryId));
-  }, [categoryId, metrics]);
+    return metrics.filter((m) => metricInLabelTree(m, categoryId, labels));
+  }, [categoryId, metrics, labels]);
 
   useEffect(() => {
     if (!categoryId) return;
@@ -265,7 +265,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
                 ) : (
                   categoryOptions.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.name}
+                      {labelPathName(labels, l.id)}
                     </option>
                   ))
                 )}

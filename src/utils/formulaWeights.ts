@@ -3,6 +3,11 @@ import type {
   MetricDefinition,
   ScoringFormulaConfig,
 } from '../types';
+import {
+  childrenOf,
+  normalizeLabelForest,
+  rootLabels,
+} from './labelTree';
 import { normalizeMetricLabels } from './metricLabels';
 
 /** Default Attendance share of the total-score formula when missing or invalid. */
@@ -53,15 +58,17 @@ export function attendanceOnlyFormula(): ScoringFormulaConfig {
 }
 
 /**
- * Category tabs / formula sliders: Attendance first, then every real label.
- * Same set Config and Rankings should show.
+ * Category tabs / formula sliders: Attendance first, then every **root** label.
+ * Subcategories are folders under a parent, not their own formula rows.
  */
 export function visibleRankingLabels(
   labels: LabelDefinition[],
 ): LabelDefinition[] {
-  const withoutAtt = labels.filter((l) => l.id !== 'attendance');
+  const { labels: forest } = normalizeLabelForest(labels);
+  const roots = rootLabels(forest);
   const attendance =
-    labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+    roots.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
+  const withoutAtt = roots.filter((l) => l.id !== 'attendance');
   return [attendance, ...withoutAtt];
 }
 
@@ -72,7 +79,7 @@ export function visibleActiveWeights(
   formula: ScoringFormulaConfig,
   labels: LabelDefinition[],
 ): ScoringFormulaConfig['weights'] {
-  const labelIds = new Set(labels.map((l) => l.id));
+  const labelIds = new Set(visibleRankingLabels(labels).map((l) => l.id));
   labelIds.add('attendance');
   return [...formula.weights]
     .filter(
@@ -94,7 +101,7 @@ export function pruneFormulaWeightsToLabels(
   formula: ScoringFormulaConfig,
   labels: LabelDefinition[],
 ): { formula: ScoringFormulaConfig; changed: boolean } {
-  const labelIds = new Set(labels.map((l) => l.id));
+  const labelIds = new Set(visibleRankingLabels(labels).map((l) => l.id));
   labelIds.add('attendance');
   const pruned = formula.weights.filter((w) => labelIds.has(w.labelId));
   const prunedChanged = pruned.length !== formula.weights.length;
@@ -167,13 +174,24 @@ export function pruneGhostCategories(opts: {
     for (const id of m.labelIds) usedByMetrics.add(id);
   }
 
-  const filteredLabels = labels.filter((l) => {
+  const { labels: forest, changed: forestChanged } = normalizeLabelForest(labels);
+  if (forestChanged) changed = true;
+
+  const filteredLabels = forest.filter((l) => {
     if (l.id === 'attendance' || l.system) return true;
     if (!SAMPLE_CATEGORY_ID_SET.has(l.id)) return true;
-    return usedByMetrics.has(l.id);
+    if (usedByMetrics.has(l.id)) return true;
+    return childrenOf(forest, l.id).some(
+      (child) =>
+        !SAMPLE_CATEGORY_ID_SET.has(child.id) || usedByMetrics.has(child.id),
+    );
   });
-  if (filteredLabels.length !== labels.length) changed = true;
-  const reEnsured = ensureAttendanceLabel(filteredLabels);
+  const keptIds = new Set(filteredLabels.map((l) => l.id));
+  const withoutOrphans = filteredLabels.filter(
+    (l) => !l.parentLabelId || keptIds.has(l.parentLabelId),
+  );
+  if (withoutOrphans.length !== labels.length) changed = true;
+  const reEnsured = ensureAttendanceLabel(withoutOrphans);
   labels = reEnsured.labels;
   if (reEnsured.changed) changed = true;
 
