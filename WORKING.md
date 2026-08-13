@@ -13,7 +13,7 @@ _(none)_
 ## Ready to ship
 
 ### #117 — Compliance consequences + manager (No play / Ineligible / No practice / No equipment)
-- **Status:** implemented
+- **Status:** implemented — open [PR #118](https://github.com/dpromero15/sop-pt/pull/118)
 - **Notes:** Physical = No practice; Grade Check = eligibility (inverted checkbox → Ineligible); CRHS + CHSSAA Policy = No play; Team fee = No play + No equipment. Config Compliance manager applies the recommended set and per-item consequences. Schema v12.
 - **Touchpoints:** `complianceConsequences.ts`, `ComplianceConfigPanel.tsx`, `ComplianceBoardView.tsx`, `PlayersView.tsx`, `EquipmentConfigPanel.tsx`, `012_compliance_consequences.ts`, `eligibility.ts`
 
@@ -46,4 +46,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (197 tests) after #117.
+- **QA:** `npm run lint` + `npm test` (197 tests) 2026-08-12 — #117 / PR #118.
