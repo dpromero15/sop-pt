@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Minus, Plus, Play, Square, RotateCcw, SkipForward } from 'lucide-react';
 import type { MetricDefinition, Player } from '../../types';
 
@@ -42,12 +42,18 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
   );
   const [stopwatchMs, setStopwatchMs] = useState(0);
   const [running, setRunning] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setValue(initialValue ?? (metric.type === 'count' ? 0 : 0));
     setInputText(initialValue != null ? String(initialValue) : '');
     setStopwatchMs(0);
     setRunning(false);
+    const id = window.setTimeout(() => {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }, 0);
+    return () => window.clearTimeout(id);
   }, [player.id, metric.id, initialValue]);
 
   useEffect(() => {
@@ -62,8 +68,27 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
 
   const stopwatchSeconds = stopwatchMs / 1000;
 
+  const saveAndNext = () => {
+    const finalValue =
+      metric.type === 'time_seconds' && stopwatchMs > 0 && !inputText
+        ? Number(stopwatchSeconds.toFixed(2))
+        : value;
+    commit(finalValue);
+  };
+
+  const scoreInputProps = {
+    ref: inputRef,
+    enterKeyHint: 'go' as const,
+  };
+
   return (
-    <div className="mx-auto w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl">
+    <form
+      className="mx-auto w-full max-w-sm space-y-4 rounded-2xl border border-slate-700 bg-slate-900 p-5 shadow-xl"
+      onSubmit={(e) => {
+        e.preventDefault();
+        saveAndNext();
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -113,6 +138,7 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
             </button>
           </div>
           <input
+            {...scoreInputProps}
             type="number"
             inputMode="numeric"
             step="1"
@@ -155,6 +181,7 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
             </button>
           </div>
           <input
+            {...scoreInputProps}
             type="number"
             step="0.01"
             inputMode="decimal"
@@ -173,6 +200,7 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
       {(metric.type === 'percentage' || metric.type === 'rating_10') && (
         <div className="space-y-3 py-2">
           <input
+            {...scoreInputProps}
             type="number"
             inputMode="decimal"
             step={metric.type === 'rating_10' ? '0.5' : '1'}
@@ -196,6 +224,7 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
         metric.type !== 'percentage' &&
         metric.type !== 'rating_10' && (
           <input
+            {...scoreInputProps}
             type="number"
             inputMode="decimal"
             value={inputText}
@@ -209,18 +238,11 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
         )}
 
       <button
-        type="button"
-        onClick={() => {
-          const finalValue =
-            metric.type === 'time_seconds' && stopwatchMs > 0 && !inputText
-              ? Number(stopwatchSeconds.toFixed(2))
-              : value;
-          commit(finalValue);
-        }}
+        type="submit"
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3.5 text-base font-semibold text-slate-950 hover:bg-emerald-400"
       >
         Save & next <ChevronRight className="h-5 w-5" />
       </button>
-    </div>
+    </form>
   );
 };

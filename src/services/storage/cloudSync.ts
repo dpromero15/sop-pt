@@ -4,6 +4,7 @@ import { ApiAdapter, type ConfigName } from './apiAdapter';
 import { getApiBaseUrl, isForceLocal } from './connectionStatus';
 import { STORAGE_KEYS } from './storageKeys';
 import { __resetSyncLogForTests, appendSyncLog } from './syncLog';
+import { classifySyncFailure } from './syncFailure';
 import type { TeamSnapshot } from './types';
 
 export type SyncUiStatus =
@@ -319,6 +320,36 @@ function ensureSquadArrays(snap: TeamSnapshot): TeamSnapshot {
   };
 }
 
+/** Chip stays Pending/Retrying on network blips; auth/fatal stay Sync error. */
+function applySyncFailure(
+  message: string,
+  teamId: string,
+  buckets?: SyncBucket[],
+): void {
+  const offline =
+    typeof navigator !== 'undefined' && navigator.onLine === false;
+  const kind = classifySyncFailure(message);
+  if (offline) {
+    appendSyncLog('warn', message, {
+      teamId,
+      buckets,
+      status: 'offline',
+    });
+    emit('offline');
+    return;
+  }
+  if (kind === 'transient') {
+    appendSyncLog('warn', message, {
+      teamId,
+      buckets,
+      status: 'pending',
+    });
+    emit('pending', 'Retrying…');
+    return;
+  }
+  emit('error', message);
+}
+
 async function flushTeam(teamId: string): Promise<void> {
   if (!cloudEnabled() || flushing) return;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -375,15 +406,11 @@ async function flushTeam(teamId: string): Promise<void> {
         teamId,
         status: 'pending',
       });
+      scheduleFlushSoon();
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Sync failed';
-    emit(
-      typeof navigator !== 'undefined' && navigator.onLine === false
-        ? 'offline'
-        : 'error',
-      message,
-    );
+    applySyncFailure(message, teamId, buckets);
     const wait = BACKOFF_MS[Math.min(backoffIdx, BACKOFF_MS.length - 1)];
     backoffIdx += 1;
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -392,9 +419,6 @@ async function flushTeam(teamId: string): Promise<void> {
     }, wait);
   } finally {
     flushing = false;
-    if (dirtyFor(teamId).size > 0 && status !== 'error' && status !== 'offline') {
-      scheduleFlushSoon();
-    }
   }
 }
 
@@ -530,16 +554,21 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
       emit('pending');
       await flushNow(teamId);
     } else {
+      backoffIdx = 0;
       emit('synced');
     }
   } catch (err) {
     StorageService.setHoldSeeds(false);
-    emit(
-      typeof navigator !== 'undefined' && navigator.onLine === false
-        ? 'offline'
-        : 'error',
-      err instanceof Error ? err.message : 'Hydrate failed',
-    );
+    const message = err instanceof Error ? err.message : 'Hydrate failed';
+    applySyncFailure(message, teamId);
+    if (status === 'pending' || status === 'offline') {
+      const wait = BACKOFF_MS[Math.min(backoffIdx, BACKOFF_MS.length - 1)];
+      backoffIdx += 1;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (boundTeamId) void enterTeamCloudSync(boundTeamId);
+      }, wait);
+    }
   }
 }
 

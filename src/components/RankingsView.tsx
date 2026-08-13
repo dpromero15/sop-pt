@@ -58,6 +58,7 @@ import {
 } from '../utils/formulaWeights';
 import {
   childrenOf,
+  parentIdsOf,
   standingLabelIdForScope,
   type CategorySubScope,
 } from '../utils/labelTree';
@@ -1145,10 +1146,20 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               >
                 Direct
               </button>
-              {activeSubcategories.map((child) => (
+              {activeSubcategories.map((child) => {
+                const otherParents = parentIdsOf(child)
+                  .filter((id) => id !== selectedLabelId)
+                  .map((id) => labels.find((l) => l.id === id)?.name)
+                  .filter(Boolean);
+                return (
                 <button
                   type="button"
                   key={child.id}
+                  title={
+                    otherParents.length > 0
+                      ? `Also under ${otherParents.join(', ')}`
+                      : undefined
+                  }
                   onClick={() => selectSubScope(child.id)}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
                     selectedSubScope === child.id
@@ -1158,7 +1169,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 >
                   {child.name}
                 </button>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

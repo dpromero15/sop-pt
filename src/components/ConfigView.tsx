@@ -41,10 +41,12 @@ import {
 import {
   canParentHaveChildren,
   childrenOf,
+  isSubcategory,
   labelPathName,
-  resolveTreeMembership,
+  parentIdsOf,
+  primaryParentIdOf,
   rootLabels,
-  treeIds,
+  toggleTreeMembership,
 } from '../utils/labelTree';
 
 interface ConfigViewProps {
@@ -147,7 +149,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelDesc, setNewLabelDesc] = useState('');
   const [newLabelColor, setNewLabelColor] = useState('emerald');
-  const [newLabelParentId, setNewLabelParentId] = useState<string | undefined>();
+  const [newLabelParentIds, setNewLabelParentIds] = useState<string[]>([]);
+  const [newLabelPrimaryParentId, setNewLabelPrimaryParentId] = useState('');
+  const [labelFormIsSubcategory, setLabelFormIsSubcategory] = useState(false);
 
   // Modal / Form state for Adding / Editing Metric Definition
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
@@ -335,6 +339,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setNewLabelName(lbl.name);
     setNewLabelDesc(lbl.description);
     setNewLabelColor(lbl.color);
+    setNewLabelParentIds(parentIdsOf(lbl));
+    setNewLabelPrimaryParentId(primaryParentIdOf(lbl) ?? '');
+    setLabelFormIsSubcategory(isSubcategory(lbl));
     setIsAddLabelOpen(true);
   };
 
@@ -344,12 +351,16 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setNewLabelName('');
     setNewLabelDesc('');
     setNewLabelColor('emerald');
-    setNewLabelParentId(undefined);
+    setNewLabelParentIds([]);
+    setNewLabelPrimaryParentId('');
+    setLabelFormIsSubcategory(false);
   };
 
   const openAddParentLabel = () => {
     setEditingLabel(null);
-    setNewLabelParentId(undefined);
+    setNewLabelParentIds([]);
+    setNewLabelPrimaryParentId('');
+    setLabelFormIsSubcategory(false);
     setNewLabelName('');
     setNewLabelDesc('');
     setNewLabelColor('emerald');
@@ -358,24 +369,30 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
   const openAddSubcategory = (parent: LabelDefinition) => {
     setEditingLabel(null);
-    setNewLabelParentId(parent.id);
+    setNewLabelParentIds([parent.id]);
+    setNewLabelPrimaryParentId(parent.id);
+    setLabelFormIsSubcategory(true);
     setNewLabelName('');
     setNewLabelDesc('');
     setNewLabelColor(parent.color);
     setIsAddLabelOpen(true);
   };
 
+  const toggleLabelParent = (id: string, checked: boolean) => {
+    setNewLabelParentIds((prev) => {
+      const next = checked
+        ? [...prev.filter((x) => x !== id), id]
+        : prev.filter((x) => x !== id);
+      if (!next.includes(newLabelPrimaryParentId) && next.length > 0) {
+        setNewLabelPrimaryParentId(next[0]);
+      }
+      return next;
+    });
+  };
+
   const toggleMetricLabel = (id: string, checked: boolean) => {
     setMetricLabelIds((prev) => {
-      let next = prev.filter((x) => x !== id);
-      if (checked) {
-        const label = labels.find((l) => l.id === id);
-        const rootId = label?.parentLabelId || id;
-        const tree = treeIds(labels, rootId);
-        next = next.filter((x) => !tree.includes(x));
-        next.push(id);
-      }
-      const resolved = resolveTreeMembership(next, labels).labelIds;
+      const resolved = toggleTreeMembership(prev, id, checked, labels);
       if (!resolved.includes(metricPrimaryLabelId) && resolved.length > 0) {
         setMetricPrimaryLabelId(resolved[0]);
       }
@@ -383,27 +400,32 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     });
   };
 
-  const metricLabelLocked = (id: string): boolean => {
-    const label = labels.find((l) => l.id === id);
-    if (!label) return false;
-    if (label.parentLabelId) {
-      return treeIds(labels, label.parentLabelId)
-        .filter((x) => x !== id)
-        .some((x) => metricLabelIds.includes(x));
-    }
-    return childrenOf(labels, id).some((c) => metricLabelIds.includes(c.id));
-  };
-
   // Add / update Label
   const handleSaveLabel = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newLabelName.trim()) return;
+
+    if (labelFormIsSubcategory && newLabelParentIds.length === 0) {
+      alert('Pick at least one parent category.');
+      return;
+    }
+    const parentPayload = labelFormIsSubcategory
+      ? {
+          parentLabelIds: newLabelParentIds,
+          primaryParentLabelId: newLabelParentIds.includes(
+            newLabelPrimaryParentId,
+          )
+            ? newLabelPrimaryParentId
+            : newLabelParentIds[0],
+        }
+      : {};
 
     if (editingLabel) {
       StorageService.updateLabel({
         ...editingLabel,
         name: newLabelName.trim(),
         description: newLabelDesc.trim() || editingLabel.description,
+        ...parentPayload,
       });
       closeLabelModal();
       void flushNow();
@@ -420,14 +442,14 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         color: newLabelColor,
         badgeBg: `bg-${newLabelColor}-500/15 text-${newLabelColor}-300 border-${newLabelColor}-500/30`,
         badgeText: `text-${newLabelColor}-300`,
-        parentLabelId: newLabelParentId,
+        ...parentPayload,
       });
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Could not add label.');
       return;
     }
 
-    if (!created.parentLabelId) {
+    if (!isSubcategory(created)) {
       setWeightsMap((prev) => ({
         ...prev,
         [created.id]: prev[created.id] ?? { weightPercent: 10, enabled: true },
@@ -438,7 +460,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     void flushNow();
     onRefreshData();
     showToast(
-      created.parentLabelId
+      isSubcategory(created)
         ? '✓ Subcategory added!'
         : '✓ New category label added!',
     );
@@ -446,10 +468,13 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
   const handleDeleteLabel = (lbl: LabelDefinition) => {
     if (lbl.system) return;
-    const childCount = childrenOf(labels, lbl.id).length;
-    const confirmMsg = childCount
-      ? `Remove category "${lbl.name}"? Remove its ${childCount} subcategor${childCount === 1 ? 'y' : 'ies'} first.`
-      : `Remove category label "${lbl.name}"? Metrics using it must be reassigned first.`;
+    const kids = childrenOf(labels, lbl.id);
+    const exclusiveCount = kids.filter((c) => parentIdsOf(c).length === 1).length;
+    const confirmMsg = exclusiveCount
+      ? `Remove category "${lbl.name}"? Remove its ${exclusiveCount} subcategor${exclusiveCount === 1 ? 'y' : 'ies'} first.`
+      : kids.length > 0
+        ? `Remove category "${lbl.name}"? Shared subcategories will stay under their other parents.`
+        : `Remove category label "${lbl.name}"? Metrics using it must be reassigned first.`;
     if (!confirm(confirmMsg)) {
       return;
     }
@@ -898,7 +923,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                       )}
                     </div>
                   </div>
-                  {kids.map((child) => (
+                  {kids.map((child) => {
+                    const otherParents = parentIdsOf(child)
+                      .filter((id) => id !== root.id)
+                      .map((id) => labels.find((l) => l.id === id)?.name || id);
+                    return (
                     <div
                       key={child.id}
                       className="ml-5 bg-slate-950/70 border border-slate-800/60 rounded-xl p-3 flex items-center justify-between gap-2 text-xs"
@@ -908,7 +937,17 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                           {child.name}
                         </span>
                         <p className="text-slate-500 text-[11px] mt-0.5">
-                          {child.description || 'Subcategory'}
+                          {otherParents.length > 0
+                            ? `Also ${otherParents.join(', ')}${
+                                primaryParentIdOf(child) === root.id
+                                  ? ' · primary here'
+                                  : ` · primary ${
+                                      labels.find(
+                                        (l) => l.id === primaryParentIdOf(child),
+                                      )?.name || ''
+                                    }`
+                              }`
+                            : child.description || 'Subcategory'}
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -930,7 +969,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })}
@@ -1057,16 +1097,24 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
       {/* MODAL: ADD / EDIT LABEL */}
       {isAddLabelOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-white">
-            <h3 className="text-lg font-bold">
-              {editingLabel
-                ? 'Edit Category Label'
-                : newLabelParentId
-                  ? `Add subcategory of ${labels.find((l) => l.id === newLabelParentId)?.name || 'category'}`
-                  : 'Add Custom Category Label'}
-            </h3>
-            <form onSubmit={handleSaveLabel} className="space-y-3 text-xs sm:text-sm">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-md max-h-[min(92dvh,100%)] flex flex-col overflow-hidden shadow-2xl text-white">
+            <div className="shrink-0 px-5 pt-5 pb-3 border-b border-slate-800">
+              <h3 className="text-lg font-bold">
+                {editingLabel
+                  ? labelFormIsSubcategory
+                    ? 'Edit subcategory'
+                    : 'Edit Category Label'
+                  : labelFormIsSubcategory
+                    ? 'Add subcategory'
+                    : 'Add Custom Category Label'}
+              </h3>
+            </div>
+            <form
+              onSubmit={handleSaveLabel}
+              className="flex flex-col flex-1 min-h-0"
+            >
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-5 py-4 space-y-3 text-xs sm:text-sm">
               <div>
                 <label className="block text-slate-400 font-semibold mb-1">Label Name *</label>
                 <input
@@ -1090,7 +1138,72 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                 />
               </div>
 
-              <div className="pt-2 flex justify-end gap-2">
+              {labelFormIsSubcategory && (
+                <div>
+                  <label className="block text-slate-400 font-semibold mb-1">
+                    Parent categories *
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 bg-slate-950 border border-slate-800 rounded-xl p-3">
+                    {rootLabels(labels)
+                      .filter((l) => canParentHaveChildren(l))
+                      .map((root) => {
+                        const checked = newLabelParentIds.includes(root.id);
+                        return (
+                          <label
+                            key={root.id}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer transition-colors ${
+                              checked
+                                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-200'
+                                : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              className="sr-only"
+                              checked={checked}
+                              onChange={() =>
+                                toggleLabelParent(root.id, !checked)
+                              }
+                            />
+                            {root.name}
+                          </label>
+                        );
+                      })}
+                  </div>
+                  {newLabelParentIds.length > 1 && (
+                    <>
+                      <label className="block text-slate-400 font-semibold mb-1 mt-3">
+                        Primary parent (formula standing) *
+                      </label>
+                      <select
+                        value={
+                          newLabelParentIds.includes(newLabelPrimaryParentId)
+                            ? newLabelPrimaryParentId
+                            : newLabelParentIds[0]
+                        }
+                        onChange={(e) =>
+                          setNewLabelPrimaryParentId(e.target.value)
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-emerald-500"
+                      >
+                        {newLabelParentIds.map((id) => (
+                          <option key={id} value={id}>
+                            {labels.find((l) => l.id === id)?.name || id}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    A subcategory can sit under several parents (e.g. Endurance
+                    on Offense, Defense, and Midfield). Only the primary parent
+                    counts that folder in overall rank.
+                  </p>
+                </div>
+              )}
+              </div>
+
+              <div className="shrink-0 flex justify-end gap-2 px-5 py-3 border-t border-slate-800 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <button
                   type="button"
                   onClick={closeLabelModal}
@@ -1147,23 +1260,19 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                         .map((root) => {
                           const kids = childrenOf(labels, root.id);
                           const rootChecked = metricLabelIds.includes(root.id);
-                          const rootLocked = metricLabelLocked(root.id);
                           return (
                             <div key={root.id} className="space-y-1.5">
                               <label
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition-colors ${
-                                  rootLocked && !rootChecked
-                                    ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600'
-                                    : rootChecked
-                                      ? 'border-blue-500/50 bg-blue-500/15 text-blue-200 cursor-pointer'
-                                      : 'border-slate-700 text-slate-400 hover:border-slate-500 cursor-pointer'
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition-colors cursor-pointer ${
+                                  rootChecked
+                                    ? 'border-blue-500/50 bg-blue-500/15 text-blue-200'
+                                    : 'border-slate-700 text-slate-400 hover:border-slate-500'
                                 }`}
                               >
                                 <input
                                   type="checkbox"
                                   className="sr-only"
                                   checked={rootChecked}
-                                  disabled={rootLocked && !rootChecked}
                                   onChange={() =>
                                     toggleMetricLabel(root.id, !rootChecked)
                                   }
@@ -1176,23 +1285,19 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                                     const checked = metricLabelIds.includes(
                                       child.id,
                                     );
-                                    const locked = metricLabelLocked(child.id);
                                     return (
                                       <label
                                         key={child.id}
-                                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
-                                          locked && !checked
-                                            ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600'
-                                            : checked
-                                              ? 'border-blue-500/50 bg-blue-500/15 text-blue-200 cursor-pointer'
-                                              : 'border-slate-700 text-slate-400 hover:border-slate-500 cursor-pointer'
+                                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-colors cursor-pointer ${
+                                          checked
+                                            ? 'border-blue-500/50 bg-blue-500/15 text-blue-200'
+                                            : 'border-slate-700 text-slate-400 hover:border-slate-500'
                                         }`}
                                       >
                                         <input
                                           type="checkbox"
                                           className="sr-only"
                                           checked={checked}
-                                          disabled={locked && !checked}
                                           onChange={() =>
                                             toggleMetricLabel(
                                               child.id,
@@ -1230,8 +1335,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                         ))}
                     </select>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      A metric can belong to multiple parent categories, but
-                      only once inside a parent (parent or one subcategory).
+                      Click a subcategory to move the metric there (replaces the
+                      parent in that tree). Shared subcategories appear under
+                      each parent; overall rank still counts the metric once.
                       Only the primary feeds formula standing.
                     </p>
                   </>

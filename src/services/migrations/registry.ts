@@ -14,6 +14,7 @@ import { migration012ComplianceConsequences } from './migrations/012_compliance_
 import { migration013PlayerBirthYearGrade } from './migrations/013_player_birth_year_grade';
 import { migration014LabelParent } from './migrations/014_label_parent';
 import { migration015PlayerPublicId } from './migrations/015_player_public_id';
+import { migration016LabelMultiParent } from './migrations/016_label_multi_parent';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -124,5 +125,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Assign a short unique publicId on every player for printouts and the ID legend.',
     up: migration015PlayerPublicId,
+  },
+  {
+    id: 16,
+    name: 'label_multi_parent',
+    description:
+      'Subcategories may list multiple root parents; primary parent owns formula standing.',
+    up: migration016LabelMultiParent,
   },
 ];

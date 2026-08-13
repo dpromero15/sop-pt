@@ -5,7 +5,10 @@ import type {
 } from '../types';
 import {
   childrenOf,
+  isSubcategory,
   normalizeLabelForest,
+  parentIdsOf,
+  primaryParentIdOf,
   rootLabels,
 } from './labelTree';
 import { normalizeMetricLabels } from './metricLabels';
@@ -187,9 +190,37 @@ export function pruneGhostCategories(opts: {
     );
   });
   const keptIds = new Set(filteredLabels.map((l) => l.id));
-  const withoutOrphans = filteredLabels.filter(
-    (l) => !l.parentLabelId || keptIds.has(l.parentLabelId),
-  );
+  const withoutOrphans: LabelDefinition[] = [];
+  for (const l of filteredLabels) {
+    const parents = parentIdsOf(l).filter((p) => keptIds.has(p));
+    if (isSubcategory(l) && parents.length === 0) {
+      changed = true;
+      continue;
+    }
+    if (parents.length === 0) {
+      withoutOrphans.push(l);
+      continue;
+    }
+    const primary =
+      parents.includes(primaryParentIdOf(l) ?? '')
+        ? primaryParentIdOf(l)!
+        : parents[0];
+    if (
+      parents.length !== parentIdsOf(l).length ||
+      primary !== primaryParentIdOf(l) ||
+      l.parentLabelId !== primary
+    ) {
+      changed = true;
+      withoutOrphans.push({
+        ...l,
+        parentLabelIds: parents,
+        primaryParentLabelId: primary,
+        parentLabelId: primary,
+      });
+      continue;
+    }
+    withoutOrphans.push(l);
+  }
   if (withoutOrphans.length !== labels.length) changed = true;
   const reEnsured = ensureAttendanceLabel(withoutOrphans);
   labels = reEnsured.labels;

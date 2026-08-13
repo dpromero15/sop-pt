@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   AttendanceStatus,
   MetricDefinition,
@@ -13,6 +13,10 @@ import {
   attendanceValueToStatus,
   isScoreEligible,
 } from '../../utils/sessionMetrics';
+import {
+  nextEligiblePlayerDown,
+  scoreCellKey,
+} from '../../utils/scoreEntryNav';
 
 interface DenseScoreEditorProps {
   sessionId: string;
@@ -80,8 +84,45 @@ export const DenseScoreEditor: React.FC<DenseScoreEditorProps> = ({
 
   // Local draft text so clearing mid-edit does not thrash storage until blur/commit.
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const pendingFocusKey = useRef<string | null>(null);
 
-  const cellKey = (playerId: string, metricId: string) => `${playerId}:${metricId}`;
+  const cellKey = (playerId: string, metricId: string) =>
+    scoreCellKey(playerId, metricId);
+
+  const focusScoreCell = (key: string) => {
+    pendingFocusKey.current = key;
+    const tryFocus = () => {
+      const want = pendingFocusKey.current;
+      if (!want) return;
+      const el = document.querySelector<HTMLInputElement>(
+        `input[data-score-cell="${CSS.escape(want)}"]`,
+      );
+      if (!el) return;
+      pendingFocusKey.current = null;
+      el.focus();
+      el.select();
+    };
+    requestAnimationFrame(tryFocus);
+  };
+
+  useEffect(() => {
+    const key = pendingFocusKey.current;
+    if (!key) return;
+    const el = document.querySelector<HTMLInputElement>(
+      `input[data-score-cell="${CSS.escape(key)}"]`,
+    );
+    if (!el) return;
+    pendingFocusKey.current = null;
+    el.focus();
+    el.select();
+  });
+
+  const statusFor = (playerId: string): AttendanceStatus => {
+    const fromMap = attendanceMap[playerId];
+    if (fromMap) return fromMap;
+    const att = findEntry(entries, sessionId, playerId, ATTENDANCE_METRIC_ID);
+    return att ? attendanceValueToStatus(att.value) : 'present';
+  };
 
   const displayValue = (playerId: string, metricId: string): string => {
     const key = cellKey(playerId, metricId);
@@ -161,8 +202,8 @@ export const DenseScoreEditor: React.FC<DenseScoreEditorProps> = ({
       <div className="border-b border-slate-800 px-4 py-3">
         <p className="text-sm font-semibold text-slate-100">Dense score editor</p>
         <p className="text-xs text-slate-500">
-          Edit cells directly. Blank clears a score. Absent / excused players are
-          view-only for metrics.
+          Edit cells directly. Enter saves and moves to the next player. Blank
+          clears a score. Absent / excused players are view-only for metrics.
         </p>
       </div>
 
@@ -186,19 +227,7 @@ export const DenseScoreEditor: React.FC<DenseScoreEditorProps> = ({
           </thead>
           <tbody>
             {sortedPlayers.map((player) => {
-              const status =
-                attendanceMap[player.id] ??
-                (() => {
-                  const att = findEntry(
-                    entries,
-                    sessionId,
-                    player.id,
-                    ATTENDANCE_METRIC_ID,
-                  );
-                  return att
-                    ? attendanceValueToStatus(att.value)
-                    : ('present' as AttendanceStatus);
-                })();
+              const status = statusFor(player.id);
               const eligible = isScoreEligible(status);
 
               return (
@@ -250,8 +279,10 @@ export const DenseScoreEditor: React.FC<DenseScoreEditorProps> = ({
                         <input
                           type="number"
                           inputMode="decimal"
+                          enterKeyHint="next"
                           step={stepForMetric(metric)}
                           disabled={!editable}
+                          data-score-cell={key}
                           value={displayValue(player.id, metric.id)}
                           onChange={(e) =>
                             setDrafts((prev) => ({
@@ -264,7 +295,22 @@ export const DenseScoreEditor: React.FC<DenseScoreEditorProps> = ({
                             persistScore(player.id, metric, e.target.value);
                           }}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
+                            if (e.key !== 'Enter') return;
+                            e.preventDefault();
+                            if (!editable) return;
+                            persistScore(
+                              player.id,
+                              metric,
+                              (e.target as HTMLInputElement).value,
+                            );
+                            const nextId = nextEligiblePlayerDown(
+                              sortedPlayers.map((p) => p.id),
+                              player.id,
+                              (id) => isScoreEligible(statusFor(id)),
+                            );
+                            if (nextId) {
+                              focusScoreCell(cellKey(nextId, metric.id));
+                            } else {
                               (e.target as HTMLInputElement).blur();
                             }
                           }}

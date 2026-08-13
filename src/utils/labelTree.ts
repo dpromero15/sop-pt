@@ -16,29 +16,70 @@ function metricLabelIds(
   return [];
 }
 
-export type LabelTreePick = Pick<LabelDefinition, 'id' | 'parentLabelId' | 'system'>;
+export type LabelTreePick = Pick<
+  LabelDefinition,
+  'id' | 'parentLabelId' | 'parentLabelIds' | 'primaryParentLabelId' | 'system'
+>;
+
+function uniqueIds(ids: string[]): string[] {
+  return Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+}
+
+/** Parent ids for a label (supports legacy `parentLabelId`). */
+export function parentIdsOf(label: LabelTreePick): string[] {
+  const fromArray = Array.isArray(label.parentLabelIds)
+    ? uniqueIds(label.parentLabelIds)
+    : [];
+  if (fromArray.length > 0) return fromArray;
+  const legacy = label.parentLabelId?.trim();
+  return legacy ? [legacy] : [];
+}
+
+/** Primary parent for formula standing (first parent if unset). */
+export function primaryParentIdOf(label: LabelTreePick): string | undefined {
+  const ids = parentIdsOf(label);
+  if (ids.length === 0) return undefined;
+  const primary = label.primaryParentLabelId?.trim();
+  if (primary && ids.includes(primary)) return primary;
+  const legacy = label.parentLabelId?.trim();
+  if (legacy && ids.includes(legacy)) return legacy;
+  return ids[0];
+}
 
 /** True when the label is a top-level category (no parent). */
 export function isRootLabel(label: LabelTreePick): boolean {
-  return !label.parentLabelId;
+  return parentIdsOf(label).length === 0;
 }
 
 /** True when the label is a subcategory. */
 export function isSubcategory(label: LabelTreePick): boolean {
-  return Boolean(label.parentLabelId);
+  return parentIdsOf(label).length > 0;
 }
 
-/** Direct children of a parent (depth 1 only). */
+/** Direct children of a parent (depth 1 only; includes shared children). */
 export function childrenOf(labels: LabelDefinition[], parentId: string): LabelDefinition[] {
-  return labels.filter((l) => l.parentLabelId === parentId);
+  return labels.filter((l) => parentIdsOf(l).includes(parentId));
 }
 
 /** Parent id plus every direct child id. */
 export function treeIds(labels: LabelTreePick[], parentId: string): string[] {
   return [
     parentId,
-    ...labels.filter((l) => l.parentLabelId === parentId).map((l) => l.id),
+    ...labels.filter((l) => parentIdsOf(l).includes(parentId)).map((l) => l.id),
   ];
+}
+
+/** Every tree a label participates in (shared children union all parents). */
+export function membershipTreeIds(labels: LabelTreePick[], id: string): string[] {
+  const label = labels.find((l) => l.id === id);
+  if (!label) return [id];
+  const roots = parentIdsOf(label);
+  if (roots.length === 0) return treeIds(labels, id);
+  const ids = new Set<string>();
+  for (const root of roots) {
+    for (const tid of treeIds(labels, root)) ids.add(tid);
+  }
+  return Array.from(ids);
 }
 
 /** Root categories, Attendance first. */
@@ -49,16 +90,30 @@ export function rootLabels(labels: LabelDefinition[]): LabelDefinition[] {
   return attendance ? [attendance, ...withoutAtt] : withoutAtt;
 }
 
-/** Display path: `Speed` or `Speed / Acceleration`. */
+/** Display path: `Speed`, `Speed / Acceleration`, or `Endurance · Offense, Defense`. */
 export function labelPathName(
-  labels: Pick<LabelDefinition, 'id' | 'name' | 'parentLabelId'>[],
+  labels: Pick<
+    LabelDefinition,
+    'id' | 'name' | 'parentLabelId' | 'parentLabelIds' | 'primaryParentLabelId'
+  >[],
   labelId: string,
 ): string {
   const label = labels.find((l) => l.id === labelId);
   if (!label) return labelId;
-  if (!label.parentLabelId) return label.name;
-  const parent = labels.find((l) => l.id === label.parentLabelId);
-  return parent ? `${parent.name} / ${label.name}` : label.name;
+  const parentIds = parentIdsOf(label);
+  if (parentIds.length === 0) return label.name;
+  const names = parentIds.map(
+    (id) => labels.find((l) => l.id === id)?.name || id,
+  );
+  const primaryId = primaryParentIdOf(label);
+  const primaryName = primaryId
+    ? labels.find((l) => l.id === primaryId)?.name || primaryId
+    : names[0];
+  if (parentIds.length === 1) {
+    return `${primaryName} / ${label.name}`;
+  }
+  const rest = names.filter((n) => n !== primaryName);
+  return `${label.name} · ${[primaryName, ...rest].join(', ')}`;
 }
 
 /** Slug a name, then suffix `_2`, `_3`… if the id already exists. */
@@ -76,8 +131,24 @@ export function allocateLabelId(name: string, existingIds: Iterable<string>): st
   return `${base}_${i}`;
 }
 
+function dropParentFields<T extends LabelTreePick>(label: T): T {
+  const {
+    parentLabelId: _a,
+    parentLabelIds: _b,
+    primaryParentLabelId: _c,
+    ...rest
+  } = label;
+  return rest as T;
+}
+
+function sameIdList(a: string[] | undefined, b: string[]): boolean {
+  const left = a ?? [];
+  return left.length === b.length && left.every((id, i) => id === b[i]);
+}
+
 /**
- * Drop invalid `parentLabelId` (missing parent, self, attendance, grandchild).
+ * Drop invalid parents (missing, self, attendance, grandchild).
+ * Writes `parentLabelIds` + `primaryParentLabelId` and mirrors `parentLabelId`.
  * Does not invent new labels.
  */
 export function normalizeLabelForest<T extends LabelTreePick>(
@@ -86,43 +157,86 @@ export function normalizeLabelForest<T extends LabelTreePick>(
   const byId = new Map(labels.map((l) => [l.id, l]));
   let changed = false;
   const next = labels.map((label) => {
-    const parentId = label.parentLabelId?.trim();
-    if (!parentId) {
-      if (label.parentLabelId) {
+    if (label.id === ATTENDANCE_ID) {
+      if (parentIdsOf(label).length > 0 || label.parentLabelId || label.primaryParentLabelId) {
         changed = true;
-        const { parentLabelId: _drop, ...rest } = label;
-        return rest as T;
+        return dropParentFields(label);
       }
       return label;
     }
 
-    const invalid =
-      parentId === label.id ||
-      parentId === ATTENDANCE_ID ||
-      label.id === ATTENDANCE_ID ||
-      !byId.has(parentId);
-
-    if (invalid) {
-      changed = true;
-      const { parentLabelId: _drop, ...rest } = label;
-      return rest as T;
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    for (const parentId of parentIdsOf(label)) {
+      if (seen.has(parentId)) continue;
+      seen.add(parentId);
+      if (parentId === label.id || parentId === ATTENDANCE_ID) continue;
+      const parent = byId.get(parentId);
+      if (!parent || parent.id === ATTENDANCE_ID) continue;
+      if (parentIdsOf(parent).length > 0) continue;
+      valid.push(parentId);
     }
 
-    const parent = byId.get(parentId);
-    if (parent?.parentLabelId) {
-      changed = true;
-      const { parentLabelId: _drop, ...rest } = label;
-      return rest as T;
+    if (valid.length === 0) {
+      if (
+        label.parentLabelId ||
+        (label.parentLabelIds && label.parentLabelIds.length > 0) ||
+        label.primaryParentLabelId
+      ) {
+        changed = true;
+        return dropParentFields(label);
+      }
+      return label;
     }
 
-    if (label.parentLabelId !== parentId) {
-      changed = true;
-      return { ...label, parentLabelId: parentId };
+    const requestedPrimary = label.primaryParentLabelId?.trim();
+    const requestedLegacy = label.parentLabelId?.trim();
+    const primary =
+      (requestedPrimary && valid.includes(requestedPrimary)
+        ? requestedPrimary
+        : undefined) ||
+      (requestedLegacy && valid.includes(requestedLegacy)
+        ? requestedLegacy
+        : undefined) ||
+      valid[0];
+
+    if (
+      sameIdList(label.parentLabelIds, valid) &&
+      label.primaryParentLabelId === primary &&
+      label.parentLabelId === primary
+    ) {
+      return label;
     }
-    return label;
+
+    changed = true;
+    return {
+      ...label,
+      parentLabelIds: valid,
+      primaryParentLabelId: primary,
+      parentLabelId: primary,
+    };
   });
 
   return { labels: next, changed };
+}
+
+/**
+ * Check or uncheck a label in the metric category picker.
+ * Checking an id replaces parent/sibling membership in the same tree.
+ */
+export function toggleTreeMembership(
+  selectedIds: string[],
+  id: string,
+  checked: boolean,
+  labels: LabelTreePick[],
+): string[] {
+  let next = selectedIds.filter((x) => x !== id);
+  if (checked) {
+    const trees = membershipTreeIds(labels, id);
+    next = next.filter((x) => !trees.includes(x));
+    next.push(id);
+  }
+  return resolveTreeMembership(next, labels).labelIds;
 }
 
 /**
@@ -148,20 +262,25 @@ export function resolveTreeMembership(
     return false;
   });
 
-  const rootOf = (id: string): string => {
+  const rootsOf = (id: string): string[] => {
     const label = byId.get(id);
-    return label?.parentLabelId || id;
+    if (!label) return [id];
+    const parents = parentIdsOf(label);
+    return parents.length > 0 ? parents : [id];
   };
 
-  const specificity = (id: string): number =>
-    byId.get(id)?.parentLabelId ? 1 : 0;
+  const specificity = (id: string): number => {
+    const label = byId.get(id);
+    return label && parentIdsOf(label).length > 0 ? 1 : 0;
+  };
 
   const byRoot = new Map<string, string[]>();
   for (const id of unique) {
-    const root = rootOf(id);
-    const list = byRoot.get(root) ?? [];
-    list.push(id);
-    byRoot.set(root, list);
+    for (const root of rootsOf(id)) {
+      const list = byRoot.get(root) ?? [];
+      list.push(id);
+      byRoot.set(root, list);
+    }
   }
 
   for (const group of byRoot.values()) {
@@ -206,7 +325,7 @@ export function metricInLabelTree(
 ): boolean {
   const ids = new Set(metricLabelIds(metric));
   const label = labels.find((l) => l.id === labelId);
-  if (!label || label.parentLabelId) {
+  if (!label || isSubcategory(label)) {
     return ids.has(labelId);
   }
   return treeIds(labels, labelId).some((id) => ids.has(id));
@@ -226,9 +345,9 @@ export function metricScoresInLabelTree(
   const primaryLabelId = metric.primaryLabelId || metricLabelIds(metric)[0];
   if (primaryLabelId === labelId) return true;
   const label = labels.find((l) => l.id === labelId);
-  if (!label || label.parentLabelId) return false;
+  if (!label || isSubcategory(label)) return false;
   return labels.some(
-    (l) => l.id === primaryLabelId && l.parentLabelId === labelId,
+    (l) => l.id === primaryLabelId && primaryParentIdOf(l) === labelId,
   );
 }
 
@@ -280,7 +399,11 @@ export function deleteLabelBlockReason(
   if (label.system || label.id === ATTENDANCE_ID) {
     return 'System labels cannot be deleted.';
   }
-  if (labels.some((l) => l.parentLabelId === id)) {
+  const exclusiveKids = labels.filter((l) => {
+    const parents = parentIdsOf(l);
+    return parents.length === 1 && parents[0] === id;
+  });
+  if (exclusiveKids.length > 0) {
     return 'Remove subcategories first.';
   }
   if (metrics.some((m) => metricInExactLabel(m, id))) {

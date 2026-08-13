@@ -272,6 +272,63 @@ describe('cloudSync', () => {
     __resetCloudSyncForTests();
   });
 
+  it('keeps transient flush failures as pending retry, not a hard sync error', async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            team: { id: 'team_blip', name: 'Blip FC', updatedAt: 't' },
+            players: [],
+            sessions: [],
+            entries: [],
+            metrics: [],
+            labels: [],
+            formula: null,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if ((init as RequestInit | undefined)?.method === 'PUT') {
+        throw new TypeError('Failed to fetch');
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const {
+      enterTeamCloudSync,
+      flushNow,
+      getCloudSyncStatus,
+      getPendingSyncBuckets,
+      __resetCloudSyncForTests,
+    } = await import('./cloudSync');
+    const { StorageService } = await import('../storage');
+    const { getSyncLog } = await import('./syncLog');
+
+    await enterTeamCloudSync('team_blip');
+    StorageService.saveFormula({
+      id: 'default_formula',
+      name: 'F',
+      weights: [{ labelId: 'attendance', weightPercent: 20, enabled: true }],
+    });
+    await flushNow('team_blip');
+
+    const state = getCloudSyncStatus();
+    expect(state.status).toBe('pending');
+    expect(state.detail).toBe('Retrying…');
+    expect(state.detail).not.toMatch(/http/i);
+    expect(getPendingSyncBuckets('team_blip')).toContain('formula');
+    expect(
+      getSyncLog().some((e) => /unreachable|failed to fetch/i.test(e.message)),
+    ).toBe(true);
+
+    __resetCloudSyncForTests();
+  });
+
   it('maps storage keys to dirty outbox buckets', () => {
     const adapter = new LocalJsonAdapter();
     adapter.setTeamScope('team_x');

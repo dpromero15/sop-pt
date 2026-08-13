@@ -64,7 +64,10 @@ import {
   allocateLabelId,
   canParentHaveChildren,
   deleteLabelBlockReason,
+  isRootLabel,
   normalizeLabelForest,
+  parentIdsOf,
+  primaryParentIdOf,
 } from '../../utils/labelTree';
 import { normalizeComplianceRequirements } from '../../utils/normalizeCompliance';
 import {
@@ -664,35 +667,57 @@ export class LocalJsonAdapter implements StorageRepository {
 
   addLabel(label: Omit<LabelDefinition, 'id'>): LabelDefinition {
     const labels = this.getLabels();
-    const parentLabelId = label.parentLabelId?.trim() || undefined;
-    if (parentLabelId) {
-      const parent = labels.find((l) => l.id === parentLabelId);
+    const parentLabelIds = Array.from(
+      new Set(
+        (label.parentLabelIds?.length
+          ? label.parentLabelIds
+          : label.parentLabelId
+            ? [label.parentLabelId]
+            : []
+        )
+          .map((id) => id.trim())
+          .filter(Boolean),
+      ),
+    );
+    for (const parentId of parentLabelIds) {
+      const parent = labels.find((l) => l.id === parentId);
       if (!parent || !canParentHaveChildren(parent)) {
         throw new Error(
           'Subcategories can only be added under a non-system parent category.',
         );
       }
     }
+    const primaryParentLabelId =
+      (label.primaryParentLabelId?.trim() &&
+      parentLabelIds.includes(label.primaryParentLabelId.trim())
+        ? label.primaryParentLabelId.trim()
+        : undefined) || parentLabelIds[0];
     const newLabel: LabelDefinition = {
       ...label,
       id: allocateLabelId(
         label.name,
         labels.map((l) => l.id),
       ),
-      parentLabelId,
     };
-    if (parentLabelId) {
-      const parent = labels.find((l) => l.id === parentLabelId);
+    if (parentLabelIds.length > 0) {
+      newLabel.parentLabelIds = parentLabelIds;
+      newLabel.primaryParentLabelId = primaryParentLabelId;
+      newLabel.parentLabelId = primaryParentLabelId;
+      const parent = labels.find((l) => l.id === primaryParentLabelId);
       if (parent) {
         newLabel.color = newLabel.color || parent.color;
         newLabel.badgeBg = newLabel.badgeBg || parent.badgeBg;
         newLabel.badgeText = newLabel.badgeText || parent.badgeText;
       }
+    } else {
+      delete newLabel.parentLabelIds;
+      delete newLabel.primaryParentLabelId;
+      delete newLabel.parentLabelId;
     }
     labels.push(newLabel);
-    this.saveLabels(labels);
+    this.saveLabels(normalizeLabelForest(labels).labels);
 
-    if (!parentLabelId) {
+    if (parentLabelIds.length === 0) {
       const formula = this.getFormula();
       if (!formula.weights.some((w) => w.labelId === newLabel.id)) {
         formula.weights.push({
@@ -711,12 +736,36 @@ export class LocalJsonAdapter implements StorageRepository {
     const labels = this.getLabels();
     const existing = labels.find((l) => l.id === updated.id);
     if (!existing) return;
+    const wasRoot = isRootLabel(existing);
     const next: LabelDefinition = {
       ...updated,
       // Preserve system flag from storage / migration
       system: existing.system || updated.system,
     };
-    this.saveLabels(labels.map((l) => (l.id === updated.id ? next : l)));
+    const forest = normalizeLabelForest(
+      labels.map((l) => (l.id === updated.id ? next : l)),
+    );
+    const saved = forest.labels.find((l) => l.id === updated.id) ?? next;
+    this.saveLabels(forest.labels);
+
+    const nowRoot = isRootLabel(saved);
+    if (wasRoot && !nowRoot) {
+      const formula = this.getFormula();
+      this.saveFormula({
+        ...formula,
+        weights: formula.weights.filter((w) => w.labelId !== saved.id),
+      });
+    } else if (!wasRoot && nowRoot) {
+      const formula = this.getFormula();
+      if (!formula.weights.some((w) => w.labelId === saved.id)) {
+        formula.weights.push({
+          labelId: saved.id,
+          weightPercent: 10,
+          enabled: true,
+        });
+        this.saveFormula(formula);
+      }
+    }
   }
 
   deleteLabel(id: string) {
@@ -728,7 +777,32 @@ export class LocalJsonAdapter implements StorageRepository {
       throw new Error(block);
     }
 
-    this.saveLabels(labels.filter((l) => l.id !== id));
+    const next = labels
+      .filter((l) => l.id !== id)
+      .map((l) => {
+        const parents = parentIdsOf(l);
+        if (!parents.includes(id)) return l;
+        const remaining = parents.filter((p) => p !== id);
+        if (remaining.length === 0) {
+          const {
+            parentLabelId: _a,
+            parentLabelIds: _b,
+            primaryParentLabelId: _c,
+            ...rest
+          } = l;
+          return rest;
+        }
+        const primary = remaining.includes(primaryParentIdOf(l) ?? '')
+          ? primaryParentIdOf(l)!
+          : remaining[0];
+        return {
+          ...l,
+          parentLabelIds: remaining,
+          primaryParentLabelId: primary,
+          parentLabelId: primary,
+        };
+      });
+    this.saveLabels(normalizeLabelForest(next).labels);
 
     const formula = this.getFormula();
     this.saveFormula({

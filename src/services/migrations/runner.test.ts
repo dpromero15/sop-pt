@@ -663,6 +663,13 @@ describe('runLocalMigrations', () => {
       nextLabels.find((l: { id: string }) => l.id === 'too_deep')
         ?.parentLabelId,
     ).toBeUndefined();
+    expect(
+      nextLabels.find((l: { id: string }) => l.id === 'acceleration'),
+    ).toMatchObject({
+      parentLabelIds: ['speed'],
+      primaryParentLabelId: 'speed',
+      parentLabelId: 'speed',
+    });
 
     const nextMetrics = JSON.parse(
       store.getItem(scopedStorageKey('t1', STORAGE_KEYS.METRICS))!,
@@ -706,5 +713,60 @@ describe('runLocalMigrations', () => {
     expect(players[0].publicId).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
     expect(players[1].publicId).toBe('AB2DEF');
     expect(players[0].publicId).not.toBe(players[1].publicId);
+  });
+
+  it('maps legacy parentLabelId to parentLabelIds via v16', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(15));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.LABELS),
+      JSON.stringify([
+        {
+          id: 'offense',
+          name: 'Offense',
+          description: '',
+          color: 'amber',
+          badgeBg: '',
+          badgeText: '',
+        },
+        {
+          id: 'defense',
+          name: 'Defense',
+          description: '',
+          color: 'cyan',
+          badgeBg: '',
+          badgeText: '',
+        },
+        {
+          id: 'endurance',
+          name: 'Endurance',
+          description: '',
+          color: 'amber',
+          badgeBg: '',
+          badgeText: '',
+          parentLabelId: 'offense',
+        },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const nextLabels = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.LABELS))!,
+    );
+    expect(
+      nextLabels.find((l: { id: string }) => l.id === 'endurance'),
+    ).toMatchObject({
+      parentLabelIds: ['offense'],
+      primaryParentLabelId: 'offense',
+      parentLabelId: 'offense',
+    });
   });
 });
