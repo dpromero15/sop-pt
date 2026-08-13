@@ -11,10 +11,33 @@ body,
   min-height: 100%;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);
   background: #020617;
   color: #e2e8f0;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Session logger: one-screen cockpit — no pinch zoom / rubber-band scroll. */
+html.logger-cockpit,
+html.logger-cockpit body,
+html.logger-cockpit #root {
+  height: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+}
+
+html.logger-cockpit body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }

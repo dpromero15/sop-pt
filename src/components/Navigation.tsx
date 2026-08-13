@@ -30,6 +30,7 @@ interface NavigationProps {
   playerCount: number;
   sessionCount: number;
   team: Team;
+  compactHeader?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -41,6 +42,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   playerCount,
   sessionCount,
   team,
+  compactHeader = false,
 }) => {
   const { can, roleLabel } = useAccess();
 
@@ -106,7 +108,11 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 text-white px-4 py-3 sm:px-6">
+      <header
+        className={`sticky top-0 z-30 shrink-0 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 text-white px-4 sm:px-6 ${
+          compactHeader ? 'py-1.5' : 'py-3'
+        }`}
+      >
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 p-0.5 shadow-lg shadow-emerald-500/20 flex items-center justify-center shrink-0">
@@ -145,7 +151,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 <span>New Session</span>
               </button>
             )}
-            {can('rosterWrite') && (
+            {can('rosterWrite') && !compactHeader && (
               <button
                 onClick={onOpenQuickAddPlayer}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md shadow-emerald-600/20 transition-all active:scale-95"

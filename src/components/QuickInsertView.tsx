@@ -364,7 +364,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
 
   if (phase === 'gate') {
     return (
-      <div className="space-y-6 pb-28">
+      <div className="h-full min-h-0 space-y-4 overflow-y-auto overscroll-contain pb-4 touch-manipulation">
         <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl sm:p-6">
           <div className="relative z-10">
             <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
@@ -451,43 +451,44 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     );
   }
 
+  const stepScrolls =
+    step !== 'attendance' ||
+    attendanceView === 'review' ||
+    attendanceComplete;
+
   return (
-    <div className="space-y-6 pb-28">
-      <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl sm:p-6">
-        <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400">
-              <Zap className="h-4 w-4" />
-              Session Logger
+    <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden touch-manipulation">
+      <div className="shrink-0 rounded-xl border border-slate-800 bg-slate-900 px-3 py-2 shadow-xl">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+              <Zap className="h-3.5 w-3.5 shrink-0" />
+              Session logger
             </div>
-            <h2 className="text-2xl font-bold text-slate-50">Sideline workflow</h2>
-            <p className="mt-1 text-sm text-slate-400">
-              Plan metrics → swipe attendance → score players who showed up
+            <p className="truncate text-sm font-bold text-slate-50">
+              {selectedSession?.title ?? 'Sideline'}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <SaveAndSyncButton
+              compact
               onSaved={() => setToastMessage('Saved — pushed to cloud')}
             />
             <button
               type="button"
               onClick={returnToGate}
-              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700"
+              className="rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-700"
             >
-              Switch session
+              Switch
             </button>
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label className="text-sm text-slate-400 sm:w-28">Open session</label>
         <select
           value={selectedSessionId}
           onChange={(e) => {
             enterLogger(e.target.value, 'plan');
           }}
-          className="flex-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2.5 text-slate-100"
+          className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-base text-slate-100"
         >
           {openSessions.length === 0 && <option value="">No open sessions</option>}
           {openSessions.map((s) => (
@@ -496,27 +497,33 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
             </option>
           ))}
         </select>
+        <div className="mt-2 flex gap-1 overflow-x-auto overscroll-x-contain rounded-lg border border-slate-800 bg-slate-950/60 p-0.5">
+          {steps.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              disabled={!selectedSession}
+              onClick={() => setStep(id)}
+              className={`flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-xs font-medium whitespace-nowrap ${
+                step === id
+                  ? 'bg-slate-800 text-emerald-300'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-800 bg-slate-900/60 p-1">
-        {steps.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            disabled={!selectedSession}
-            onClick={() => setStep(id)}
-            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium whitespace-nowrap ${
-              step === id
-                ? 'bg-slate-800 text-emerald-300'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        ))}
-      </div>
-
+      <div
+        className={`min-h-0 flex-1 ${
+          stepScrolls
+            ? 'overflow-y-auto overscroll-contain'
+            : 'flex flex-col overflow-hidden'
+        }`}
+      >
       {!selectedSession && (
         <p className="rounded-xl border border-dashed border-slate-700 p-6 text-center text-slate-400">
           No open session selected. Switch session to continue or start new.
@@ -546,17 +553,19 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
       )}
 
       {selectedSession && step === 'attendance' && (
-        <div className="space-y-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-2">
           {attendanceView === 'review' || attendanceComplete ? (
-            <AttendanceMaintenanceList
-              players={activePlayers}
-              attendanceMap={attendanceMap}
-              onSetStatus={persistAttendance}
-            />
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+              <AttendanceMaintenanceList
+                players={activePlayers}
+                attendanceMap={attendanceMap}
+                onSetStatus={persistAttendance}
+              />
+            </div>
           ) : (
             <>
               {markedPlayerIds.size > 0 && swipeSeedIds.length > 0 && (
-                <p className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-2 text-sm text-slate-400">
+                <p className="shrink-0 rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-1.5 text-xs text-slate-400">
                   {markedPlayerIds.size} already marked · finishing {swipeSeedIds.length} remaining
                 </p>
               )}
@@ -570,19 +579,19 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               />
             </>
           )}
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
             <SaveAndSyncButton
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-600/40 bg-sky-500/15 hover:bg-sky-500/25 py-3 font-semibold text-sky-200"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-600/40 bg-sky-500/15 hover:bg-sky-500/25 py-2.5 font-semibold text-sky-200"
               onSaved={() => setToastMessage('Attendance saved — pushed to cloud')}
             />
             <button
               type="button"
               onClick={continueToScoring}
-              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 py-3 font-medium text-slate-200 hover:bg-slate-900"
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 py-2.5 font-medium text-slate-200 hover:bg-slate-900"
             >
               {attendanceComplete
                 ? 'Continue to scoring'
-                : `Continue to scoring · rest out (${remainingUnmarked.length})`}{' '}
+                : `Continue · rest out (${remainingUnmarked.length})`}{' '}
               <ChevronRight className="h-5 w-5" />
             </button>
           </div>
@@ -590,7 +599,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
       )}
 
       {selectedSession && step === 'score' && (
-        <div className="space-y-4">
+        <div className="space-y-4 pb-2">
           {(() => {
             const sessionHasScores = sessionHasNonAttendanceScores(selectedSessionId);
             const showDense =
@@ -792,9 +801,10 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
           </div>
         </div>
       )}
+      </div>
 
       {toastMessage && (
-        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
+        <div className="pointer-events-none fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-full bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 shadow-lg">
           {toastMessage}
         </div>
       )}

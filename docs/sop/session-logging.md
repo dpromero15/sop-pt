@@ -6,7 +6,7 @@ Standard procedure for logging a practice, match, or fitness test on a phone.
 
 ## Why
 
-Coaches need one-handed speed: take attendance without menus, then score only players who are here. Returning to a session that already has attendance should not force a full re-swipe. Quick Insert should only work with **open** sessions (or start a new one).
+Coaches need one-handed speed: take attendance without menus, then score only players who are here. Returning to a session that already has attendance should not force a full re-swipe. Quick Insert should only work with **open** sessions (or start a new one). On a phone the logger is a **fixed cockpit** (no pinch-zoom / page rubber-band while swiping).
 
 ## How
 

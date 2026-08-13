@@ -22,6 +22,7 @@ import { Player } from './types';
 import { useAccess } from './access/AccessProvider';
 import { ensureSignedInCoach } from './utils/coachIdentity';
 import { isLocalDebugMockAuth } from './services/firebase';
+import { useLoggerCockpit } from './utils/viewportLock';
 
 const BUMP_COACH_STORAGE_KEY = 'stm_active_bump_coach_v1';
 
@@ -269,6 +270,14 @@ export default function App() {
     refreshData();
   };
 
+  const loggerCockpit =
+    authReady &&
+    Boolean(authConfigured) &&
+    auth.signedIn &&
+    workspaceReady &&
+    currentTab === 'quick-insert';
+  useLoggerCockpit(loggerCockpit);
+
   if (!authReady) {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-400 flex items-center justify-center">
@@ -343,7 +352,13 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950">
+    <div
+      className={`bg-slate-950 text-slate-100 font-sans antialiased selection:bg-emerald-500 selection:text-slate-950 ${
+        loggerCockpit
+          ? 'flex h-dvh max-h-dvh flex-col overflow-hidden'
+          : 'min-h-screen'
+      }`}
+    >
       <Navigation
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
@@ -361,9 +376,16 @@ export default function App() {
         playerCount={players.length}
         sessionCount={sessions.length}
         team={team}
+        compactHeader={loggerCockpit}
       />
 
-      <main className="max-w-7xl mx-auto px-4 py-6 sm:px-6">
+      <main
+        className={
+          loggerCockpit
+            ? 'mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col overflow-hidden px-3 pt-2 pb-[calc(5.75rem+env(safe-area-inset-bottom))] sm:px-6'
+            : 'mx-auto max-w-7xl px-4 py-6 sm:px-6'
+        }
+      >
         {currentTab === 'rankings' && (
           <RankingsView
             rankings={rankings}
