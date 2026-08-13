@@ -12,11 +12,6 @@ _(none)_
 
 ## Ready to ship
 
-### #131 — Lock session logger to a fixed unzoomed phone cockpit
-- **Status:** implemented — open [PR #132](https://github.com/dpromero15/sop-pt/pull/132)
-- **Notes:** Quick Insert fills the phone viewport with zoom locked. Attendance swipes no longer pinch-zoom or rubber-band the page; Out / Here / Continue stay on screen.
-- **Touchpoints:** `viewportLock.ts`, `index.css`, `App.tsx`, `QuickInsertView.tsx`, `AttendanceSwipeDeck.tsx`, `Navigation.tsx`
-
 ### #133 — Allow editing saved session names
 - **Status:** implemented
 - **Notes:** Pencil on Sessions inspector and Quick Insert logger header renames via `updateSession`. Empty titles rejected.
@@ -24,7 +19,6 @@ _(none)_
 
 **Suggested PR Closes:**
 ```
-Closes #131
 Closes #133
 ```
 
@@ -51,6 +45,7 @@ _(none)_
 - Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
 - Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
 - Manual Adjusted ineligible shipped via [#130](https://github.com/dpromero15/sop-pt/pull/130) (`Closes #129`).
+- Session logger cockpit shipped via [#132](https://github.com/dpromero15/sop-pt/pull/132) (`Closes #131`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
