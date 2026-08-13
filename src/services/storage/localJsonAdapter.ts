@@ -39,6 +39,10 @@ import {
 } from '../../data/initialData';
 import type { StorageRepository, TeamSnapshot } from './types';
 import {
+  generateUniquePublicId,
+  normalizePublicId,
+} from '../../utils/playerPublicId';
+import {
   ATTENDANCE_METRIC_ID,
   defaultMetricIdsForSessionType,
   ensureAttendanceFirst,
@@ -309,9 +313,20 @@ export class LocalJsonAdapter implements StorageRepository {
 
   addPlayer(player: Omit<Player, 'id' | 'joinedDate'>): Player {
     const players = this.getPlayers({ includeDeleted: true });
+    const taken = new Set(
+      players
+        .map((p) => normalizePublicId(p.publicId))
+        .filter((id): id is string => Boolean(id)),
+    );
+    const requested = normalizePublicId(player.publicId);
+    const publicId =
+      requested && !taken.has(requested)
+        ? requested
+        : generateUniquePublicId(taken);
     const newPlayer: Player = {
       ...player,
       id: `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      publicId,
       joinedDate: new Date().toISOString().split('T')[0],
     };
     players.push(newPlayer);

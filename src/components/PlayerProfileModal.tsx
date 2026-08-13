@@ -31,6 +31,7 @@ import { calculatePlayerRankings } from '../utils/scoring';
 import { visibleRankingLabels } from '../utils/formulaWeights';
 import { defaultAvatarFor } from '../constants/avatars';
 import { StorageService } from '../services/storage';
+import { displayPublicId } from '../utils/playerPublicId';
 
 interface PlayerProfileModalProps {
   player: Player | null;
@@ -135,6 +136,18 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-2">
+                  <button
+                    type="button"
+                    title="Copy player ID"
+                    onClick={() => {
+                      const id = displayPublicId(player);
+                      if (id === '—') return;
+                      void navigator.clipboard?.writeText(id);
+                    }}
+                    className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold font-mono tracking-wider hover:bg-slate-700"
+                  >
+                    ID {displayPublicId(player)}
+                  </button>
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
                     Position: {player.position}
                   </span>

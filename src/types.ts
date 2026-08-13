@@ -113,6 +113,11 @@ export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
 export interface Player {
   id: string;
   name: string;
+  /**
+   * Short stable code for printouts / anonymous sheets (6 Crockford-like chars).
+   * Distinct from internal `id`. Assigned on create and by schema v15.
+   */
+  publicId?: string;
   jerseyNumber: number;
   position: PlayerPosition;
   preferredFoot: 'Left' | 'Right' | 'Both';

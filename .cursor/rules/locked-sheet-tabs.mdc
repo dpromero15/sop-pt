@@ -1,0 +1,13 @@
+---
+description: Mobile locked sheets must use tabs instead of one long scrolling stack
+globs: src/components/**/*.tsx
+alwaysApply: false
+---
+
+# Locked sheets + tabs
+
+Dense overlays stay **locked** (fixed card, no background scroll). Split extra content into **tabs**; keep header + Save on screen.
+
+Full pattern: [locked-sheet-tabs skill](../skills/locked-sheet-tabs/SKILL.md). Reference: player add/edit in `PlayersView.tsx`.
+
+Do not “fix” overflow by scrolling the overlay or dropping `max-h` on the card.

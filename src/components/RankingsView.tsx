@@ -44,9 +44,13 @@ import {
   resolvePrintCutLines,
 } from '../utils/rankingBoundaries';
 import {
+  buildPlayerIdLegendDocument,
   buildRankingsPrintDocument,
+  openPlayerIdLegendPrint,
   openRankingsPrint,
+  type RankingsPrintNameMode,
 } from '../utils/rankingsPrint';
+import { displayPublicId } from '../utils/playerPublicId';
 import { metricPrimaryLabelId } from '../utils/metricLabels';
 import {
   visibleActiveWeights,
@@ -330,6 +334,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const [coachesScope, setCoachesScope] = useState<string>('average');
   const [specialtyPosition, setSpecialtyPosition] =
     useState<PlayerPosition | null>(null);
+  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [emptyLine] = useState(
     () =>
       EMPTY_RANKINGS_LINES[
@@ -484,7 +489,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     return (
       r.player.name.toLowerCase().includes(q) ||
       r.player.position.toLowerCase().includes(q) ||
-      r.player.jerseyNumber.toString() === searchQuery
+      r.player.jerseyNumber.toString() === searchQuery ||
+      displayPublicId(r.player).toLowerCase().includes(q)
     );
   });
 
@@ -596,7 +602,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     a.click();
   };
 
-  const handlePrint = () => {
+  const handlePrint = (nameMode: RankingsPrintNameMode) => {
     const sorted = [...rankingSource].sort((a, b) => {
       if (individualCoachOrdinals) {
         return compareOptionalRankValue(
@@ -636,8 +642,21 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           selectedMetricId,
           totalMode: effectiveTotalMode,
         }),
+        nameMode,
       }),
     );
+    setPrintMenuOpen(false);
+  };
+
+  const handlePrintLegend = () => {
+    openPlayerIdLegendPrint(
+      buildPlayerIdLegendDocument({
+        teamName: team?.name ?? 'Team',
+        season: team?.season,
+        players: rankingSource.map((r) => r.player),
+      }),
+    );
+    setPrintMenuOpen(false);
   };
 
   const isBoardMode =
@@ -711,13 +730,49 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               <Sliders className="w-4 h-4 text-emerald-400" />
               <span>Configure Formula</span>
             </button>
-            <button
-              onClick={handlePrint}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-all active:scale-95"
-              title="Print this ranking (pick a metric or Coaches Rank first)"
-            >
-              <Printer className="w-4 h-4" />
-            </button>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setPrintMenuOpen((open) => !open)}
+                className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-all active:scale-95"
+                title="Print ranking or player ID legend"
+                aria-expanded={printMenuOpen}
+                aria-haspopup="menu"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+              {printMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-30 mt-1.5 w-56 rounded-xl border border-slate-700 bg-slate-900 p-1 shadow-2xl"
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handlePrint('name')}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    Print with names
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handlePrint('publicId')}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    Print with player IDs
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handlePrintLegend}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    Print ID legend
+                  </button>
+                </div>
+              )}
+            </div>
             <button
               onClick={handleExportCSV}
               className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700/80 transition-all active:scale-95"
@@ -757,7 +812,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search player name, position, jersey #..."
+            placeholder="Search name, position, jersey, or player ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"

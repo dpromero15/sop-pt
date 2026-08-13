@@ -7,11 +7,14 @@ import {
   ChevronRight, 
   X, 
   UserPlus, 
+  User,
   Download,
   Upload,
   Award,
   ClipboardList,
   RotateCcw,
+  Printer,
+  Shield,
 } from 'lucide-react';
 import {
   Player,
@@ -56,8 +59,14 @@ import {
   parseBirthYear,
   parsePlayerGrade,
 } from '../utils/playerDemographics';
+import { displayPublicId } from '../utils/playerPublicId';
+import {
+  buildPlayerIdLegendDocument,
+  openPlayerIdLegendPrint,
+} from '../utils/rankingsPrint';
 
 type PlayersPane = 'roster' | 'coaches' | 'compliance';
+type PlayerFormTab = 'info' | 'status' | 'compliance';
 
 interface PlayersViewProps {
   players: Player[];
@@ -71,6 +80,7 @@ interface PlayersViewProps {
   onRefreshData: () => void;
   isAddModalOpen: boolean;
   onCloseAddModal: () => void;
+  onOpenAddModal?: () => void;
   readOnlyRoster?: boolean;
   allowCoachesRating?: boolean;
   allowProfileNotes?: boolean;
@@ -88,6 +98,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   onRefreshData,
   isAddModalOpen,
   onCloseAddModal,
+  onOpenAddModal,
   readOnlyRoster = false,
   allowCoachesRating = true,
   allowProfileNotes = true,
@@ -96,6 +107,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [positionFilter, setPositionFilter] = useState<string>('all');
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+  const [formTab, setFormTab] = useState<PlayerFormTab>('info');
 
   // Form State
   const [formName, setFormName] = useState('');
@@ -114,6 +126,16 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   useEffect(() => {
     if (!allowCoachesRating && pane === 'coaches') setPane('roster');
   }, [allowCoachesRating, pane]);
+
+  const showComplianceTab = Boolean(
+    editingPlayer && complianceRequirements.length > 0,
+  );
+  const activeFormTab: PlayerFormTab =
+    formTab === 'compliance' && !showComplianceTab ? 'info' : formTab;
+
+  useEffect(() => {
+    if (isAddModalOpen || editingPlayer) setFormTab('info');
+  }, [isAddModalOpen, editingPlayer]);
 
   const liveRoster = useMemo(() => rosterPlayers(players), [players]);
   const inactiveRoster = useMemo(
@@ -158,7 +180,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
   const handleSavePlayerForm = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) return;
+    if (!formName.trim()) {
+      setFormTab('info');
+      showToast('Full player name is required.');
+      return;
+    }
 
     const nextStatus: Player['status'] = formInactive
       ? 'inactive'
@@ -227,6 +253,17 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     showToast('✓ CSV template downloaded');
   };
 
+  const handlePrintIdLegend = () => {
+    const team = StorageService.getTeam();
+    openPlayerIdLegendPrint(
+      buildPlayerIdLegendDocument({
+        teamName: team.name,
+        season: team.season,
+        players: liveRoster,
+      }),
+    );
+  };
+
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -236,7 +273,16 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     reader.onload = () => {
       const text = String(reader.result || '');
       const existing = new Set<number>(players.map((p) => p.jerseyNumber));
-      const { ok, errors, skipped } = parseAndValidatePlayerCsv(text, existing);
+      const existingPublicIds = new Set<string>(
+        players
+          .map((p) => p.publicId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      const { ok, errors, skipped } = parseAndValidatePlayerCsv(
+        text,
+        existing,
+        existingPublicIds,
+      );
 
       ok.forEach((row) => {
         StorageService.addPlayer(row);
@@ -287,8 +333,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
   // Filter logic (live roster only — inactive sit in their own section)
   const matchesRosterFilters = (p: Player) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.jerseyNumber.toString() === searchQuery;
+    const q = searchQuery.toLowerCase();
+    const matchesSearch =
+      p.name.toLowerCase().includes(q) ||
+      p.jerseyNumber.toString() === searchQuery ||
+      displayPublicId(p).toLowerCase().includes(q);
 
     if (positionFilter === 'GK') return matchesSearch && p.position === 'GK';
     if (positionFilter === 'DEF') return matchesSearch && ['CB', 'LB', 'RB'].includes(p.position);
@@ -332,9 +381,19 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
             </p>
           </div>
 
-          {pane === 'roster' && !readOnlyRoster && (
+          {pane === 'roster' && (
             <div className="flex flex-wrap items-center gap-2 shrink-0">
-              <SaveAndSyncButton compact />
+              {!readOnlyRoster && <SaveAndSyncButton compact />}
+              <button
+                type="button"
+                onClick={handlePrintIdLegend}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+              >
+                <Printer className="w-4 h-4 text-slate-300" />
+                <span>Print ID legend</span>
+              </button>
+              {!readOnlyRoster && (
+              <>
               <button
                 type="button"
                 onClick={handleExportCsvTemplate}
@@ -376,12 +435,16 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   setFormGrade('');
                   setFormRankingIneligible(false);
                   setFormInactive(false);
+                  setFormTab('info');
+                  onOpenAddModal?.();
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
               >
                 <UserPlus className="w-4 h-4" />
                 <span>Register New Player</span>
               </button>
+              </>
+              )}
             </div>
           )}
         </div>
@@ -480,7 +543,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search by name or jersey number..."
+            placeholder="Search by name, jersey, or player ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
@@ -544,6 +607,9 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         {player.name}
                       </h3>
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-200 text-[11px] font-extrabold border border-slate-700 font-mono tracking-wider">
+                          {displayPublicId(player)}
+                        </span>
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
                           #{player.jerseyNumber} • {player.position}
                         </span>
@@ -725,7 +791,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {player.position} · not on live roster
+                    {displayPublicId(player)} · {player.position} · not on live roster
                   </div>
                 </button>
                 {!readOnlyRoster && (
@@ -806,16 +872,17 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       </>
       )}
 
-      {/* Modal Form for Add/Edit Player */}
+      {/* Locked sheet: add/edit player — tabs keep the card on-screen on mobile */}
       {(isAddModalOpen || editingPlayer) && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-lg p-6 shadow-2xl relative text-white space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-lg max-h-[min(92dvh,100%)] flex flex-col overflow-hidden shadow-2xl relative text-white">
+            <div className="shrink-0 flex items-center justify-between px-5 pt-5 pb-3 border-b border-slate-800">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <UserPlus className="w-5 h-5 text-emerald-400" />
                 <span>{editingPlayer ? 'Edit Player Info' : 'Register New Player'}</span>
               </h3>
               <button
+                type="button"
                 onClick={() => {
                   setEditingPlayer(null);
                   onCloseAddModal();
@@ -826,198 +893,260 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
               </button>
             </div>
 
-            <form onSubmit={handleSavePlayerForm} className="space-y-4 text-xs sm:text-sm">
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Full Player Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Leo Messi"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Jersey Number *</label>
-                  <input
-                    type="number"
-                    required
-                    min={1}
-                    max={99}
-                    value={formJersey}
-                    onChange={(e) => setFormJersey(parseInt(e.target.value) || 10)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Position *</label>
-                  <select
-                    value={formPosition}
-                    onChange={(e) => setFormPosition(e.target.value as PlayerPosition)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    {['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'].map(pos => (
-                      <option key={pos} value={pos}>{pos}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Preferred Foot</label>
-                  <select
-                    value={formFoot}
-                    onChange={(e) => setFormFoot(e.target.value as any)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                  >
-                    <option value="Right">Right</option>
-                    <option value="Left">Left</option>
-                    <option value="Both">Both (Ambidextrous)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Birth year</label>
-                  <input
-                    type="number"
-                    min={new Date().getFullYear() - 50}
-                    max={new Date().getFullYear() - 5}
-                    placeholder="e.g. 2010"
-                    value={formBirthYear}
-                    onChange={(e) => setFormBirthYear(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Current grade</label>
-                <select
-                  value={formGrade}
-                  onChange={(e) => setFormGrade(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+            <div
+              className="shrink-0 mx-5 mt-3 inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+              role="tablist"
+              aria-label="Player form sections"
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === 'info'}
+                onClick={() => setFormTab('info')}
+                className={`inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeFormTab === 'info'
+                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                Info
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeFormTab === 'status'}
+                onClick={() => setFormTab('status')}
+                className={`inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeFormTab === 'status'
+                    ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                Status
+              </button>
+              {showComplianceTab && (
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeFormTab === 'compliance'}
+                  onClick={() => setFormTab('compliance')}
+                  className={`inline-flex flex-1 items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                    activeFormTab === 'compliance'
+                      ? 'bg-amber-500 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <option value="">Not set</option>
-                  {PLAYER_GRADES.map((g) => (
-                    <option key={g} value={g}>
-                      {formatPlayerGrade(g)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Avatar Image URL (Optional)</label>
-                <input
-                  type="text"
-                  placeholder="/avatars/cucurella-outline.svg or https://..."
-                  value={formAvatar}
-                  onChange={(e) => setFormAvatar(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
-                <span>
-                  <span className="block text-slate-200 font-semibold">
-                    Inactive (cut / not on squad)
-                  </span>
-                  <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
-                    Keeps the player and their logs. Hides them from roster
-                    lists, rankings, logger, and team averages.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formInactive}
-                  onChange={(e) => setFormInactive(e.target.checked)}
-                  className="mt-1 rounded border-slate-600"
-                />
-              </label>
-
-              <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
-                <span>
-                  <span className="block text-slate-200 font-semibold">
-                    Ineligible for Adjusted Rank
-                  </span>
-                  <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
-                    Manual only. Compliance badges stay informational and do not
-                    drop the player from Adjusted Rank.
-                  </span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={formRankingIneligible}
-                  onChange={(e) => setFormRankingIneligible(e.target.checked)}
-                  className="mt-1 rounded border-slate-600"
-                />
-              </label>
-
-              <div>
-                <label className="block text-slate-400 font-semibold mb-1">Coach Notes / Strengths</label>
-                <textarea
-                  rows={2}
-                  placeholder="Playmaker vision, high stamina, vocal leader..."
-                  value={formNotes}
-                  onChange={(e) => setFormNotes(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-
-              {editingPlayer && complianceRequirements.length > 0 && (
-                <div className="space-y-2 border border-slate-800 rounded-xl p-3 bg-slate-950/50">
-                  <div className="text-slate-400 font-semibold">Compliance checklist</div>
-                  {complianceRequirements.map((req) => {
-                    const complete = isRequirementComplete(
-                      playerCompliance,
-                      editingPlayer.id,
-                      req,
-                    );
-                    return (
-                      <label
-                        key={req.id}
-                        className="flex items-center justify-between gap-2 text-sm text-slate-200"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <span className="min-w-0">
-                          {req.name}
-                          {consequenceLabelsForRequirement(req).map((label) => (
-                            <span
-                              key={label}
-                              className="ml-1.5 text-[10px] uppercase text-rose-300"
-                            >
-                              {label}
-                            </span>
-                          ))}
-                          <span className="block text-[10px] text-slate-500 font-normal">
-                            {polarityHint(req)}
-                          </span>
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={isRequirementChecked(req, complete)}
-                          onChange={(e) => {
-                            StorageService.setPlayerRequirementComplete(
-                              editingPlayer.id,
-                              req.id,
-                              completeFromChecked(req, e.target.checked),
-                            );
-                            onRefreshData();
-                          }}
-                          className="rounded border-slate-600"
-                        />
-                      </label>
-                    );
-                  })}
-                </div>
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  Compliance
+                </button>
               )}
+            </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+            <form
+              onSubmit={handleSavePlayerForm}
+              className="flex min-h-0 flex-1 flex-col text-xs sm:text-sm"
+            >
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4">
+                {activeFormTab === 'info' && (
+                  <>
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Full Player Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Leo Messi"
+                        value={formName}
+                        onChange={(e) => setFormName(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Jersey Number *</label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={99}
+                          value={formJersey}
+                          onChange={(e) => setFormJersey(parseInt(e.target.value) || 10)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Position *</label>
+                        <select
+                          value={formPosition}
+                          onChange={(e) => setFormPosition(e.target.value as PlayerPosition)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                        >
+                          {['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'].map(pos => (
+                            <option key={pos} value={pos}>{pos}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Preferred Foot</label>
+                        <select
+                          value={formFoot}
+                          onChange={(e) => setFormFoot(e.target.value as 'Left' | 'Right' | 'Both')}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                        >
+                          <option value="Right">Right</option>
+                          <option value="Left">Left</option>
+                          <option value="Both">Both (Ambidextrous)</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">Birth year</label>
+                        <input
+                          type="number"
+                          min={new Date().getFullYear() - 50}
+                          max={new Date().getFullYear() - 5}
+                          placeholder="e.g. 2010"
+                          value={formBirthYear}
+                          onChange={(e) => setFormBirthYear(e.target.value)}
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Current grade</label>
+                      <select
+                        value={formGrade}
+                        onChange={(e) => setFormGrade(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                      >
+                        <option value="">Not set</option>
+                        {PLAYER_GRADES.map((g) => (
+                          <option key={g} value={g}>
+                            {formatPlayerGrade(g)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Avatar Image URL (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="/avatars/cucurella-outline.svg or https://..."
+                        value={formAvatar}
+                        onChange={(e) => setFormAvatar(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeFormTab === 'status' && (
+                  <>
+                    <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                      <span>
+                        <span className="block text-slate-200 font-semibold">
+                          Inactive (cut / not on squad)
+                        </span>
+                        <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                          Keeps the player and their logs. Hides them from roster
+                          lists, rankings, logger, and team averages.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formInactive}
+                        onChange={(e) => setFormInactive(e.target.checked)}
+                        className="mt-1 rounded border-slate-600"
+                      />
+                    </label>
+
+                    <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                      <span>
+                        <span className="block text-slate-200 font-semibold">
+                          Ineligible for Adjusted Rank
+                        </span>
+                        <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                          Manual only. Compliance badges stay informational and do not
+                          drop the player from Adjusted Rank.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formRankingIneligible}
+                        onChange={(e) => setFormRankingIneligible(e.target.checked)}
+                        className="mt-1 rounded border-slate-600"
+                      />
+                    </label>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">Coach Notes / Strengths</label>
+                      <textarea
+                        rows={4}
+                        placeholder="Playmaker vision, high stamina, vocal leader..."
+                        value={formNotes}
+                        onChange={(e) => setFormNotes(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {activeFormTab === 'compliance' && editingPlayer && (
+                  <div className="space-y-2 border border-slate-800 rounded-xl p-3 bg-slate-950/50">
+                    <div className="text-slate-400 font-semibold">Compliance checklist</div>
+                    {complianceRequirements.map((req) => {
+                      const complete = isRequirementComplete(
+                        playerCompliance,
+                        editingPlayer.id,
+                        req,
+                      );
+                      return (
+                        <label
+                          key={req.id}
+                          className="flex items-center justify-between gap-2 text-sm text-slate-200"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <span className="min-w-0">
+                            {req.name}
+                            {consequenceLabelsForRequirement(req).map((label) => (
+                              <span
+                                key={label}
+                                className="ml-1.5 text-[10px] uppercase text-rose-300"
+                              >
+                                {label}
+                              </span>
+                            ))}
+                            <span className="block text-[10px] text-slate-500 font-normal">
+                              {polarityHint(req)}
+                            </span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={isRequirementChecked(req, complete)}
+                            onChange={(e) => {
+                              StorageService.setPlayerRequirementComplete(
+                                editingPlayer.id,
+                                req.id,
+                                completeFromChecked(req, e.target.checked),
+                              );
+                              onRefreshData();
+                            }}
+                            className="rounded border-slate-600"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="shrink-0 flex items-center justify-end gap-2 border-t border-slate-800 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
                 <button
                   type="button"
                   onClick={() => {

@@ -440,6 +440,7 @@ export default function App() {
             onRefreshData={refreshData}
             isAddModalOpen={isAddPlayerOpen && can('rosterWrite')}
             onCloseAddModal={() => setIsAddPlayerOpen(false)}
+            onOpenAddModal={() => setIsAddPlayerOpen(true)}
             readOnlyRoster={!can('rosterWrite')}
             allowCoachesRating={can('coachesRating')}
             allowProfileNotes={can('profileNotes')}
