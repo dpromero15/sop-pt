@@ -12,14 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #129 — Adjusted Rank should exclude only manually marked ineligible players
+### #131 — Lock session logger to a fixed unzoomed phone cockpit
 - **Status:** implemented
-- **Notes:** Compliance no longer drives Adjusted Rank. `player.rankingIneligible` (roster Mark ineligible / edit checkbox) is the only exclusion; others stay in the list and breakouts.
-- **Touchpoints:** `eligibility.ts`, `App.tsx`, `PlayersView.tsx`, `RankingsView.tsx`, `types.ts`, `storage.md`
+- **Notes:** Quick Insert fills the phone viewport with zoom locked. Attendance swipes no longer pinch-zoom or rubber-band the page; Out / Here / Continue stay on screen.
+- **Touchpoints:** `viewportLock.ts`, `index.css`, `App.tsx`, `QuickInsertView.tsx`, `AttendanceSwipeDeck.tsx`, `Navigation.tsx`
 
 **Suggested PR Closes:**
 ```
-Closes #129
+Closes #131
 ```
 
 ## Still open (this release)
@@ -44,6 +44,7 @@ _(none)_
 - Attendance Statistical/Adjusted standing shipped via [#124](https://github.com/dpromero15/sop-pt/pull/124) (`Closes #123`).
 - Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
 - Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
+- Manual Adjusted ineligible shipped via [#130](https://github.com/dpromero15/sop-pt/pull/130) (`Closes #129`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
@@ -51,4 +52,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (218 tests) 2026-08-13 — #129.
+- **QA:** `npm run lint` + `npm test` (220 tests) 2026-08-13 — #131.

@@ -55,6 +55,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   const startRef = useRef<{ x: number; y: number } | null>(null);
   const modeRef = useRef<DragMode>('idle');
   const longPressTimer = useRef<number | null>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const initialQueueRef = useRef(initialQueueIds);
   initialQueueRef.current = initialQueueIds;
   const activePlayerId = queue[0];
@@ -99,6 +100,20 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
     // players / initialQueueIds are read when rosterKey changes (session or membership), not on every refresh.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: depend on rosterKey only
   }, [rosterKey]);
+
+  useEffect(() => {
+    const el = surfaceRef.current;
+    if (!el) return;
+    const blockScroll = (event: TouchEvent) => {
+      event.preventDefault();
+    };
+    el.addEventListener('touchmove', blockScroll, { passive: false });
+    el.addEventListener('gesturestart', blockScroll, { passive: false });
+    return () => {
+      el.removeEventListener('touchmove', blockScroll);
+      el.removeEventListener('gesturestart', blockScroll);
+    };
+  }, [activePlayerId]);
 
   const clearLongPress = () => {
     if (longPressTimer.current != null) {
@@ -264,8 +279,8 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
   const rotation = offset.x / 20;
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 text-sm text-slate-400">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div className="flex shrink-0 items-center justify-between gap-2 text-xs text-slate-400">
         <span>
           {queue.length} remaining · {players.length - queue.length} done
         </span>
@@ -311,7 +326,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
               Tap remaining · then swipe
             </p>
           </div>
-          <ul className="max-h-48 divide-y divide-slate-800/80 overflow-y-auto">
+          <ul className="max-h-28 divide-y divide-slate-800/80 overflow-y-auto overscroll-contain">
             {rosterRows.map(({ player, inQueue, isActive, status }) => {
               if (!inQueue) {
                 return (
@@ -377,7 +392,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
       )}
 
       {/* Compact jersey strip for one-thumb jump without opening the full list */}
-      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+      <div className="-mx-1 flex shrink-0 gap-1.5 overflow-x-auto overscroll-x-contain px-1 pb-1 touch-pan-x">
         {queue.map((id) => {
           const p = playersById.get(id);
           if (!p) return null;
@@ -401,7 +416,10 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
         })}
       </div>
 
-      <div className="relative mx-auto h-[340px] w-full max-w-sm touch-none select-none">
+      <div
+        ref={surfaceRef}
+        className="relative mx-auto min-h-[160px] w-full max-w-sm flex-1 touch-none select-none overscroll-none"
+      >
         {queue.slice(1, 3).map((id, i) => {
           const p = players.find((pl) => pl.id === id);
           if (!p) return null;
@@ -425,7 +443,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className="absolute inset-0 z-20 flex cursor-grab flex-col justify-between rounded-2xl border border-slate-700 bg-gradient-to-b from-slate-800 to-slate-950 p-6 shadow-2xl active:cursor-grabbing"
+          className="absolute inset-0 z-20 flex cursor-grab flex-col justify-between rounded-2xl border border-slate-700 bg-gradient-to-b from-slate-800 to-slate-950 p-4 shadow-2xl active:cursor-grabbing sm:p-6"
           style={{
             transform: `translate(${offset.x}px, ${offset.y}px) rotate(${rotation}deg)`,
             transition: dragging ? 'none' : 'transform 0.2s ease',
@@ -450,7 +468,9 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               #{activePlayer.jerseyNumber} · {activePlayer.position}
             </p>
-            <h3 className="mt-2 text-3xl font-bold text-slate-50">{activePlayer.name}</h3>
+            <h3 className="mt-1 text-2xl font-bold leading-tight text-slate-50 sm:text-3xl">
+            {activePlayer.name}
+          </h3>
             <p className="mt-2 text-sm capitalize text-slate-400">
               Current: {currentStatus}
             </p>
@@ -462,11 +482,11 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid shrink-0 grid-cols-4 gap-2">
         <button
           type="button"
           onClick={() => commitStatus(activePlayer.id, 'absent', true)}
-          className="flex flex-col items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 py-3 text-rose-300"
+          className="flex flex-col items-center gap-0.5 rounded-xl border border-rose-500/30 bg-rose-500/10 py-2 text-rose-300"
         >
           <X className="h-5 w-5" />
           <span className="text-xs">Out</span>
@@ -474,7 +494,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
         <button
           type="button"
           onClick={() => commitStatus(activePlayer.id, 'excused', true)}
-          className="flex flex-col items-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 py-3 text-amber-300"
+          className="flex flex-col items-center gap-0.5 rounded-xl border border-amber-500/30 bg-amber-500/10 py-2 text-amber-300"
         >
           <Ban className="h-5 w-5" />
           <span className="text-xs">Excused</span>
@@ -485,7 +505,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
             const next = toggleLateStatus(currentStatus ?? 'present');
             commitStatus(activePlayer.id, next, false);
           }}
-          className="flex flex-col items-center gap-1 rounded-xl border border-amber-500/30 bg-amber-500/10 py-3 text-amber-200"
+          className="flex flex-col items-center gap-0.5 rounded-xl border border-amber-500/30 bg-amber-500/10 py-2 text-amber-200"
         >
           <Clock className="h-5 w-5" />
           <span className="text-xs">Late</span>
@@ -493,7 +513,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
         <button
           type="button"
           onClick={() => commitStatus(activePlayer.id, 'present', true)}
-          className="flex flex-col items-center gap-1 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-3 text-emerald-300"
+          className="flex flex-col items-center gap-0.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 py-2 text-emerald-300"
         >
           <Check className="h-5 w-5" />
           <span className="text-xs">Here</span>
