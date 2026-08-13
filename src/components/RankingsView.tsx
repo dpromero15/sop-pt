@@ -51,7 +51,7 @@ import {
   isUnscoredForRankMode,
   labelScoreForMode,
   metricsForCategory,
-  playerHasLoggedStanding,
+  scopeHasRankingsData,
   RankingsMetricSelection,
   RankingsSortMode,
   RankingsTotalMode,
@@ -399,54 +399,29 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   }, [activeMetric, rankingSource]);
 
   /** True when the current category / metric filter has any real logged values. */
-  const scopeHasData = useMemo(() => {
-    if (totalMode === 'coaches') {
-      if (individualCoachOrdinals) {
-        return individualCoachOrdinals.size > 0;
-      }
-      return rankings.some((r) => r.coachesTotalSum !== null);
-    }
-
-    if (!hasLoggedData) return false;
-
-    if (sortBy === 'metric' && activeMetric) {
-      const primaryId = metricPrimaryLabelId(activeMetric);
-      return rankings.some((r) =>
-        r.labelScores[primaryId]?.metrics.some(
-          (m) => m.metricId === activeMetric.id,
-        ),
-      );
-    }
-
-
-    if (selectedLabelId !== 'all') {
-      if (totalMode === 'adjusted') {
-        return rankings.some(
-          (r) => r.labelScores[selectedLabelId]?.adjustedScore !== null,
-        );
-      }
-      return rankings.some(
-        (r) => (r.labelScores[selectedLabelId]?.entryCount ?? 0) > 0,
-      );
-    }
-
-    if (totalMode === 'adjusted') {
-      return rankings.some(
-        (r) =>
-          r.adjustedTotalScore !== null || playerHasLoggedStanding(r),
-      );
-    }
-
-    return rankings.some(playerHasLoggedStanding);
-  }, [
-    hasLoggedData,
-    rankings,
-    selectedLabelId,
-    sortBy,
-    totalMode,
-    activeMetric,
-    individualCoachOrdinals,
-  ]);
+  const scopeHasData = useMemo(
+    () =>
+      scopeHasRankingsData({
+        rankings,
+        hasLoggedData,
+        sortBy,
+        selectedLabelId,
+        selectedMetricId,
+        metrics,
+        totalMode: effectiveTotalMode,
+        individualCoachOrdinals,
+      }),
+    [
+      hasLoggedData,
+      rankings,
+      selectedLabelId,
+      selectedMetricId,
+      sortBy,
+      effectiveTotalMode,
+      metrics,
+      individualCoachOrdinals,
+    ],
+  );
 
   const budgetRemaining = useMemo(
     () => bumpBudgetRemaining(adjustedBumps, bumpBudget),

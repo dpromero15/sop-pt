@@ -5,8 +5,10 @@ import {
   compareRankings,
   formatTeamMetricValue,
   isUnscoredForRankMode,
+  labelScoreForMode,
   metricsForCategory,
   playerHasLoggedStanding,
+  scopeHasRankingsData,
   selectionAfterCategoryChange,
   teamMetricSummary,
   totalForMode,
@@ -526,5 +528,76 @@ describe('playerHasLoggedStanding', () => {
   it('is false when nothing is logged', () => {
     const r = { ...ranking('p1', null, {}), attendanceRate: null };
     expect(playerHasLoggedStanding(r)).toBe(false);
+  });
+});
+
+describe('scopeHasRankingsData', () => {
+  const attendanceOnly = {
+    ...ranking('p1', null, {}),
+    attendanceRate: 80,
+    adjustedTotalScore: null,
+    overallRank: null,
+    adjustedRank: null,
+  };
+
+  it('treats attendance-only logs as data for Statistical all-categories', () => {
+    expect(
+      scopeHasRankingsData({
+        rankings: [attendanceOnly],
+        hasLoggedData: true,
+        sortBy: 'total',
+        selectedLabelId: 'all',
+        selectedMetricId: 'none',
+        metrics,
+        totalMode: 'overall',
+      }),
+    ).toBe(true);
+  });
+
+  it('treats attendance-only logs as data for Adjusted all-categories', () => {
+    expect(
+      scopeHasRankingsData({
+        rankings: [attendanceOnly],
+        hasLoggedData: true,
+        sortBy: 'total',
+        selectedLabelId: 'all',
+        selectedMetricId: 'none',
+        metrics,
+        totalMode: 'adjusted',
+      }),
+    ).toBe(true);
+  });
+
+  it('shows the Attendance category on Statistical and Adjusted when only rate exists', () => {
+    expect(
+      scopeHasRankingsData({
+        rankings: [attendanceOnly],
+        hasLoggedData: true,
+        sortBy: 'label',
+        selectedLabelId: 'attendance',
+        selectedMetricId: 'none',
+        metrics,
+        totalMode: 'overall',
+      }),
+    ).toBe(true);
+    expect(
+      scopeHasRankingsData({
+        rankings: [attendanceOnly],
+        hasLoggedData: true,
+        sortBy: 'label',
+        selectedLabelId: 'attendance',
+        selectedMetricId: 'none',
+        metrics,
+        totalMode: 'adjusted',
+      }),
+    ).toBe(true);
+  });
+});
+
+describe('labelScoreForMode attendance', () => {
+  it('falls back to attendanceRate when the category score is missing', () => {
+    const r = { ...ranking('p1', null, {}), attendanceRate: 80 };
+    expect(labelScoreForMode(r, 'attendance', 'overall')).toBe(80);
+    expect(labelScoreForMode(r, 'attendance', 'adjusted')).toBe(80);
   });
 });

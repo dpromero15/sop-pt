@@ -9,6 +9,31 @@ import {
 } from '../types';
 import { aggregateMetricValue, percentileAmong } from './metricAggregation';
 import { metricScoresInCategory } from './metricLabels';
+import { ATTENDANCE_METRIC_ID } from './sessionMetrics';
+import { visibleRankingLabels } from './formulaWeights';
+
+/** Used when the team blob has attendance entries but no attendance metric row. */
+const ATTENDANCE_METRIC_FALLBACK: MetricDefinition = {
+  id: ATTENDANCE_METRIC_ID,
+  name: 'Session Attendance',
+  labelIds: ['attendance'],
+  primaryLabelId: 'attendance',
+  type: 'attendance',
+  unit: 'status',
+  higherIsBetter: true,
+  aggregationMode: 'average',
+};
+
+function metricsForRankings(metrics: MetricDefinition[]): MetricDefinition[] {
+  if (
+    metrics.some(
+      (m) => m.type === 'attendance' || m.id === ATTENDANCE_METRIC_ID,
+    )
+  ) {
+    return metrics;
+  }
+  return [...metrics, ATTENDANCE_METRIC_FALLBACK];
+}
 
 /**
  * Absolute min/max normalization — kept for optional standards / benchmarks
@@ -127,8 +152,11 @@ export function calculatePlayerRankings(
   labels: LabelDefinition[],
   formula: ScoringFormulaConfig,
 ): PlayerRanking[] {
+  const rankingLabels = visibleRankingLabels(labels);
+  const rankingMetrics = metricsForRankings(metrics);
+
   const metricMap = new Map<string, MetricDefinition>();
-  metrics.forEach((m) => metricMap.set(m.id, m));
+  rankingMetrics.forEach((m) => metricMap.set(m.id, m));
 
   const weightMap = new Map<string, { weightPercent: number; enabled: boolean }>();
   formula.weights.forEach((w) =>
@@ -143,7 +171,7 @@ export function calculatePlayerRankings(
   for (const player of players) {
     const playerEntries = entries.filter((e) => e.playerId === player.id);
     const byMetric = new Map<string, number | null>();
-    for (const m of metrics) {
+    for (const m of rankingMetrics) {
       byMetric.set(m.id, aggregateMetricValue(playerEntries, m));
     }
     aggByPlayer.set(player.id, byMetric);
@@ -151,7 +179,7 @@ export function calculatePlayerRankings(
 
   // Squad pools for percentile (only players with a value).
   const squadByMetric = new Map<string, number[]>();
-  for (const m of metrics) {
+  for (const m of rankingMetrics) {
     const values: number[] = [];
     for (const player of players) {
       const v = aggByPlayer.get(player.id)?.get(m.id);
@@ -165,8 +193,8 @@ export function calculatePlayerRankings(
     const playerAgg = aggByPlayer.get(player.id)!;
     const labelScoresRecord: Record<string, PlayerLabelScore> = {};
 
-    labels.forEach((label) => {
-      const labelMetrics = metrics.filter((m) =>
+    rankingLabels.forEach((label) => {
+      const labelMetrics = rankingMetrics.filter((m) =>
         metricScoresInCategory(m, label.id),
       );
       const metricDetails: PlayerLabelScore['metrics'] = [];
@@ -239,7 +267,7 @@ export function calculatePlayerRankings(
     let adjustedNumerator = 0;
     let adjustedDenominator = 0;
 
-    labels.forEach((label) => {
+    rankingLabels.forEach((label) => {
       const wConfig = weightMap.get(label.id);
       if (!wConfig || !wConfig.enabled || wConfig.weightPercent <= 0) return;
 
@@ -267,8 +295,11 @@ export function calculatePlayerRankings(
         : null;
 
     const attendanceEntries = playerEntries.filter((e) => {
+      if (e.value < 0) return false;
       const m = metricMap.get(e.metricId);
-      return m && m.type === 'attendance' && e.value >= 0;
+      return (
+        e.metricId === ATTENDANCE_METRIC_ID || m?.type === 'attendance'
+      );
     });
 
     let attendanceRate: number | null = null;

@@ -12,26 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #119 — JIT: do not drop compliance/config writes during flush
-- **Status:** implemented — open [PR #122](https://github.com/dpromero15/sop-pt/pull/122)
-- **Notes:** Outbox keeps writes that happen while a flush is in flight, then flushes them. Explicit **Save** (`SaveAndSyncButton` / `flushNow`) on Compliance manager, Quick Insert, Sessions, Coaches Rating, Players, Rankings, formula weights, labels, metrics, bump budget, ranking cut lines, equipment, and team profile — no 10s JIT wait.
-- **Touchpoints:** `cloudSync.ts`, `SaveAndSyncButton.tsx`, `ConfigView.tsx`, `ComplianceConfigPanel.tsx`, `RankingBoundariesPanel.tsx`, `EquipmentConfigPanel.tsx`, `TeamManagementView.tsx`, `QuickInsertView.tsx`, `SessionsView.tsx`, `CoachesRatingView.tsx`, `PlayersView.tsx`, `RankingsView.tsx`
-
-### #120 — Sync / system log for JIT errors
-- **Status:** implemented
-- **Notes:** Local ring buffer (`stm_sync_log_v1`). Nav chip popover (also on phones) + Admin system log with Sync now / Retry hydrate.
-- **Touchpoints:** `syncLog.ts`, `SyncStatusChip.tsx`, `SyncLogPanel.tsx`, `AdminPageView.tsx`
-
-### #121 — Rankings empty after attendance; Coaches Rank needs saved complete ballot
-- **Status:** implemented
-- **Notes:** Board shows when attendance exists even if formula total is null. Coaches ballot auto-saves on reorder + flushNow. Sessions empty copy calls out sync wipe.
-- **Touchpoints:** `rankingsFilter.ts`, `RankingsView.tsx`, `CoachesRatingView.tsx`, `SessionsView.tsx`
+### #123 — Attendance still empty on Statistical Rank and Adjusted Rank
+- **Status:** implemented — open [PR #124](https://github.com/dpromero15/sop-pt/pull/124)
+- **Notes:** Scoring always includes the Attendance label/metric so session logs feed Statistical + Adjusted standing. Attendance category / metric views treat `attendanceRate` as data (not empty-cat).
+- **Touchpoints:** `scoring.ts`, `rankingsFilter.ts`, `RankingsView.tsx`
 
 **Suggested PR Closes:**
 ```
-Closes #119
-Closes #120
-Closes #121
+Closes #123
 ```
 
 ## Still open (this release)
@@ -52,6 +40,7 @@ _(none)_
 - Ghost categories shipped via [#115](https://github.com/dpromero15/sop-pt/pull/115) (`Closes #112 #113`).
 - Compliance invert + soft delete shipped via [#116](https://github.com/dpromero15/sop-pt/pull/116) (`Closes #109 #114`).
 - Compliance consequences shipped via [#118](https://github.com/dpromero15/sop-pt/pull/118) (`Closes #117`).
+- JIT Save + sync log + attendance board shipped via [#122](https://github.com/dpromero15/sop-pt/pull/122) (`Closes #119 #120 #121`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
@@ -59,4 +48,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (202 tests) 2026-08-12 — #117/#119/#120/#121.
+- **QA:** `npm run lint` + `npm test` (208 tests) 2026-08-12 — #119/#120/#121/#123.
