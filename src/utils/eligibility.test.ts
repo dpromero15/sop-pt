@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ComplianceRequirement, Player, PlayerRanking } from '../types';
 import {
   applyEligibilityToAdjustedRanks,
+  isRankingEligible,
   completeFromChecked,
   isEligibleToPlay,
   isEligibleToPractice,
@@ -250,6 +251,14 @@ describe('missingRequirements', () => {
   });
 });
 
+describe('isRankingEligible', () => {
+  it('is true unless rankingIneligible is explicitly set', () => {
+    expect(isRankingEligible({})).toBe(true);
+    expect(isRankingEligible({ rankingIneligible: false })).toBe(true);
+    expect(isRankingEligible({ rankingIneligible: true })).toBe(false);
+  });
+});
+
 describe('applyEligibilityToAdjustedRanks', () => {
   it('ranks only eligible players; ineligible get null adjustedRank', () => {
     const rankings = [
@@ -257,14 +266,23 @@ describe('applyEligibilityToAdjustedRanks', () => {
       stubRanking('b', 80),
       stubRanking('c', 70),
     ];
-    const next = applyEligibilityToAdjustedRanks(
-      rankings,
-      new Set(['a', 'c']),
-    );
+    rankings[1] = {
+      ...rankings[1],
+      player: { ...rankings[1].player, rankingIneligible: true },
+    };
+    const next = applyEligibilityToAdjustedRanks(rankings);
     expect(next.find((r) => r.player.id === 'a')?.adjustedRank).toBe(1);
     expect(next.find((r) => r.player.id === 'c')?.adjustedRank).toBe(2);
     expect(next.find((r) => r.player.id === 'b')?.adjustedRank).toBeNull();
     expect(next.find((r) => r.player.id === 'b')?.eligibleToPlay).toBe(false);
+  });
+
+  it('does not drop players for incomplete compliance', () => {
+    const rankings = [stubRanking('a', 90), stubRanking('b', 80)];
+    const next = applyEligibilityToAdjustedRanks(rankings);
+    expect(next.every((r) => r.eligibleToPlay)).toBe(true);
+    expect(next.find((r) => r.player.id === 'a')?.adjustedRank).toBe(1);
+    expect(next.find((r) => r.player.id === 'b')?.adjustedRank).toBe(2);
   });
 });
 

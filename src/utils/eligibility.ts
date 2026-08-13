@@ -122,17 +122,24 @@ export function missingRequirements(
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
+/** True unless the coach manually marked the player ineligible for Adjusted Rank. */
+export function isRankingEligible(player: {
+  rankingIneligible?: boolean;
+}): boolean {
+  return player.rankingIneligible !== true;
+}
+
 /**
  * Mark eligibility and re-assign Adjusted competition ranks among eligible
  * players only. Ineligible rows get adjustedRank null (scores unchanged).
+ * Uses the coach's manual `rankingIneligible` flag — not compliance.
  */
 export function applyEligibilityToAdjustedRanks(
   rankings: PlayerRanking[],
-  eligibleIds: Set<string>,
 ): PlayerRanking[] {
   const tagged = rankings.map((r) => ({
     ...r,
-    eligibleToPlay: eligibleIds.has(r.player.id),
+    eligibleToPlay: isRankingEligible(r.player),
   }));
 
   const effectiveScores = tagged.map((r) => {

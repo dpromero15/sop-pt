@@ -4,7 +4,7 @@
 |---|---|
 | **Release** | `2.10.0` |
 | **Branch** | `release/v2.10.0` |
-| **Last updated** | 2026-08-12 |
+| **Last updated** | 2026-08-13 |
 
 ## In progress
 
@@ -12,14 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #127 — Print professional rankings sheet with unlabeled metric cut lines
-- **Status:** implemented — open [PR #128](https://github.com/dpromero15/sop-pt/pull/128)
-- **Notes:** Rankings Print uses the current scope (Statistical + one metric, or Coaches Rank). All players ranked; breakouts are unlabeled dotted lines (no “cut” text) on screen and print.
-- **Touchpoints:** `rankingsPrint.ts`, `RankingsView.tsx`, `rankingBoundaries.ts`, `App.tsx`
+### #129 — Adjusted Rank should exclude only manually marked ineligible players
+- **Status:** implemented
+- **Notes:** Compliance no longer drives Adjusted Rank. `player.rankingIneligible` (roster Mark ineligible / edit checkbox) is the only exclusion; others stay in the list and breakouts.
+- **Touchpoints:** `eligibility.ts`, `App.tsx`, `PlayersView.tsx`, `RankingsView.tsx`, `types.ts`, `storage.md`
 
 **Suggested PR Closes:**
 ```
-Closes #127
+Closes #129
 ```
 
 ## Still open (this release)
@@ -43,6 +43,7 @@ _(none)_
 - JIT Save + sync log + attendance board shipped via [#122](https://github.com/dpromero15/sop-pt/pull/122) (`Closes #119 #120 #121`).
 - Attendance Statistical/Adjusted standing shipped via [#124](https://github.com/dpromero15/sop-pt/pull/124) (`Closes #123`).
 - Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
+- Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
@@ -50,4 +51,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (216 tests) 2026-08-13 — #127.
+- **QA:** `npm run lint` + `npm test` (218 tests) 2026-08-13 — #129.
