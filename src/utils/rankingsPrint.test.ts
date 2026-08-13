@@ -127,8 +127,9 @@ describe('buildRankingsPrintDocument', () => {
     const html = rankingsPrintHtml(doc);
     expect(html).toContain('Thunder FC');
     expect(html).toContain('40 Meter Dash');
-    expect(html).toContain('cut-after');
+    expect(html).toContain('breakout');
     expect(html).not.toMatch(/Cut @/i);
+    expect(html).toMatch(/border-bottom:\s*2px dotted/);
   });
 
   it('prints Coaches Rank with the same unlabeled cut lines', () => {

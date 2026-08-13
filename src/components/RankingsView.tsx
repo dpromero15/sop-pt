@@ -1353,16 +1353,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               <React.Fragment key={item.player.id}>
               {crossedCuts.map((cut) => (
                 <div
-                  key={`cut-${cut}-${item.player.id}`}
-                  className="flex items-center gap-3 pt-2 pb-1"
+                  key={`breakout-${cut}-${item.player.id}`}
+                  className="flex items-center py-2"
                   role="separator"
-                  aria-label={`Cut line at ${cut}`}
+                  aria-label="Group breakout"
                 >
-                  <div className="h-px flex-1 bg-violet-500/40" />
-                  <span className="text-[11px] uppercase tracking-wider font-semibold text-violet-300 shrink-0">
-                    Cut @ {cut}
-                  </span>
-                  <div className="h-px flex-1 bg-violet-500/40" />
+                  <div className="h-0 flex-1 border-t border-dashed border-violet-400/70" />
                 </div>
               ))}
               {showIneligibleDivider && (

@@ -215,7 +215,7 @@ export function rankingsPrintHtml(doc: RankingsPrintDocument): string {
   const body = doc.rows
     .map((row) => {
       const place = row.place == null ? '—' : String(row.place);
-      const cutClass = row.showCutBelow ? ' class="cut-after"' : '';
+      const cutClass = row.showCutBelow ? ' class="breakout"' : '';
       return `<tr${cutClass}><td class="rank">${place}</td><td class="jersey">#${row.jersey}</td><td>${escapeHtml(row.name)}</td><td>${escapeHtml(row.position)}</td><td class="value">${escapeHtml(row.value)}</td></tr>`;
     })
     .join('');
@@ -272,8 +272,8 @@ export function rankingsPrintHtml(doc: RankingsPrintDocument): string {
       border-bottom: 0.4px solid #d4d4d4;
       font-variant-numeric: tabular-nums;
     }
-    tr.cut-after td {
-      border-bottom: 2.25px solid #111;
+    tr.breakout td {
+      border-bottom: 2px dotted #111;
     }
     .rank { width: 3.2rem; }
     .jersey { width: 3.2rem; color: #444; }
