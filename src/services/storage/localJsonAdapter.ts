@@ -918,7 +918,13 @@ export class LocalJsonAdapter implements StorageRepository {
         for (const p of players) {
           seeded[p.id] = {};
           for (const req of list) {
-            if (!req.blocksPlay && !req.blocksPractice) continue;
+            if (
+              !req.blocksPlay &&
+              !req.blocksPractice &&
+              req.blocksEquipment !== true
+            ) {
+              continue;
+            }
             seeded[p.id][req.id] = { complete: true, completedAt: now };
           }
         }

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Package, Plus, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import type { EquipmentGroup, EquipmentItem, Player } from '../types';
 import { StorageService } from '../services/storage';
+import { isEligibleForEquipment } from '../utils/complianceConsequences';
 
 interface EquipmentConfigPanelProps {
   groups: EquipmentGroup[];
@@ -41,6 +42,20 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
   const playerName = (id?: string) =>
     players.find((p) => p.id === id)?.name ?? 'Unknown';
 
+  const equipmentOkByPlayer = useMemo(() => {
+    const reqs = StorageService.getComplianceRequirements();
+    const compliance = StorageService.getPlayerCompliance();
+    return new Map(
+      players.map((p) => [
+        p.id,
+        isEligibleForEquipment(p.id, reqs, compliance),
+      ]),
+    );
+  }, [players]);
+
+  const firstEquipmentEligibleId =
+    players.find((p) => equipmentOkByPlayer.get(p.id))?.id ?? '';
+
   const handleAddGroup = () => {
     const name = groupName.trim();
     if (!name) return;
@@ -72,6 +87,14 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
 
   const handleAssign = () => {
     if (!assignItemId || !assignPlayerId) return;
+    const reqs = StorageService.getComplianceRequirements();
+    const compliance = StorageService.getPlayerCompliance();
+    if (!isEligibleForEquipment(assignPlayerId, reqs, compliance)) {
+      alert(
+        'This player is blocked from equipment (unpaid team fee or other No equipment item).',
+      );
+      return;
+    }
     StorageService.assignEquipmentItem(assignItemId, assignPlayerId);
     setAssignItemId(null);
     setAssignPlayerId('');
@@ -184,7 +207,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
                       type="button"
                       onClick={() => {
                         setAssignItemId(item.id);
-                        setAssignPlayerId(players[0]?.id ?? '');
+                        setAssignPlayerId(firstEquipmentEligibleId);
                       }}
                       className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-emerald-300 hover:bg-slate-800"
                     >
@@ -239,11 +262,15 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
                 onChange={(e) => setAssignPlayerId(e.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
-                {players.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    #{p.jerseyNumber} {p.name}
-                  </option>
-                ))}
+                {players.map((p) => {
+                  const ok = equipmentOkByPlayer.get(p.id) === true;
+                  return (
+                    <option key={p.id} value={p.id} disabled={!ok}>
+                      #{p.jerseyNumber} {p.name}
+                      {ok ? '' : ' — no equipment'}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             <div className="flex justify-end gap-2">

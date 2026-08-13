@@ -147,6 +147,20 @@ describe('missingBlockingRequirements', () => {
     const missing = missingBlockingRequirements('p1', reqs, {});
     expect(missing.map((r) => r.id)).toEqual(['req_physical', 'req_red_card']);
   });
+
+  it('includes equipment-only blockers', () => {
+    const kit: ComplianceRequirement = {
+      id: 'req_kit',
+      name: 'Kit deposit',
+      kind: 'fee',
+      blocksPlay: false,
+      blocksPractice: false,
+      blocksEquipment: true,
+      sortOrder: 4,
+    };
+    const missing = missingBlockingRequirements('p1', [kit], {});
+    expect(missing.map((r) => r.id)).toEqual(['req_kit']);
+  });
 });
 
 describe('missingPracticeBlockingRequirements', () => {

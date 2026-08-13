@@ -18,6 +18,7 @@ export function normalizeComplianceRequirement(
     kind,
     blocksPlay: raw.blocksPlay === true,
     blocksPractice: raw.blocksPractice === true,
+    blocksEquipment: raw.blocksEquipment === true,
   };
 }
 

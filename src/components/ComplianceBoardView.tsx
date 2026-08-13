@@ -8,14 +8,19 @@ import type {
 import { StorageService } from '../services/storage';
 import {
   completeFromChecked,
-  isEligibleToPlay,
-  isEligibleToPractice,
   isFlagRequirement,
   isRequirementChecked,
   isRequirementComplete,
   missingBlockingRequirements,
   missingRequirements,
 } from '../utils/eligibility';
+import {
+  CONSEQUENCE_BADGE_CLASS,
+  CONSEQUENCE_LABEL,
+  consequenceKeysForRequirement,
+  consequenceLabelsForRequirement,
+  playerConsequenceBadges,
+} from '../utils/complianceConsequences';
 
 type ComplianceMode = 'triage' | 'board';
 type IncompleteScope = 'blocking' | 'all';
@@ -124,12 +129,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                 playerCompliance,
               )
             : missingRequirements(player.id, requirements, playerCompliance);
-        const eligible = isEligibleToPlay(
-          player.id,
-          requirements,
-          playerCompliance,
-        );
-        return { player, missing, eligible };
+        return { player, missing };
       })
       .filter((row) => row.missing.length > 0);
   }, [sortedPlayers, requirements, playerCompliance, incompleteScope]);
@@ -288,7 +288,13 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
           </div>
         ) : (
           <ul className="space-y-3">
-            {triageRows.map(({ player, missing, eligible }) => (
+            {triageRows.map(({ player, missing }) => {
+              const badges = playerConsequenceBadges(
+                player.id,
+                requirements,
+                playerCompliance,
+              );
+              return (
               <li
                 key={player.id}
                 className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 space-y-3"
@@ -302,26 +308,15 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                       </span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
-                      {!eligible ? (
-                        <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[11px] font-bold border border-rose-500/30">
-                          Ineligible
+                      {badges.map((key) => (
+                        <span
+                          key={key}
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold border ${CONSEQUENCE_BADGE_CLASS[key]}`}
+                        >
+                          {CONSEQUENCE_LABEL[key]}
                         </span>
-                      ) : null}
-                      {!isEligibleToPractice(
-                        player.id,
-                        requirements,
-                        playerCompliance,
-                      ) ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[11px] font-bold border border-amber-500/30">
-                          No practice
-                        </span>
-                      ) : null}
-                      {eligible &&
-                        isEligibleToPractice(
-                          player.id,
-                          requirements,
-                          playerCompliance,
-                        ) && (
+                      ))}
+                      {badges.length === 0 && missing.length > 0 && (
                         <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-200 text-[11px] font-bold border border-amber-500/30">
                           Incomplete (soft)
                         </span>
@@ -357,24 +352,22 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                             : `Mark ${req.name} complete`
                       }
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                        req.blocksPlay
-                          ? 'border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20'
-                          : req.blocksPractice
-                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
-                            : 'border-slate-600 bg-slate-800/80 text-slate-200 hover:bg-slate-700'
+                        consequenceKeysForRequirement(req)[0]
+                          ? CONSEQUENCE_BADGE_CLASS[
+                              consequenceKeysForRequirement(req)[0]
+                            ]
+                          : 'border-slate-600 bg-slate-800/80 text-slate-200 hover:bg-slate-700'
                       } disabled:opacity-60 disabled:cursor-not-allowed`}
                     >
                       {req.name}
-                      {req.blocksPlay && (
-                        <span className="text-[10px] uppercase opacity-80">
-                          play
+                      {consequenceLabelsForRequirement(req).map((label) => (
+                        <span
+                          key={label}
+                          className="text-[10px] uppercase opacity-80"
+                        >
+                          {label}
                         </span>
-                      )}
-                      {req.blocksPractice && (
-                        <span className="text-[10px] uppercase opacity-80">
-                          practice
-                        </span>
-                      )}
+                      ))}
                       {!readOnly && (
                         <span className="text-emerald-300">✓</span>
                       )}
@@ -382,7 +375,8 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                   ))}
                 </div>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )
       ) : (
@@ -392,9 +386,9 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
               Compliance board
             </p>
             <p className="text-xs text-slate-500">
-              Paperwork and fees: checked = complete. Eligibility and red-card
-              items: checked = active flag (out of compliance). Column actions
-              clear flags or mark paperwork complete for visible rows.
+              Paperwork and fees: checked = complete. Grade check / eligibility
+              and red-card: checked = flag (out of compliance). Column labels
+              show No play, Ineligible, No practice, or No equipment.
             </p>
           </div>
           <div className="overflow-x-auto">
@@ -412,14 +406,9 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                       <div className="flex flex-col gap-0.5 items-center text-center">
                         <span className="line-clamp-2">
                           {req.name}
-                          {req.blocksPlay && (
-                            <span className="ml-0.5 font-normal text-rose-400/80">
-                              ·P
-                            </span>
-                          )}
-                          {req.blocksPractice && (
-                            <span className="ml-0.5 font-normal text-amber-400/80">
-                              ·Pr
+                          {consequenceLabelsForRequirement(req).length > 0 && (
+                            <span className="block font-normal normal-case tracking-normal text-[9px] text-rose-300/90">
+                              {consequenceLabelsForRequirement(req).join(' · ')}
                             </span>
                           )}
                         </span>
@@ -444,7 +433,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
               </thead>
               <tbody>
                 {boardPlayers.map((player) => {
-                  const eligible = isEligibleToPlay(
+                  const badges = playerConsequenceBadges(
                     player.id,
                     requirements,
                     playerCompliance,
@@ -463,20 +452,20 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                         </div>
                         <div className="text-[10px] text-slate-500">
                           {player.position}
-                          {!eligible && (
-                            <span className="ml-1.5 text-rose-300">
-                              ineligible
+                          {badges.map((key) => (
+                            <span
+                              key={key}
+                              className={`ml-1.5 ${
+                                key === 'noPractice'
+                                  ? 'text-amber-300'
+                                  : key === 'noEquipment'
+                                    ? 'text-sky-300'
+                                    : 'text-rose-300'
+                              }`}
+                            >
+                              {CONSEQUENCE_LABEL[key].toLowerCase()}
                             </span>
-                          )}
-                          {!isEligibleToPractice(
-                            player.id,
-                            requirements,
-                            playerCompliance,
-                          ) && (
-                            <span className="ml-1.5 text-amber-300">
-                              no practice
-                            </span>
-                          )}
+                          ))}
                         </div>
                       </td>
                       {sortedRequirements.map((req) => {

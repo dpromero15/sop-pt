@@ -62,6 +62,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Metrics (v9):** `labelId` → `labelIds[]` + `primaryLabelId` (multi-category membership; primary owns formula standing).
 - **Ghost categories (v10):** Unused Thunder FC sample labels (Speed, Fitness, …) with no metrics are removed; orphan formula weights and metrics pointing at missing labels are pruned so Rankings tabs / Active Weights match Config. Fresh teams seed Attendance-only labels/metrics/formula (not the full demo catalog).
 - **Soft delete (v11):** Optional `deletedAt` on players and sessions. Single delete is restoreable for 90 days; `clearAllPlayers` stays a permanent wipe. Purge runs after migrations on boot.
+- **Compliance consequences (v12):** `blocksEquipment` (default false). Recommended CRHS set: Physical = No practice; Grade Check = eligibility kind (inverted checkbox, **Ineligible**); CRHS Policy + CHSSAA Policy = No play; Team fee = No play + No equipment. Config **Compliance manager** can apply that set and toggle consequences. Equipment assign is blocked when a No equipment item is incomplete.
 
 ### Metric definition fields
 

@@ -27,4 +27,16 @@ describe('normalizeComplianceRequirement', () => {
     });
     expect(normalized.kind).toBe('disciplinary');
   });
+
+  it('defaults missing blocksEquipment to false', () => {
+    const normalized = normalizeComplianceRequirement({
+      id: 'r3',
+      name: 'Policy',
+      kind: 'paperwork',
+      blocksPlay: true,
+      blocksPractice: false,
+      sortOrder: 3,
+    });
+    expect(normalized.blocksEquipment).toBe(false);
+  });
 });

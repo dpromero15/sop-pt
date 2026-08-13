@@ -12,20 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #109 — Compliance: sort names, denser board, invert eligibility/red-card checks
-- **Status:** implemented — open [PR #116](https://github.com/dpromero15/sop-pt/pull/116)
-- **Notes:** Name A–Z / Z–A / jersey sort. Compact board. Flag checkboxes invert in UI only.
-- **Touchpoints:** `eligibility.ts`, `ComplianceBoardView.tsx`, `PlayersView.tsx`, `ComplianceConfigPanel.tsx`, `initialData.ts`
-
-### #114 — Soft delete sessions and players (restore + 90-day purge)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** `deletedAt` flag; restore from Recently deleted; 90-day boot purge; snapshots keep tombstones. `clearAllPlayers` stays permanent.
-- **Touchpoints:** `softDelete.ts`, `localJsonAdapter.ts`, `PlayersView.tsx`, `SessionsView.tsx`, `QuickInsertView.tsx`, `011_soft_delete_fields.ts`, `main.tsx`
+### #117 — Compliance consequences + manager (No play / Ineligible / No practice / No equipment)
+- **Status:** implemented
+- **Notes:** Physical = No practice; Grade Check = eligibility (inverted checkbox → Ineligible); CRHS + CHSSAA Policy = No play; Team fee = No play + No equipment. Config Compliance manager applies the recommended set and per-item consequences. Schema v12.
+- **Touchpoints:** `complianceConsequences.ts`, `ComplianceConfigPanel.tsx`, `ComplianceBoardView.tsx`, `PlayersView.tsx`, `EquipmentConfigPanel.tsx`, `012_compliance_consequences.ts`, `eligibility.ts`
 
 **Suggested PR Closes:**
 ```
-Closes #109
-Closes #114
+Closes #117
 ```
 
 ## Still open (this release)
@@ -44,11 +38,12 @@ _(none)_
 - First `2.10.0` batch shipped via [#106](https://github.com/dpromero15/sop-pt/pull/106) (`Closes #103 #104 #105`).
 - Second `2.10.0` batch shipped via [#111](https://github.com/dpromero15/sop-pt/pull/111) (`Closes #107 #108 #110`).
 - Ghost categories shipped via [#115](https://github.com/dpromero15/sop-pt/pull/115) (`Closes #112 #113`).
-- Compliance + soft delete on [#116](https://github.com/dpromero15/sop-pt/pull/116) (`Closes #109 #114`).
+- Compliance invert + soft delete shipped via [#116](https://github.com/dpromero15/sop-pt/pull/116) (`Closes #109 #114`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - Soft delete: schema **v11** (`011_soft_delete_fields`).
+- Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` pass (184 tests) 2026-08-12 — Phase 4 (#114).
+- **QA:** `npm run lint` + `npm test` (197 tests) after #117.

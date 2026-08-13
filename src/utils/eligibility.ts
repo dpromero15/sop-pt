@@ -82,7 +82,9 @@ export function missingBlockingRequirements(
   state: PlayerComplianceState,
 ): ComplianceRequirement[] {
   return requirements
-    .filter((r) => r.blocksPlay || r.blocksPractice)
+    .filter(
+      (r) => r.blocksPlay || r.blocksPractice || r.blocksEquipment === true,
+    )
     .filter((r) => !isRequirementComplete(state, playerId, r.id))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
