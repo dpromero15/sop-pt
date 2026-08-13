@@ -679,4 +679,32 @@ describe('runLocalMigrations', () => {
       ['attendance', 'speed'],
     );
   });
+
+  it('assigns player publicId via v15', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(14));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', name: 'Ada', jerseyNumber: 10 },
+        { id: 'p2', name: 'Bea', jerseyNumber: 7, publicId: 'ab2def' },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const players = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+    );
+    expect(players[0].publicId).toMatch(/^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/);
+    expect(players[1].publicId).toBe('AB2DEF');
+    expect(players[0].publicId).not.toBe(players[1].publicId);
+  });
 });

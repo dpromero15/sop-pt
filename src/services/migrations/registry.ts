@@ -13,6 +13,7 @@ import { migration011SoftDeleteFields } from './migrations/011_soft_delete_field
 import { migration012ComplianceConsequences } from './migrations/012_compliance_consequences';
 import { migration013PlayerBirthYearGrade } from './migrations/013_player_birth_year_grade';
 import { migration014LabelParent } from './migrations/014_label_parent';
+import { migration015PlayerPublicId } from './migrations/015_player_public_id';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -116,5 +117,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Normalize optional label parentLabelId and strip tree-duplicate metric memberships.',
     up: migration014LabelParent,
+  },
+  {
+    id: 15,
+    name: 'player_public_id',
+    description:
+      'Assign a short unique publicId on every player for printouts and the ID legend.',
+    up: migration015PlayerPublicId,
   },
 ];

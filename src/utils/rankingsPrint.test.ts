@@ -7,12 +7,15 @@ import type {
 } from '../types';
 import { compareRankings } from './rankingsFilter';
 import {
+  buildPlayerIdLegendDocument,
   buildRankingsPrintDocument,
   computePrintScale,
+  playerIdLegendHtml,
   printColumnCount,
   rankingsPrintHtml,
   splitPrintRows,
 } from './rankingsPrint';
+import { publicIdFromSeed } from './playerPublicId';
 
 const metrics: MetricDefinition[] = [
   {
@@ -46,6 +49,7 @@ function ranking(
   const player: Player = {
     id,
     name: id,
+    publicId: publicIdFromSeed(id),
     jerseyNumber: Number(id.replace(/\D/g, '') || 1),
     position: 'ST',
     preferredFoot: 'Right',
@@ -137,6 +141,75 @@ describe('buildRankingsPrintDocument', () => {
     expect(html).toMatch(/height:\s*11in/);
     expect(html).toMatch(/page-break-inside:\s*avoid/);
     expect(html).toContain('class="columns cols-1"');
+    expect(html).toContain('>Player<');
+    expect(html).toContain('>p2<');
+  });
+
+  it('prints player IDs instead of names when requested', () => {
+    const pool = [ranking('p1', 5.5), ranking('p2', 4.8)];
+    const doc = buildRankingsPrintDocument({
+      teamName: 'Thunder FC',
+      rankings: pool,
+      sortBy: 'metric',
+      selectedLabelId: 'speed',
+      selectedMetricId: 'm_40m',
+      metrics,
+      labels,
+      totalMode: 'overall',
+      cutLines: [],
+      nameMode: 'publicId',
+    });
+    expect(doc.nameHeader).toBe('ID');
+    expect(doc.rows.map((r) => r.name)).toEqual([
+      publicIdFromSeed('p1'),
+      publicIdFromSeed('p2'),
+    ]);
+    const html = rankingsPrintHtml(doc);
+    expect(html).toContain('>ID<');
+    expect(html).toContain(publicIdFromSeed('p1'));
+    expect(html).not.toContain('>p1<');
+  });
+
+  it('builds a name/ID legend for the live roster', () => {
+    const players: Player[] = [
+      {
+        id: 'p1',
+        name: 'Ada',
+        publicId: publicIdFromSeed('p1'),
+        jerseyNumber: 10,
+        position: 'ST',
+        preferredFoot: 'Right',
+        joinedDate: '2026-01-01',
+        status: 'active',
+      },
+      {
+        id: 'p2',
+        name: 'Bea',
+        publicId: publicIdFromSeed('p2'),
+        jerseyNumber: 7,
+        position: 'CM',
+        preferredFoot: 'Left',
+        joinedDate: '2026-01-01',
+        status: 'inactive',
+      },
+    ];
+    const doc = buildPlayerIdLegendDocument({
+      teamName: 'Thunder FC',
+      season: '2026',
+      players,
+      printedAt: new Date('2026-08-13T12:00:00Z'),
+    });
+    expect(doc.rows).toHaveLength(1);
+    expect(doc.rows[0]).toMatchObject({
+      name: 'Ada',
+      jersey: 10,
+      publicId: publicIdFromSeed('p1'),
+    });
+    const html = playerIdLegendHtml(doc);
+    expect(html).toContain('Player ID Legend');
+    expect(html).toContain('Ada');
+    expect(html).toContain(publicIdFromSeed('p1'));
+    expect(html).not.toContain('Bea');
   });
 
   it('prints Coaches Rank with the same unlabeled cut lines', () => {

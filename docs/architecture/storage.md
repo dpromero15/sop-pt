@@ -42,7 +42,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 ### Player fields
 
-`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
+`id`, `name`, `publicId?`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
 
 - **`birthYear`:** Calendar year of birth. Replaces legacy `age` (schema **v13** converts `age` → `asOfYear - age` and drops `age`).
 - **`grade`:** Current school grade `9` | `10` | `11` | `12` (Freshman–Senior). Optional; not inferred from birth year.
@@ -71,6 +71,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Compliance consequences (v12):** `blocksEquipment` (default false). Recommended CRHS set: Physical = No practice; Grade Check = eligibility kind (inverted checkbox, **Ineligible**); CRHS Policy + CHSSAA Policy = No play; Team fee = No play + No equipment. Config **Compliance manager** can apply that set and toggle consequences. Equipment assign is blocked when a No equipment item is incomplete.
 - **Player demographics (v13):** `age` → `birthYear` (`asOfYear - age`); optional `grade` 9–12. Repair re-run drops leftover `age`.
 - **Label parents (v14):** Optional `parentLabelId` on labels (max depth 1). Invalid parents are cleared; metric `labelIds` keep at most one id per parent tree (prefer subcategory); subcategory formula weights are dropped.
+- **Player public ID (v15):** Short stable `publicId` (6 Crockford-like chars, unique per team) for printouts and the team ID legend. Distinct from internal `id`. Assigned on create; migration backfills existing squads. Rankings print can show IDs instead of names.
 
 ### Metric definition fields
 

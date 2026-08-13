@@ -4,6 +4,7 @@ import {
   parseBirthYear,
   parsePlayerGrade,
 } from './playerDemographics';
+import { normalizePublicId } from './playerPublicId';
 
 export const PLAYER_CSV_HEADERS = [
   'name',
@@ -14,6 +15,7 @@ export const PLAYER_CSV_HEADERS = [
   'grade',
   'avatarUrl',
   'notes',
+  'publicId',
 ] as const;
 
 const VALID_POSITIONS = new Set<PlayerPosition>([
@@ -80,6 +82,7 @@ export function buildPlayerCsvTemplate(): string {
     '10',
     '',
     'Sample player row — replace with your roster',
+    '',
   ];
   return (
     PLAYER_CSV_HEADERS.join(',') +
@@ -94,6 +97,7 @@ export type PlayerCsvImportRow = Omit<Player, 'id' | 'joinedDate'>;
 export function parseAndValidatePlayerCsv(
   csvText: string,
   existingJerseyNumbers: Set<number>,
+  existingPublicIds: Set<string> = new Set(),
 ): { ok: PlayerCsvImportRow[]; errors: string[]; skipped: number } {
   const ok: PlayerCsvImportRow[] = [];
   const errors: string[] = [];
@@ -122,6 +126,7 @@ export function parseAndValidatePlayerCsv(
   const gradeIdx = colIndex('grade');
   const avatarIdx = colIndex('avatarUrl');
   const notesIdx = colIndex('notes');
+  const publicIdIdx = colIndex('publicId');
 
   if (nameIdx < 0 || jerseyIdx < 0 || positionIdx < 0) {
     errors.push(
@@ -131,6 +136,11 @@ export function parseAndValidatePlayerCsv(
   }
 
   const seenJerseys = new Set(existingJerseyNumbers);
+  const seenPublicIds = new Set<string>();
+  for (const id of existingPublicIds) {
+    const normalized = normalizePublicId(id);
+    if (normalized) seenPublicIds.add(normalized);
+  }
   const asOfYear = new Date().getFullYear();
 
   for (let i = 1; i < lines.length; i++) {
@@ -231,6 +241,26 @@ export function parseAndValidatePlayerCsv(
     const notes =
       notesIdx >= 0 ? (cells[notesIdx] || '').trim() || undefined : undefined;
 
+    let publicId: string | undefined;
+    if (publicIdIdx >= 0) {
+      const raw = (cells[publicIdIdx] || '').trim();
+      if (raw) {
+        const parsed = normalizePublicId(raw);
+        if (!parsed) {
+          errors.push(
+            `Row ${rowNum}: invalid publicId "${raw}" — will auto-assign.`,
+          );
+        } else if (seenPublicIds.has(parsed)) {
+          errors.push(
+            `Row ${rowNum}: duplicate publicId "${parsed}" — will auto-assign.`,
+          );
+        } else {
+          publicId = parsed;
+          seenPublicIds.add(parsed);
+        }
+      }
+    }
+
     seenJerseys.add(jerseyNumber);
     ok.push({
       name,
@@ -241,6 +271,7 @@ export function parseAndValidatePlayerCsv(
       grade,
       avatarUrl,
       notes,
+      publicId,
       status: 'active',
     });
   }

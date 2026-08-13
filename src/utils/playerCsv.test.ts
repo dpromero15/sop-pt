@@ -73,4 +73,19 @@ describe('playerCsv', () => {
     expect(result.ok).toHaveLength(0);
     expect(result.errors[0]).toMatch(/must include name/i);
   });
+
+  it('accepts a valid publicId and auto-assigns on duplicates', () => {
+    const csv = [
+      PLAYER_CSV_HEADERS.join(','),
+      'Jamie Doe,7,ST,,,,,,AB2DEF',
+      'Sam Lee,11,CM,,,,,,AB2DEF',
+    ].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set());
+    expect(result.ok).toHaveLength(2);
+    expect(result.ok[0]?.publicId).toBe('AB2DEF');
+    expect(result.ok[1]?.publicId).toBeUndefined();
+    expect(result.errors.some((e) => e.includes('duplicate publicId'))).toBe(
+      true,
+    );
+  });
 });

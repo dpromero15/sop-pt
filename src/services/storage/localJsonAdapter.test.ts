@@ -30,6 +30,25 @@ describe('LocalJsonAdapter', () => {
     adapter = new LocalJsonAdapter(store);
   });
 
+  it('assigns a unique publicId when adding a player', () => {
+    const created = adapter.addPlayer({
+      name: 'New Kid',
+      jerseyNumber: 99,
+      position: 'ST',
+      preferredFoot: 'Right',
+      status: 'active',
+    });
+    expect(created.publicId).toMatch(
+      /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{6}$/,
+    );
+    const ids = adapter
+      .getPlayers()
+      .map((p) => p.publicId)
+      .filter((id): id is string => Boolean(id));
+    expect(new Set(ids).size).toBe(adapter.getPlayers().length);
+    expect(ids).toContain(created.publicId);
+  });
+
   it('seeds and persists separated team blob', () => {
     const team = adapter.getTeam();
     expect(team.name).toBe(DEFAULT_TEAM.name);
