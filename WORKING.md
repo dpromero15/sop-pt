@@ -13,13 +13,19 @@ _(none)_
 ## Ready to ship
 
 ### #131 — Lock session logger to a fixed unzoomed phone cockpit
-- **Status:** implemented
+- **Status:** implemented — open [PR #132](https://github.com/dpromero15/sop-pt/pull/132)
 - **Notes:** Quick Insert fills the phone viewport with zoom locked. Attendance swipes no longer pinch-zoom or rubber-band the page; Out / Here / Continue stay on screen.
 - **Touchpoints:** `viewportLock.ts`, `index.css`, `App.tsx`, `QuickInsertView.tsx`, `AttendanceSwipeDeck.tsx`, `Navigation.tsx`
+
+### #133 — Allow editing saved session names
+- **Status:** implemented
+- **Notes:** Pencil on Sessions inspector and Quick Insert logger header renames via `updateSession`. Empty titles rejected.
+- **Touchpoints:** `SessionTitleEditor.tsx`, `SessionsView.tsx`, `QuickInsertView.tsx`
 
 **Suggested PR Closes:**
 ```
 Closes #131
+Closes #133
 ```
 
 ## Still open (this release)
@@ -52,4 +58,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (220 tests) 2026-08-13 — #131.
+- **QA:** `npm run lint` + `npm test` (220 tests) 2026-08-13 — #133.
