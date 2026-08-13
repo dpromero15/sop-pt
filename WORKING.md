@@ -13,7 +13,7 @@ _(none)_
 ## Ready to ship
 
 ### #119 — JIT: do not drop compliance/config writes during flush
-- **Status:** implemented
+- **Status:** implemented — open [PR #122](https://github.com/dpromero15/sop-pt/pull/122)
 - **Notes:** Outbox keeps writes that happen while a flush is in flight, then flushes them. Explicit **Save** (`SaveAndSyncButton` / `flushNow`) on Compliance manager, Quick Insert, Sessions, Coaches Rating, Players, Rankings, formula weights, labels, metrics, bump budget, ranking cut lines, equipment, and team profile — no 10s JIT wait.
 - **Touchpoints:** `cloudSync.ts`, `SaveAndSyncButton.tsx`, `ConfigView.tsx`, `ComplianceConfigPanel.tsx`, `RankingBoundariesPanel.tsx`, `EquipmentConfigPanel.tsx`, `TeamManagementView.tsx`, `QuickInsertView.tsx`, `SessionsView.tsx`, `CoachesRatingView.tsx`, `PlayersView.tsx`, `RankingsView.tsx`
 
