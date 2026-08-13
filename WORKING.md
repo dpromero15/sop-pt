@@ -12,11 +12,6 @@ _(none)_
 
 ## Ready to ship
 
-### #127 — Print professional rankings sheet with unlabeled metric cut lines
-- **Status:** implemented — open [PR #128](https://github.com/dpromero15/sop-pt/pull/128)
-- **Notes:** Rankings Print uses the current scope (Statistical + one metric, or Coaches Rank). All players ranked; breakouts are unlabeled dotted lines (no “cut” text) on screen and print.
-- **Touchpoints:** `rankingsPrint.ts`, `RankingsView.tsx`, `rankingBoundaries.ts`, `App.tsx`
-
 ### #129 — Adjusted Rank should exclude only manually marked ineligible players
 - **Status:** implemented
 - **Notes:** Compliance no longer drives Adjusted Rank. `player.rankingIneligible` (roster Mark ineligible / edit checkbox) is the only exclusion; others stay in the list and breakouts.
@@ -24,7 +19,6 @@ _(none)_
 
 **Suggested PR Closes:**
 ```
-Closes #127
 Closes #129
 ```
 
@@ -49,6 +43,7 @@ _(none)_
 - JIT Save + sync log + attendance board shipped via [#122](https://github.com/dpromero15/sop-pt/pull/122) (`Closes #119 #120 #121`).
 - Attendance Statistical/Adjusted standing shipped via [#124](https://github.com/dpromero15/sop-pt/pull/124) (`Closes #123`).
 - Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
+- Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
