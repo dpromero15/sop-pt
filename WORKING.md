@@ -13,7 +13,7 @@ _(none)_
 ## Ready to ship
 
 ### #123 — Attendance still empty on Statistical Rank and Adjusted Rank
-- **Status:** implemented
+- **Status:** implemented — open [PR #124](https://github.com/dpromero15/sop-pt/pull/124)
 - **Notes:** Scoring always includes the Attendance label/metric so session logs feed Statistical + Adjusted standing. Attendance category / metric views treat `attendanceRate` as data (not empty-cat).
 - **Touchpoints:** `scoring.ts`, `rankingsFilter.ts`, `RankingsView.tsx`
 
