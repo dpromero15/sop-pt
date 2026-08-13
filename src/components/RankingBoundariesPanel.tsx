@@ -7,6 +7,8 @@ import type {
   RankingCutPair,
 } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { normalizeRankingBoundaries } from '../utils/rankingBoundaries';
 import { metricInCategory } from '../utils/metricLabels';
 
@@ -115,6 +117,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
       secondaryCut,
       specialtyCuts: { ...normalized.specialtyCuts, GK: gk },
     });
+    void flushNow();
     onRefreshData();
   };
 
@@ -135,6 +138,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
       next.categoryCuts = { ...next.categoryCuts, [categoryId]: pair };
     }
     StorageService.saveRankingBoundaries(next);
+    void flushNow();
     onRefreshData();
   };
 
@@ -153,6 +157,7 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
       next.categoryCuts = rest;
     }
     StorageService.saveRankingBoundaries(next);
+    void flushNow();
     onRefreshData();
   };
 
@@ -162,9 +167,12 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-      <div className="flex items-center gap-2 text-slate-100 font-semibold">
-        <Scissors className="w-5 h-5 text-violet-400" />
-        <span>Ranking Cut Lines</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-slate-100 font-semibold">
+          <Scissors className="w-5 h-5 text-violet-400" />
+          <span>Ranking Cut Lines</span>
+        </div>
+        <SaveAndSyncButton compact />
       </div>
       <p className="text-sm text-slate-400">
         Visual cut lines on rankings. Use <strong className="text-slate-300">All rankings</strong> for

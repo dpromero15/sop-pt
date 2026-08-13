@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Award, Plus, Trash2, Check, GripVertical } from 'lucide-react';
 import { Reorder, useDragControls } from 'motion/react';
 import type {
@@ -9,7 +9,9 @@ import type {
   PlayerRanking,
 } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
 import { activePlayers, isCompleteBallot } from '../utils/coachesRating';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { defaultAvatarFor } from '../constants/avatars';
 
 interface CoachesRatingViewProps {
@@ -258,12 +260,13 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
     orderFromBallot(activePlayers(players), undefined),
   );
   const [toast, setToast] = useState<string | null>(null);
+  const reorderSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const selectedCoach =
     coaches.find((c) => c.id === selectedCoachId) ?? coaches[0] ?? null;
 
   // Load ballot order when coach or roster changes
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedCoach) {
       setOrderedPlayers(orderFromBallot(active, undefined));
       return;
@@ -313,16 +316,52 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   const complete =
     draftBallot !== null && isCompleteBallot(draftBallot, activeIds);
 
-  const handleSaveBallot = () => {
-    if (!draftBallot) return;
-    StorageService.saveCoachBallot(draftBallot);
+  const persistBallot = (draft: CoachBallot, announce: boolean) => {
+    StorageService.saveCoachBallot(draft);
+    void flushNow();
     onRefreshData();
+    if (!announce) return;
+    const counts = isCompleteBallot(
+      draft,
+      activePlayers(players).map((p) => p.id),
+    );
     showToast(
-      complete
+      counts
         ? 'Ballot saved — counts toward Coaches Rank'
-        : 'Ballot saved',
+        : 'Ballot saved (incomplete — rank every active player)',
     );
   };
+
+  const handleSaveBallot = () => {
+    if (!draftBallot) return;
+    persistBallot(draftBallot, true);
+  };
+
+  const handleReorder = (next: Player[]) => {
+    setOrderedPlayers(next);
+    if (!selectedCoach) return;
+    if (reorderSaveTimer.current) clearTimeout(reorderSaveTimer.current);
+    reorderSaveTimer.current = setTimeout(() => {
+      persistBallot(
+        { coachId: selectedCoach.id, ranks: ranksFromOrder(next) },
+        false,
+      );
+    }, 400);
+  };
+
+  useEffect(() => {
+    if (reorderSaveTimer.current) {
+      clearTimeout(reorderSaveTimer.current);
+      reorderSaveTimer.current = null;
+    }
+  }, [selectedCoach?.id]);
+
+  useEffect(
+    () => () => {
+      if (reorderSaveTimer.current) clearTimeout(reorderSaveTimer.current);
+    },
+    [],
+  );
 
   const n = orderedPlayers.length;
 
@@ -342,12 +381,28 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
             <span>Coaches Rating</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
-            Drag players by the grip handle — top of the list is #1 (best). Each
-            row shows Statistical/Adjusted ranks, attendance, and category scores so
-            you can rank with context. Complete ballots feed Rankings → Coaches
-            Rank (averaged or per coach).
+            Drag players by the grip handle — top of the list is #1 (best).
+            Use <span className="text-slate-300">Save</span> to push now (do
+            not wait for JIT). Rankings → Coaches Rank only appears after a
+            <strong className="text-slate-300"> complete</strong> ballot
+            (every active player, unique 1…{active.length || 'N'}).
           </p>
         </div>
+        {selectedCoach && (
+          <SaveAndSyncButton
+            beforeFlush={() => {
+              if (draftBallot) StorageService.saveCoachBallot(draftBallot);
+            }}
+            onSaved={() => {
+              onRefreshData();
+              showToast(
+                complete
+                  ? 'Saved — counts toward Coaches Rank'
+                  : 'Saved (incomplete — rank every active player)',
+              );
+            }}
+          />
+        )}
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2">
@@ -417,9 +472,16 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
                   {' · '}
                   {n} active player{n === 1 ? '' : 's'}
                   {' · '}
-                  <span className="text-emerald-400">
-                    Drag to reorder · top = #1
-                  </span>
+                  {complete ? (
+                    <span className="text-emerald-400">
+                      Complete — shows on Coaches Rank
+                    </span>
+                  ) : (
+                    <span className="text-amber-300">
+                      Incomplete — Coaches Rank stays empty until every active
+                      player is ranked
+                    </span>
+                  )}
                 </p>
                 <button
                   type="button"
@@ -439,7 +501,7 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
                 <Reorder.Group
                   axis="y"
                   values={orderedPlayers}
-                  onReorder={setOrderedPlayers}
+                  onReorder={handleReorder}
                   className="space-y-2 max-h-[36rem] overflow-y-auto pr-1"
                 >
                   {orderedPlayers.map((p, index) => (

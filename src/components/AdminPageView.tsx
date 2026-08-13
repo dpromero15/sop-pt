@@ -18,6 +18,7 @@ import {
 import type { Team, TeamMembership, TeamMembershipRole } from '../types';
 import { AdminToolsView } from './AdminToolsView';
 import { DataMigrationPanel } from './DataMigrationPanel';
+import { SyncLogPanel } from './SyncLogPanel';
 import { getApiBaseUrl } from '../services/storage/connectionStatus';
 
 interface AdminPageViewProps {
@@ -304,6 +305,7 @@ export const AdminPageView: React.FC<AdminPageViewProps> = ({
             </span>
           </div>
           <AdminToolsView onRefreshData={onRefreshData} />
+          <SyncLogPanel />
         </section>
       )}
 

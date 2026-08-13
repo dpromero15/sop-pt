@@ -12,14 +12,26 @@ _(none)_
 
 ## Ready to ship
 
-### #117 — Compliance consequences + manager (No play / Ineligible / No practice / No equipment)
-- **Status:** implemented — open [PR #118](https://github.com/dpromero15/sop-pt/pull/118)
-- **Notes:** Physical = No practice; Grade Check = eligibility (inverted checkbox → Ineligible); CRHS + CHSSAA Policy = No play; Team fee = No play + No equipment. Config Compliance manager applies the recommended set and per-item consequences. Schema v12.
-- **Touchpoints:** `complianceConsequences.ts`, `ComplianceConfigPanel.tsx`, `ComplianceBoardView.tsx`, `PlayersView.tsx`, `EquipmentConfigPanel.tsx`, `012_compliance_consequences.ts`, `eligibility.ts`
+### #119 — JIT: do not drop compliance/config writes during flush
+- **Status:** implemented — open [PR #122](https://github.com/dpromero15/sop-pt/pull/122)
+- **Notes:** Outbox keeps writes that happen while a flush is in flight, then flushes them. Explicit **Save** (`SaveAndSyncButton` / `flushNow`) on Compliance manager, Quick Insert, Sessions, Coaches Rating, Players, Rankings, formula weights, labels, metrics, bump budget, ranking cut lines, equipment, and team profile — no 10s JIT wait.
+- **Touchpoints:** `cloudSync.ts`, `SaveAndSyncButton.tsx`, `ConfigView.tsx`, `ComplianceConfigPanel.tsx`, `RankingBoundariesPanel.tsx`, `EquipmentConfigPanel.tsx`, `TeamManagementView.tsx`, `QuickInsertView.tsx`, `SessionsView.tsx`, `CoachesRatingView.tsx`, `PlayersView.tsx`, `RankingsView.tsx`
+
+### #120 — Sync / system log for JIT errors
+- **Status:** implemented
+- **Notes:** Local ring buffer (`stm_sync_log_v1`). Nav chip popover (also on phones) + Admin system log with Sync now / Retry hydrate.
+- **Touchpoints:** `syncLog.ts`, `SyncStatusChip.tsx`, `SyncLogPanel.tsx`, `AdminPageView.tsx`
+
+### #121 — Rankings empty after attendance; Coaches Rank needs saved complete ballot
+- **Status:** implemented
+- **Notes:** Board shows when attendance exists even if formula total is null. Coaches ballot auto-saves on reorder + flushNow. Sessions empty copy calls out sync wipe.
+- **Touchpoints:** `rankingsFilter.ts`, `RankingsView.tsx`, `CoachesRatingView.tsx`, `SessionsView.tsx`
 
 **Suggested PR Closes:**
 ```
-Closes #117
+Closes #119
+Closes #120
+Closes #121
 ```
 
 ## Still open (this release)
@@ -39,6 +51,7 @@ _(none)_
 - Second `2.10.0` batch shipped via [#111](https://github.com/dpromero15/sop-pt/pull/111) (`Closes #107 #108 #110`).
 - Ghost categories shipped via [#115](https://github.com/dpromero15/sop-pt/pull/115) (`Closes #112 #113`).
 - Compliance invert + soft delete shipped via [#116](https://github.com/dpromero15/sop-pt/pull/116) (`Closes #109 #114`).
+- Compliance consequences shipped via [#118](https://github.com/dpromero15/sop-pt/pull/118) (`Closes #117`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
@@ -46,4 +59,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (197 tests) 2026-08-12 — #117 / PR #118.
+- **QA:** `npm run lint` + `npm test` (202 tests) 2026-08-12 — #117/#119/#120/#121.

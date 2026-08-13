@@ -126,6 +126,20 @@ export function totalHigherIsBetter(totalMode: RankingsTotalMode): boolean {
   return totalMode !== 'coaches';
 }
 
+/** True when this player has any logged standing (formula, attendance, or category entries). */
+export function playerHasLoggedStanding(ranking: PlayerRanking): boolean {
+  if (ranking.totalScore != null || ranking.adjustedTotalScore != null) {
+    return true;
+  }
+  if (ranking.attendanceRate != null) return true;
+  return Object.values(ranking.labelScores).some(
+    (ls) =>
+      (ls?.entryCount ?? 0) > 0 ||
+      ls?.score != null ||
+      ls?.adjustedScore != null,
+  );
+}
+
 /** True when the player has no value for the active rank-by mode. */
 export function isUnscoredForRankMode(
   ranking: PlayerRanking,

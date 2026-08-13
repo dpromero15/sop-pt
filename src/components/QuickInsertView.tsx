@@ -36,6 +36,8 @@ import { AttendanceSwipeDeck } from './logger/AttendanceSwipeDeck';
 import { AttendanceMaintenanceList } from './logger/AttendanceMaintenanceList';
 import { PlayerScoreCard } from './logger/PlayerScoreCard';
 import { DenseScoreEditor } from './logger/DenseScoreEditor';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
+import { flushNow } from '../services/storage/cloudSync';
 
 type WorkflowStep = 'plan' | 'attendance' | 'score' | 'summary';
 type AttendanceViewMode = 'swipe' | 'review';
@@ -176,8 +178,9 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const completeSession = () => {
     if (!selectedSession) return;
     StorageService.updateSession({ ...selectedSession, status: 'closed' });
+    void flushNow();
     onRefreshData();
-    setToastMessage('Session closed');
+    setToastMessage('Session closed — saved to cloud');
     returnToGate();
   };
 
@@ -462,13 +465,18 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               Plan metrics → swipe attendance → score players who showed up
             </p>
           </div>
-          <button
-            type="button"
-            onClick={returnToGate}
-            className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700"
-          >
-            Switch session
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <SaveAndSyncButton
+              onSaved={() => setToastMessage('Saved — pushed to cloud')}
+            />
+            <button
+              type="button"
+              onClick={returnToGate}
+              className="rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-medium text-slate-200 hover:bg-slate-700"
+            >
+              Switch session
+            </button>
+          </div>
         </div>
       </div>
 
@@ -562,16 +570,22 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               />
             </>
           )}
-          <button
-            type="button"
-            onClick={continueToScoring}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 py-3 font-medium text-slate-200 hover:bg-slate-900"
-          >
-            {attendanceComplete
-              ? 'Continue to scoring'
-              : `Continue to scoring · rest out (${remainingUnmarked.length})`}{' '}
-            <ChevronRight className="h-5 w-5" />
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <SaveAndSyncButton
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-600/40 bg-sky-500/15 hover:bg-sky-500/25 py-3 font-semibold text-sky-200"
+              onSaved={() => setToastMessage('Attendance saved — pushed to cloud')}
+            />
+            <button
+              type="button"
+              onClick={continueToScoring}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-700 py-3 font-medium text-slate-200 hover:bg-slate-900"
+            >
+              {attendanceComplete
+                ? 'Continue to scoring'
+                : `Continue to scoring · rest out (${remainingUnmarked.length})`}{' '}
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -762,14 +776,20 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               );
             })}
           </div>
-          <button
-            type="button"
-            onClick={completeSession}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
-          >
-            <Check className="h-5 w-5" />
-            Complete & close session
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <SaveAndSyncButton
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-sky-600/40 bg-sky-500/15 hover:bg-sky-500/25 py-3 font-semibold text-sky-200"
+              onSaved={() => setToastMessage('Saved — pushed to cloud')}
+            />
+            <button
+              type="button"
+              onClick={completeSession}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500 py-3 font-semibold text-slate-950 hover:bg-emerald-400"
+            >
+              <Check className="h-5 w-5" />
+              Complete & close session
+            </button>
+          </div>
         </div>
       )}
 

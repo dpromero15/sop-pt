@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Sliders, Lock } from 'lucide-react';
 import { LabelDefinition, ScoringFormulaConfig } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
 import {
   ATTENDANCE_LABEL,
   DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
@@ -87,7 +88,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
       ...formula,
       weights: updatedWeights
     });
-
+    void flushNow();
     onRefreshData();
     onClose();
   };
@@ -181,7 +182,7 @@ export const ScoringConfigModal: React.FC<ScoringConfigModalProps> = ({
               onClick={handleSave}
               className="px-5 py-2 rounded-xl bg-emerald-500 text-slate-950 font-extrabold shadow-lg shadow-emerald-500/20"
             >
-              Apply Formula
+              Save & sync
             </button>
           </div>
         </div>

@@ -178,7 +178,9 @@ describe('cloudSync', () => {
 
     await enterTeamCloudSync('team_clear');
     expect(StorageService.getPlayers()).toEqual([]);
-    expect(getCloudSyncStatus().status).toBe('synced');
+    await vi.waitFor(() => {
+      expect(getCloudSyncStatus().status).toBe('synced');
+    });
     const putPlayers = fetchMock.mock.calls.find(
       (c) =>
         String(c[0]).includes('/players') &&
@@ -187,6 +189,86 @@ describe('cloudSync', () => {
     expect(putPlayers).toBeTruthy();
     const body = JSON.parse(String((putPlayers?.[1] as RequestInit).body));
     expect(body.items).toEqual([]);
+    __resetCloudSyncForTests();
+  });
+
+  it('queues compliance writes that happen during an in-flight flush', async () => {
+    let releasePut: (() => void) | undefined;
+    const firstPut = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    let putCount = 0;
+    const putUrls: string[] = [];
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.includes('/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            team: { id: 'team_jit', name: 'JIT FC', updatedAt: 't' },
+            players: [],
+            sessions: [],
+            entries: [],
+            metrics: [],
+            labels: [],
+            formula: { id: 'default_formula', name: 'F', weights: [] },
+            complianceRequirements: [],
+            playerCompliance: {},
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if ((init as RequestInit | undefined)?.method === 'PUT') {
+        putUrls.push(url);
+        putCount += 1;
+        if (putCount === 1) await firstPut;
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const {
+      enterTeamCloudSync,
+      flushNow,
+      getPendingSyncBuckets,
+      __resetCloudSyncForTests,
+    } = await import('./cloudSync');
+    const { StorageService } = await import('../storage');
+    const { getSyncLog } = await import('./syncLog');
+
+    await enterTeamCloudSync('team_jit');
+    StorageService.saveFormula({
+      id: 'default_formula',
+      name: 'F',
+      weights: [{ labelId: 'attendance', weightPercent: 20, enabled: true }],
+    });
+    const flushing = flushNow('team_jit');
+    await vi.waitFor(() => expect(putCount).toBeGreaterThan(0));
+
+    StorageService.setPlayerRequirementComplete(
+      'p1',
+      'req_grade_check',
+      true,
+    );
+    expect(getPendingSyncBuckets('team_jit')).toContain('playerCompliance');
+    expect(
+      getSyncLog().some((e) => /queued playercompliance/i.test(e.message)),
+    ).toBe(true);
+
+    releasePut?.();
+    await flushing;
+    await vi.waitFor(() =>
+      expect(putUrls.some((u) => u.includes('/config/playerCompliance'))).toBe(
+        true,
+      ),
+    );
     __resetCloudSyncForTests();
   });
 

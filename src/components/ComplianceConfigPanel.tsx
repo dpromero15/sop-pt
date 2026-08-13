@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ClipboardList, Pencil, Plus, Trash2, Sparkles } from 'lucide-react';
 import type { ComplianceRequirement, RequirementKind } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { isFlagRequirement } from '../utils/eligibility';
 import {
   consequenceLabelsForRequirement,
@@ -96,6 +98,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
       });
     }
     setIsOpen(false);
+    void flushNow();
     onRefreshData();
   };
 
@@ -104,6 +107,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
       return;
     }
     StorageService.deleteComplianceRequirement(id);
+    void flushNow();
     onRefreshData();
   };
 
@@ -118,6 +122,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     StorageService.saveComplianceRequirements(
       mergeRecommendedCompliance(requirements),
     );
+    void flushNow();
     onRefreshData();
   };
 
@@ -140,6 +145,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
           <span>Compliance manager</span>
         </div>
         <div className="flex items-center gap-2">
+          <SaveAndSyncButton />
           <button
             type="button"
             onClick={handleApplyRecommended}
@@ -163,7 +169,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         checkbox works) and <span className="text-slate-200">consequences</span>{' '}
         (what happens when it is incomplete or flagged). Eligibility / grade
         check and disciplinary: check to raise a flag. Paperwork and fees: check
-        when done.
+        when done. Save pushes to cloud now (do not wait for JIT).
       </p>
       <ul className="space-y-2">
         {requirements.map((req) => (

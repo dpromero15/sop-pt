@@ -28,6 +28,8 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - Local write first. UI never waits on the network.
 - Hydrate **once** on team enter (`GET /v1/teams/:id/snapshot`).
 - Dirty collections flush after ~10s debounce, on `online`, or when the tab hides. One PUT per dirty collection. Empty squad clears (`players` / `sessions` / `entries` = `[]`) flush immediately; pending outbox also flushes at end of hydrate.
+- Writes during an in-flight flush stay in the outbox and flush next (do not drop). Formula Save, bump budget Save, and Compliance manager Save call `flushNow`. Compliance board / manager have **Sync now**.
+- Sync chip + Admin **System sync log** keep a local ring buffer (`stm_sync_log_v1`, last 80 events) of hydrate/flush/error/queued-dirty.
 - `applySnapshot` persists empty arrays (so releasing `holdSeeds` does not reseed sample Thunder FC).
 - Ranking cut lines: overall `primaryCut`/`secondaryCut` plus optional `categoryCuts` / `metricCuts` maps (resolved specialty → metric → category → global).
 - If cloud is empty and this device has a roster (e.g. JSON import), the first enter **pushes** that squad.

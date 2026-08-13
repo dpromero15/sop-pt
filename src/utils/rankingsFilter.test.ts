@@ -6,6 +6,7 @@ import {
   formatTeamMetricValue,
   isUnscoredForRankMode,
   metricsForCategory,
+  playerHasLoggedStanding,
   selectionAfterCategoryChange,
   teamMetricSummary,
   totalForMode,
@@ -513,5 +514,17 @@ describe('teamMetricSummary', () => {
 describe('categoryScoreTagLabel', () => {
   it('appends standing to the label name', () => {
     expect(categoryScoreTagLabel(speedLabel)).toBe('Speed standing');
+  });
+});
+
+describe('playerHasLoggedStanding', () => {
+  it('is true when only attendance rate is present', () => {
+    const r = { ...ranking('p1', null, {}), attendanceRate: 75 };
+    expect(playerHasLoggedStanding(r)).toBe(true);
+  });
+
+  it('is false when nothing is logged', () => {
+    const r = { ...ranking('p1', null, {}), attendanceRate: null };
+    expect(playerHasLoggedStanding(r)).toBe(false);
   });
 });
