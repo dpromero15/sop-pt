@@ -7,6 +7,7 @@ import {
   isEligibleToPractice,
   isFlagRequirement,
   isRequirementChecked,
+  isRequirementComplete,
   missingBlockingRequirements,
   missingPracticeBlockingRequirements,
   missingRequirements,
@@ -84,6 +85,40 @@ describe('isFlagRequirement', () => {
   });
 });
 
+describe('isRequirementComplete', () => {
+  const grade: ComplianceRequirement = {
+    id: 'req_grade_check',
+    name: 'Grade Check',
+    kind: 'eligibility',
+    blocksPlay: true,
+    blocksPractice: false,
+    sortOrder: 1,
+  };
+  const physical = reqs[0];
+
+  it('treats missing paperwork as incomplete and missing flags as cleared', () => {
+    expect(isRequirementComplete({}, 'p1', physical)).toBe(false);
+    expect(isRequirementComplete({}, 'p1', grade)).toBe(true);
+  });
+
+  it('raises a flag only when complete is explicitly false', () => {
+    expect(
+      isRequirementComplete(
+        { p1: { req_grade_check: { complete: false } } },
+        'p1',
+        grade,
+      ),
+    ).toBe(false);
+    expect(
+      isRequirementComplete(
+        { p1: { req_grade_check: { complete: true } } },
+        'p1',
+        grade,
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('flag checkbox mapping', () => {
   it('shows paperwork checked when complete', () => {
     expect(isRequirementChecked({ kind: 'paperwork' }, true)).toBe(true);
@@ -109,6 +144,33 @@ describe('isEligibleToPlay', () => {
 
   it('is false when a blocksPlay item is incomplete', () => {
     expect(isEligibleToPlay('p1', reqs, {})).toBe(false);
+  });
+
+  it('treats untouched Grade Check / disciplinary flags as cleared', () => {
+    const flags: ComplianceRequirement[] = [
+      {
+        id: 'req_grade_check',
+        name: 'Grade Check',
+        kind: 'eligibility',
+        blocksPlay: true,
+        blocksPractice: false,
+        sortOrder: 1,
+      },
+      {
+        id: 'req_red_card',
+        name: 'Red card sit-out',
+        kind: 'disciplinary',
+        blocksPlay: true,
+        blocksPractice: false,
+        sortOrder: 2,
+      },
+    ];
+    expect(isEligibleToPlay('p1', flags, {})).toBe(true);
+    expect(
+      isEligibleToPlay('p1', flags, {
+        p1: { req_grade_check: { complete: false } },
+      }),
+    ).toBe(false);
   });
 
   it('is true when all blocksPlay items are complete', () => {
@@ -145,7 +207,7 @@ describe('isEligibleToPractice', () => {
 describe('missingBlockingRequirements', () => {
   it('lists incomplete play or practice blockers', () => {
     const missing = missingBlockingRequirements('p1', reqs, {});
-    expect(missing.map((r) => r.id)).toEqual(['req_physical', 'req_red_card']);
+    expect(missing.map((r) => r.id)).toEqual(['req_physical']);
   });
 
   it('includes equipment-only blockers', () => {
@@ -173,11 +235,7 @@ describe('missingPracticeBlockingRequirements', () => {
 describe('missingRequirements', () => {
   it('lists all incomplete items including soft', () => {
     const missing = missingRequirements('p1', reqs, {});
-    expect(missing.map((r) => r.id)).toEqual([
-      'req_physical',
-      'req_fee',
-      'req_red_card',
-    ]);
+    expect(missing.map((r) => r.id)).toEqual(['req_physical', 'req_fee']);
   });
 
   it('omits completed items', () => {
