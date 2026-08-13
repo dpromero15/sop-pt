@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import type { ComplianceRequirement, Player, PlayerRanking } from '../types';
 import {
   applyEligibilityToAdjustedRanks,
+  completeFromChecked,
   isEligibleToPlay,
   isEligibleToPractice,
+  isFlagRequirement,
+  isRequirementChecked,
   missingBlockingRequirements,
   missingPracticeBlockingRequirements,
   missingRequirements,
@@ -67,6 +70,36 @@ function stubRanking(
     calculatedValues: {},
   };
 }
+
+describe('isFlagRequirement', () => {
+  it('is true for eligibility and disciplinary', () => {
+    expect(isFlagRequirement({ kind: 'eligibility' })).toBe(true);
+    expect(isFlagRequirement({ kind: 'disciplinary' })).toBe(true);
+  });
+
+  it('is false for paperwork, fee, and other', () => {
+    expect(isFlagRequirement({ kind: 'paperwork' })).toBe(false);
+    expect(isFlagRequirement({ kind: 'fee' })).toBe(false);
+    expect(isFlagRequirement({ kind: 'other' })).toBe(false);
+  });
+});
+
+describe('flag checkbox mapping', () => {
+  it('shows paperwork checked when complete', () => {
+    expect(isRequirementChecked({ kind: 'paperwork' }, true)).toBe(true);
+    expect(isRequirementChecked({ kind: 'paperwork' }, false)).toBe(false);
+    expect(completeFromChecked({ kind: 'paperwork' }, true)).toBe(true);
+    expect(completeFromChecked({ kind: 'paperwork' }, false)).toBe(false);
+  });
+
+  it('shows disciplinary/eligibility checked when incomplete (flag raised)', () => {
+    expect(isRequirementChecked({ kind: 'disciplinary' }, true)).toBe(false);
+    expect(isRequirementChecked({ kind: 'disciplinary' }, false)).toBe(true);
+    expect(isRequirementChecked({ kind: 'eligibility' }, false)).toBe(true);
+    expect(completeFromChecked({ kind: 'disciplinary' }, true)).toBe(false);
+    expect(completeFromChecked({ kind: 'disciplinary' }, false)).toBe(true);
+  });
+});
 
 describe('isEligibleToPlay', () => {
   it('is true when no blocking requirements', () => {

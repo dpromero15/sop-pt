@@ -12,6 +12,11 @@ _(none)_
 
 ## Ready to ship
 
+### #109 — Compliance: sort names, denser board, invert eligibility/red-card checks
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Name A–Z / Z–A / jersey sort (shared board + triage). Compact wrapped headers. Eligibility/disciplinary checkboxes invert: checked = flag (storage `complete` unchanged).
+- **Touchpoints:** `eligibility.ts`, `ComplianceBoardView.tsx`, `PlayersView.tsx`, `ComplianceConfigPanel.tsx`, `initialData.ts`
+
 ### #112 — Rankings shows Speed / Fitness even though they are not on the formula page
 - **Status:** implemented (verify acceptance before PR)
 - **Notes:** Rankings tabs / Active Weights / Config share one category set; orphan formula weights hidden and pruned; no `'speed'` invention.
@@ -24,15 +29,12 @@ _(none)_
 
 **Suggested PR Closes:**
 ```
+Closes #109
 Closes #112
 Closes #113
 ```
 
 ## Still open (this release)
-
-### #109 — Compliance: sort names, denser board, invert eligibility/red-card checks
-- Name sort, compact board columns, inverted polarity for eligibility/disciplinary.
-- **Label:** `v2.10.0`
 
 ### #114 — Soft delete sessions and players (restore + 90-day purge)
 - Player/session delete flags `deletedAt` instead of hard remove; restore from trash; auto-purge after 90 days.
@@ -54,5 +56,5 @@ Closes #113
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` pass (174 tests) 2026-08-12 — Phase 2 (#112+#113).
-- Next: Phase 3 (#109 Compliance).
+- **QA:** `npm run lint` + `npm test` pass (178 tests) 2026-08-12 — Phase 3 (#109).
+- Next: Phase 4 (#114 soft delete). PR #115 may still be open for #112+#113; #109 can batch into that PR or a follow-up.

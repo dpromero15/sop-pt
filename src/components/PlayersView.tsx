@@ -26,9 +26,11 @@ import { StorageService } from '../services/storage';
 import { calculatePlayerRankings } from '../utils/scoring';
 import {
   applyEligibilityToAdjustedRanks,
+  completeFromChecked,
   eligiblePlayerIdSet,
   isEligibleToPlay,
   isEligibleToPractice,
+  isRequirementChecked,
   missingBlockingRequirements,
   missingPracticeBlockingRequirements,
 } from '../utils/eligibility';
@@ -730,12 +732,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         </span>
                         <input
                           type="checkbox"
-                          checked={complete}
+                          checked={isRequirementChecked(req, complete)}
                           onChange={(e) => {
                             StorageService.setPlayerRequirementComplete(
                               editingPlayer.id,
                               req.id,
-                              e.target.checked,
+                              completeFromChecked(req, e.target.checked),
                             );
                             onRefreshData();
                           }}

@@ -17,7 +17,7 @@ const RED_CARD_SITOUT: ComplianceRequirement = {
   blocksPlay: true,
   blocksPractice: false,
   description:
-    'Flag after a red card; leave incomplete until the player has sat out the next match',
+    'Check to flag a red-card sit-out; uncheck after the player has served the next match',
   sortOrder: 4,
 };
 
