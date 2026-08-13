@@ -67,11 +67,18 @@ describe('playerConsequenceBadges', () => {
 
   it('aggregates distinct badges for incomplete items', () => {
     expect(playerConsequenceBadges('p1', reqs, {})).toEqual([
-      'ineligible',
       'noPlay',
       'noPractice',
       'noEquipment',
     ]);
+  });
+
+  it('adds Ineligible only when Grade Check is explicitly flagged', () => {
+    expect(
+      playerConsequenceBadges('p1', reqs, {
+        p1: { req_grade_check: { complete: false } },
+      }),
+    ).toEqual(['ineligible', 'noPlay', 'noPractice', 'noEquipment']);
   });
 
   it('omits badges once those items are complete / cleared', () => {

@@ -474,7 +474,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                         const complete = isRequirementComplete(
                           playerCompliance,
                           player.id,
-                          req.id,
+                          req,
                         );
                         return (
                           <td key={req.id} className="px-1 py-1 text-center w-8">

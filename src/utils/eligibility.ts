@@ -28,13 +28,23 @@ export function completeFromChecked(
   return isFlagRequirement(req) ? !checked : checked;
 }
 
-/** Missing completion counts as incomplete. */
+/**
+ * Whether this item is in compliance for the player.
+ * Paperwork / fees: missing counts as incomplete.
+ * Flag kinds (eligibility / disciplinary): missing counts as cleared
+ * (not flagged) — only an explicit `complete: false` raises the flag.
+ */
 export function isRequirementComplete(
   state: PlayerComplianceState,
   playerId: string,
-  requirementId: string,
+  req: Pick<ComplianceRequirement, 'id'> &
+    Partial<Pick<ComplianceRequirement, 'kind'>>,
 ): boolean {
-  return state[playerId]?.[requirementId]?.complete === true;
+  const stored = state[playerId]?.[req.id]?.complete;
+  if (req.kind && isFlagRequirement({ kind: req.kind })) {
+    return stored !== false;
+  }
+  return stored === true;
 }
 
 /**
@@ -48,7 +58,7 @@ export function isEligibleToPlay(
 ): boolean {
   const blocking = requirements.filter((r) => r.blocksPlay);
   if (blocking.length === 0) return true;
-  return blocking.every((r) => isRequirementComplete(state, playerId, r.id));
+  return blocking.every((r) => isRequirementComplete(state, playerId, r));
 }
 
 /**
@@ -62,7 +72,7 @@ export function isEligibleToPractice(
 ): boolean {
   const blocking = requirements.filter((r) => r.blocksPractice);
   if (blocking.length === 0) return true;
-  return blocking.every((r) => isRequirementComplete(state, playerId, r.id));
+  return blocking.every((r) => isRequirementComplete(state, playerId, r));
 }
 
 export function eligiblePlayerIdSet(
@@ -85,7 +95,7 @@ export function missingBlockingRequirements(
     .filter(
       (r) => r.blocksPlay || r.blocksPractice || r.blocksEquipment === true,
     )
-    .filter((r) => !isRequirementComplete(state, playerId, r.id))
+    .filter((r) => !isRequirementComplete(state, playerId, r))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
@@ -97,7 +107,7 @@ export function missingPracticeBlockingRequirements(
 ): ComplianceRequirement[] {
   return requirements
     .filter((r) => r.blocksPractice)
-    .filter((r) => !isRequirementComplete(state, playerId, r.id))
+    .filter((r) => !isRequirementComplete(state, playerId, r))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
@@ -108,7 +118,7 @@ export function missingRequirements(
   state: PlayerComplianceState,
 ): ComplianceRequirement[] {
   return requirements
-    .filter((r) => !isRequirementComplete(state, playerId, r.id))
+    .filter((r) => !isRequirementComplete(state, playerId, r))
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 

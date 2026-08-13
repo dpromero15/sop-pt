@@ -112,7 +112,7 @@ export function isEligibleForEquipment(
 ): boolean {
   const blocking = requirements.filter(requirementBlocksEquipment);
   if (blocking.length === 0) return true;
-  return blocking.every((r) => isRequirementComplete(state, playerId, r.id));
+  return blocking.every((r) => isRequirementComplete(state, playerId, r));
 }
 
 export function playerConsequenceBadges(
@@ -122,7 +122,7 @@ export function playerConsequenceBadges(
 ): ComplianceConsequence[] {
   const seen = new Set<ComplianceConsequence>();
   for (const req of requirements) {
-    if (isRequirementComplete(state, playerId, req.id)) continue;
+    if (isRequirementComplete(state, playerId, req)) continue;
     for (const key of consequenceKeysForRequirement(req)) {
       seen.add(key);
     }

@@ -30,6 +30,7 @@ import {
   completeFromChecked,
   eligiblePlayerIdSet,
   isRequirementChecked,
+  isRequirementComplete,
   missingBlockingRequirements,
 } from '../utils/eligibility';
 import {
@@ -756,9 +757,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 <div className="space-y-2 border border-slate-800 rounded-xl p-3 bg-slate-950/50">
                   <div className="text-slate-400 font-semibold">Compliance checklist</div>
                   {complianceRequirements.map((req) => {
-                    const complete =
-                      playerCompliance[editingPlayer.id]?.[req.id]?.complete ===
-                      true;
+                    const complete = isRequirementComplete(
+                      playerCompliance,
+                      editingPlayer.id,
+                      req,
+                    );
                     return (
                       <label
                         key={req.id}
