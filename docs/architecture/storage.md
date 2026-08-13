@@ -70,13 +70,16 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Soft delete (v11):** Optional `deletedAt` on players and sessions. Single delete is restoreable for 90 days; `clearAllPlayers` stays a permanent wipe. Purge runs after migrations on boot.
 - **Compliance consequences (v12):** `blocksEquipment` (default false). Recommended CRHS set: Physical = No practice; Grade Check = eligibility kind (inverted checkbox, **Ineligible**); CRHS Policy + CHSSAA Policy = No play; Team fee = No play + No equipment. Config **Compliance manager** can apply that set and toggle consequences. Equipment assign is blocked when a No equipment item is incomplete.
 - **Player demographics (v13):** `age` → `birthYear` (`asOfYear - age`); optional `grade` 9–12. Repair re-run drops leftover `age`.
+- **Label parents (v14):** Optional `parentLabelId` on labels (max depth 1). Invalid parents are cleared; metric `labelIds` keep at most one id per parent tree (prefer subcategory); subcategory formula weights are dropped.
 
 ### Metric definition fields
 
 `id`, `name`, `labelIds`, `primaryLabelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
 
-- **`labelIds`:** Categories where the metric appears in Rankings / Config filters (non-empty).
-- **`primaryLabelId`:** Category that receives formula standing contribution (must be in `labelIds`). Secondary memberships are browse-only.
+Labels also store optional `parentLabelId` (subcategory of a root label).
+
+- **`labelIds`:** Categories where the metric appears in Rankings / Config filters (non-empty). At most one id from each parent tree.
+- **`primaryLabelId`:** Category that receives formula standing contribution (must be in `labelIds`). Secondary memberships are browse-only. A subcategory primary still rolls into the parent’s formula standing.
 - **`aggregationMode`:** `sum` | `best` | `latest` | `average` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)). Attendance always averages present/late/absent regardless of stored mode.
 - **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`). Legacy `labelId` is mapped to `labelIds` / `primaryLabelId` on load and via schema v9.
 

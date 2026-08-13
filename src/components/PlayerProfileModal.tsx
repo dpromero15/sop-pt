@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Player, LabelDefinition, MetricEntry, MetricDefinition } from '../types';
 import { calculatePlayerRankings } from '../utils/scoring';
+import { visibleRankingLabels } from '../utils/formulaWeights';
 import { defaultAvatarFor } from '../constants/avatars';
 import { StorageService } from '../services/storage';
 
@@ -56,8 +57,10 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   const rankings = calculatePlayerRankings(allPlayers, allEntries, metrics, labels, formula);
   const playerRanking = rankings.find(r => r.player.id === player.id);
 
+  const rankingLabels = visibleRankingLabels(labels);
+
   // Radar: unscored categories plot at a low hidden placeholder (shape only — not a real score).
-  const radarData = labels.map((lbl) => {
+  const radarData = rankingLabels.map((lbl) => {
     const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
     return {
       category: lbl.name,
@@ -232,7 +235,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                 <span>Category Breakdown</span>
               </h3>
               <div className="grid grid-cols-2 gap-2">
-                {labels.map(lbl => {
+                {rankingLabels.map(lbl => {
                   const lScore = playerRanking?.labelScores[lbl.id]?.score ?? null;
                   return (
                     <div 

@@ -12,6 +12,7 @@ import { migration010PruneGhostCategories } from './migrations/010_prune_ghost_c
 import { migration011SoftDeleteFields } from './migrations/011_soft_delete_fields';
 import { migration012ComplianceConsequences } from './migrations/012_compliance_consequences';
 import { migration013PlayerBirthYearGrade } from './migrations/013_player_birth_year_grade';
+import { migration014LabelParent } from './migrations/014_label_parent';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -108,5 +109,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Map player age → birthYear and keep optional grade (9–12).',
     up: migration013PlayerBirthYearGrade,
+  },
+  {
+    id: 14,
+    name: 'label_parent',
+    description:
+      'Normalize optional label parentLabelId and strip tree-duplicate metric memberships.',
+    up: migration014LabelParent,
   },
 ];

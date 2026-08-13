@@ -18,6 +18,23 @@ describe('normalizeMetricLabels', () => {
     expect(next.primaryLabelId).toBe('speed');
   });
 
+  it('strips parent when the same tree already has a subcategory', () => {
+    const next = normalizeMetricLabels(
+      {
+        labelIds: ['speed', 'acceleration', 'fitness'],
+        primaryLabelId: 'speed',
+        type: 'time_seconds',
+      },
+      [
+        { id: 'speed' },
+        { id: 'acceleration', parentLabelId: 'speed' },
+        { id: 'fitness' },
+      ],
+    );
+    expect(next.labelIds).toEqual(['acceleration', 'fitness']);
+    expect(next.primaryLabelId).toBe('acceleration');
+  });
+
   it('keeps multi membership and clamps primary', () => {
     const next = normalizeMetricLabels({
       labelIds: ['speed', 'fitness'],

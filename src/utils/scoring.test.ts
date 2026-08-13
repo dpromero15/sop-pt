@@ -687,6 +687,73 @@ describe('calculatePlayerRankings', () => {
     expect(ranking.totalScore).toBe(100);
   });
 
+  it('rolls subcategory primary metrics into parent standing only', () => {
+    const accel: LabelDefinition = {
+      id: 'acceleration',
+      name: 'Acceleration',
+      description: '',
+      color: 'blue',
+      badgeBg: '',
+      badgeText: '',
+      parentLabelId: 'speed',
+    };
+    const fitnessLabel: LabelDefinition = {
+      id: 'fitness',
+      name: 'Fitness',
+      description: '',
+      color: 'rose',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const nested: MetricDefinition = {
+      id: 'm_10m',
+      name: '10m split',
+      labelIds: ['acceleration', 'fitness'],
+      primaryLabelId: 'acceleration',
+      type: 'time_seconds',
+      unit: 's',
+      higherIsBetter: false,
+      aggregationMode: 'best',
+    };
+    const nestedFormula: ScoringFormulaConfig = {
+      id: 'f-nested',
+      name: 'Nested',
+      weights: [
+        { labelId: 'speed', weightPercent: 50, enabled: true },
+        { labelId: 'fitness', weightPercent: 50, enabled: true },
+        { labelId: 'acceleration', weightPercent: 99, enabled: true },
+      ],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_10m',
+        value: 1.8,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      [nested],
+      [...labels, accel, fitnessLabel],
+      nestedFormula,
+    );
+
+    expect(ranking.labelScores.speed.metrics.map((m) => m.metricId)).toEqual([
+      'm_10m',
+    ]);
+    expect(
+      ranking.labelScores.acceleration.metrics.map((m) => m.metricId),
+    ).toEqual(['m_10m']);
+    expect(ranking.labelScores.fitness.metrics).toEqual([]);
+    // Child weight is ignored; only parent speed contributes.
+    expect(ranking.totalScore).toBe(100);
+  });
+
   it('scores attendance into Statistical and Adjusted even if the label list omitted it', () => {
     const attFormula: ScoringFormulaConfig = {
       id: 'f-att-only',

@@ -53,6 +53,11 @@ import {
   visibleRankingLabels,
 } from '../utils/formulaWeights';
 import {
+  childrenOf,
+  standingLabelIdForScope,
+  type CategorySubScope,
+} from '../utils/labelTree';
+import {
   categoryScoreTagLabel,
   compareOptionalRankValue,
   compareRankings,
@@ -310,6 +315,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   );
 
   const [selectedLabelId, setSelectedLabelId] = useState<string | 'all'>('all');
+  const [selectedSubScope, setSelectedSubScope] =
+    useState<CategorySubScope>('all');
+  const standingLabelId = standingLabelIdForScope(
+    selectedLabelId,
+    selectedSubScope,
+  );
   const [selectedMetricId, setSelectedMetricId] =
     useState<RankingsMetricSelection>('none');
   const [searchQuery, setSearchQuery] = useState('');
@@ -347,14 +358,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       resolveActiveCutLines({
         boundaries: rankingBoundaries,
         specialtyPosition,
-        selectedLabelId,
+        selectedLabelId: standingLabelId,
         selectedMetricId,
         totalMode: effectiveTotalMode,
       }),
     [
       rankingBoundaries,
       specialtyPosition,
-      selectedLabelId,
+      standingLabelId,
       selectedMetricId,
       effectiveTotalMode,
     ],
@@ -364,9 +375,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     !specialtyPosition &&
       ((selectedMetricId &&
         rankingBoundaries.metricCuts?.[selectedMetricId]) ||
-        (selectedLabelId &&
-          selectedLabelId !== 'all' &&
-          rankingBoundaries.categoryCuts?.[selectedLabelId])),
+        (standingLabelId &&
+          standingLabelId !== 'all' &&
+          rankingBoundaries.categoryCuts?.[standingLabelId])),
   );
 
   const activePlayerIds = useMemo(
@@ -396,12 +407,23 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   }, [totalMode, coachesScope, coachBallots, rosterPlayers]);
 
   const scopedMetrics = useMemo(
-    () => metricsForCategory(metrics, selectedLabelId),
-    [metrics, selectedLabelId],
+    () =>
+      metricsForCategory(
+        metrics,
+        selectedLabelId,
+        labels,
+        selectedSubScope,
+      ),
+    [metrics, selectedLabelId, labels, selectedSubScope],
   );
 
+  const activeSubcategories =
+    selectedLabelId !== 'all'
+      ? childrenOf(labels, selectedLabelId)
+      : [];
 
-  const activeLabel = labels.find((l) => l.id === selectedLabelId);
+
+  const activeLabel = labels.find((l) => l.id === standingLabelId);
   const activeMetric = metrics.find((m) => m.id === selectedMetricId);
 
   const teamSummary = useMemo(() => {
@@ -416,7 +438,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         rankings,
         hasLoggedData,
         sortBy,
-        selectedLabelId,
+        selectedLabelId: standingLabelId,
         selectedMetricId,
         metrics,
         totalMode: effectiveTotalMode,
@@ -425,7 +447,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     [
       hasLoggedData,
       rankings,
-      selectedLabelId,
+      standingLabelId,
       selectedMetricId,
       sortBy,
       effectiveTotalMode,
@@ -478,7 +500,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       a,
       b,
       sortBy,
-      selectedLabelId,
+      standingLabelId,
       selectedMetricId,
       metrics,
       effectiveTotalMode,
@@ -490,10 +512,32 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       labelId,
       selectedMetricId,
       metrics,
+      labels,
     );
     setSelectedLabelId(labelId);
+    setSelectedSubScope('all');
     setSelectedMetricId(next.selectedMetricId);
     setSortBy(next.sortBy);
+  };
+
+  const selectSubScope = (scope: CategorySubScope) => {
+    const scopeLabel =
+      scope === 'all' || scope === 'direct' ? selectedLabelId : scope;
+    const next = selectionAfterCategoryChange(
+      scopeLabel,
+      selectedMetricId,
+      metrics,
+      labels,
+    );
+    setSelectedSubScope(scope);
+    setSelectedMetricId(next.selectedMetricId);
+    setSortBy(
+      next.selectedMetricId !== 'none'
+        ? 'metric'
+        : selectedLabelId === 'all'
+          ? 'total'
+          : 'label',
+    );
   };
 
   const selectMetricTag = (metricId: string) => {
@@ -565,7 +609,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         a,
         b,
         sortBy,
-        selectedLabelId,
+        standingLabelId,
         selectedMetricId,
         metrics,
         effectiveTotalMode,
@@ -577,7 +621,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         season: team?.season,
         rankings: sorted,
         sortBy,
-        selectedLabelId,
+        selectedLabelId: standingLabelId,
         selectedMetricId,
         metrics,
         labels,
@@ -588,7 +632,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         cutLines: resolvePrintCutLines({
           boundaries: rankingBoundaries,
           specialtyPosition,
-          selectedLabelId,
+          selectedLabelId: standingLabelId,
           selectedMetricId,
           totalMode: effectiveTotalMode,
         }),
@@ -1022,6 +1066,46 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               );
             })}
           </div>
+          {activeSubcategories.length > 0 && (
+            <div className="flex items-center gap-1.5 overflow-x-auto pt-2 pb-1 scrollbar-none">
+              <button
+                type="button"
+                onClick={() => selectSubScope('all')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                  selectedSubScope === 'all'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-slate-300'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => selectSubScope('direct')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                  selectedSubScope === 'direct'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                    : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-slate-300'
+                }`}
+              >
+                Direct
+              </button>
+              {activeSubcategories.map((child) => (
+                <button
+                  type="button"
+                  key={child.id}
+                  onClick={() => selectSubScope(child.id)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                    selectedSubScope === child.id
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : 'bg-slate-900 text-slate-500 border border-slate-800 hover:text-slate-300'
+                  }`}
+                >
+                  {child.name}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         )}
 
@@ -1166,7 +1250,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 : isUnscoredForRankMode(
                     item,
                     sortBy,
-                    selectedLabelId,
+                    standingLabelId,
                     selectedMetricId,
                     metrics,
                     effectiveTotalMode,
@@ -1179,7 +1263,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 : isUnscoredForRankMode(
                     sortedRankings[idx - 1],
                     sortBy,
-                    selectedLabelId,
+                    standingLabelId,
                     selectedMetricId,
                     metrics,
                     effectiveTotalMode,
@@ -1205,7 +1289,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     : isUnscoredForRankMode(
                         row,
                         sortBy,
-                        selectedLabelId,
+                        standingLabelId,
                         selectedMetricId,
                         metrics,
                         effectiveTotalMode,
@@ -1261,8 +1345,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             }
 
             const categoryScore =
-              selectedLabelId !== 'all'
-                ? labelScoreForMode(item, selectedLabelId, effectiveTotalMode)
+              standingLabelId !== 'all'
+                ? labelScoreForMode(item, standingLabelId, effectiveTotalMode)
                 : null;
 
             const showingMeasuredValue =
@@ -1278,7 +1362,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   : !isUnscoredForRankMode(
                       r,
                       sortBy,
-                      selectedLabelId,
+                      standingLabelId,
                       selectedMetricId,
                       metrics,
                       effectiveTotalMode,

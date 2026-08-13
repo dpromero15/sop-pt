@@ -35,9 +35,17 @@ import { RankingBoundariesPanel } from './RankingBoundariesPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
 import { metricLabelPayload } from '../utils/metricLabels';
 import {
-  ATTENDANCE_LABEL,
   DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
+  visibleRankingLabels,
 } from '../utils/formulaWeights';
+import {
+  canParentHaveChildren,
+  childrenOf,
+  labelPathName,
+  resolveTreeMembership,
+  rootLabels,
+  treeIds,
+} from '../utils/labelTree';
 
 interface ConfigViewProps {
   labels: LabelDefinition[];
@@ -96,13 +104,8 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     return map;
   });
 
-  // Labels for weight sliders: Attendance always first and always present.
-  const weightLabels = (() => {
-    const withoutAtt = labels.filter((l) => l.id !== 'attendance');
-    const attendance =
-      labels.find((l) => l.id === 'attendance') ?? ATTENDANCE_LABEL;
-    return [attendance, ...withoutAtt];
-  })();
+  // Formula sliders: Attendance first, then parent categories only.
+  const weightLabels = visibleRankingLabels(labels);
 
   // Keep weightsMap in sync when labels change (add/remove/clear)
   useEffect(() => {
@@ -133,7 +136,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         }
       };
       ensureId('attendance');
-      labels.forEach((l) => ensureId(l.id));
+      visibleRankingLabels(labels).forEach((l) => ensureId(l.id));
       return next;
     });
   }, [labels, formula.weights]);
@@ -144,6 +147,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   const [newLabelName, setNewLabelName] = useState('');
   const [newLabelDesc, setNewLabelDesc] = useState('');
   const [newLabelColor, setNewLabelColor] = useState('emerald');
+  const [newLabelParentId, setNewLabelParentId] = useState<string | undefined>();
 
   // Modal / Form state for Adding / Editing Metric Definition
   const [isMetricModalOpen, setIsMetricModalOpen] = useState(false);
@@ -286,7 +290,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   // Formula Presets — only touch categories that currently exist.
   const handleApplyPreset = (presetType: 'balanced' | 'offense' | 'fitness') => {
     const updated: Record<string, { weightPercent: number; enabled: boolean }> = {};
-    labels.forEach(l => {
+    weightLabels.forEach(l => {
       updated[l.id] = { weightPercent: 0, enabled: false };
     });
 
@@ -317,7 +321,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     }
 
     // System categories stay enabled; preset may still update their %.
-    labels.forEach((l) => {
+    weightLabels.forEach((l) => {
       if (isWeightToggleLocked(l) && updated[l.id]) {
         updated[l.id] = { ...updated[l.id], enabled: true };
       }
@@ -340,6 +344,54 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     setNewLabelName('');
     setNewLabelDesc('');
     setNewLabelColor('emerald');
+    setNewLabelParentId(undefined);
+  };
+
+  const openAddParentLabel = () => {
+    setEditingLabel(null);
+    setNewLabelParentId(undefined);
+    setNewLabelName('');
+    setNewLabelDesc('');
+    setNewLabelColor('emerald');
+    setIsAddLabelOpen(true);
+  };
+
+  const openAddSubcategory = (parent: LabelDefinition) => {
+    setEditingLabel(null);
+    setNewLabelParentId(parent.id);
+    setNewLabelName('');
+    setNewLabelDesc('');
+    setNewLabelColor(parent.color);
+    setIsAddLabelOpen(true);
+  };
+
+  const toggleMetricLabel = (id: string, checked: boolean) => {
+    setMetricLabelIds((prev) => {
+      let next = prev.filter((x) => x !== id);
+      if (checked) {
+        const label = labels.find((l) => l.id === id);
+        const rootId = label?.parentLabelId || id;
+        const tree = treeIds(labels, rootId);
+        next = next.filter((x) => !tree.includes(x));
+        next.push(id);
+      }
+      const resolved = resolveTreeMembership(next, labels).labelIds;
+      if (!resolved.includes(metricPrimaryLabelId) && resolved.length > 0) {
+        setMetricPrimaryLabelId(resolved[0]);
+      }
+      return resolved;
+    });
+  };
+
+  const metricLabelLocked = (id: string): boolean => {
+    const label = labels.find((l) => l.id === id);
+    if (!label) return false;
+    if (label.parentLabelId) {
+      return treeIds(labels, label.parentLabelId)
+        .filter((x) => x !== id)
+        .some((x) => metricLabelIds.includes(x));
+    }
+    return childrenOf(labels, id).some((c) => metricLabelIds.includes(c.id));
   };
 
   // Add / update Label
@@ -360,28 +412,45 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       return;
     }
 
-    const created = StorageService.addLabel({
-      name: newLabelName,
-      description: newLabelDesc || 'Custom category label',
-      color: newLabelColor,
-      badgeBg: `bg-${newLabelColor}-500/15 text-${newLabelColor}-300 border-${newLabelColor}-500/30`,
-      badgeText: `text-${newLabelColor}-300`
-    });
+    let created;
+    try {
+      created = StorageService.addLabel({
+        name: newLabelName,
+        description: newLabelDesc || 'Custom category label',
+        color: newLabelColor,
+        badgeBg: `bg-${newLabelColor}-500/15 text-${newLabelColor}-300 border-${newLabelColor}-500/30`,
+        badgeText: `text-${newLabelColor}-300`,
+        parentLabelId: newLabelParentId,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Could not add label.');
+      return;
+    }
 
-    setWeightsMap((prev) => ({
-      ...prev,
-      [created.id]: prev[created.id] ?? { weightPercent: 10, enabled: true },
-    }));
+    if (!created.parentLabelId) {
+      setWeightsMap((prev) => ({
+        ...prev,
+        [created.id]: prev[created.id] ?? { weightPercent: 10, enabled: true },
+      }));
+    }
 
     closeLabelModal();
     void flushNow();
     onRefreshData();
-    showToast('✓ New category label added!');
+    showToast(
+      created.parentLabelId
+        ? '✓ Subcategory added!'
+        : '✓ New category label added!',
+    );
   };
 
   const handleDeleteLabel = (lbl: LabelDefinition) => {
     if (lbl.system) return;
-    if (!confirm(`Remove category label "${lbl.name}"? Metrics using it must be reassigned first.`)) {
+    const childCount = childrenOf(labels, lbl.id).length;
+    const confirmMsg = childCount
+      ? `Remove category "${lbl.name}"? Remove its ${childCount} subcategor${childCount === 1 ? 'y' : 'ies'} first.`
+      : `Remove category label "${lbl.name}"? Metrics using it must be reassigned first.`;
+    if (!confirm(confirmMsg)) {
       return;
     }
     try {
@@ -449,7 +518,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     const labelsPayload = metricLabelPayload(
       metricLabelIds,
       metricPrimaryLabelId,
-      { attendance: isAttendanceMetric },
+      { attendance: isAttendanceMetric, labels },
     );
     const payload: Omit<MetricDefinition, 'id'> = {
       name: metricName.trim(),
@@ -765,13 +834,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setEditingLabel(null);
-                  setNewLabelName('');
-                  setNewLabelDesc('');
-                  setNewLabelColor('emerald');
-                  setIsAddLabelOpen(true);
-                }}
+                onClick={openAddParentLabel}
                 className="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 font-semibold text-xs transition-all active:scale-95"
               >
                 + Add Label
@@ -779,51 +842,98 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {labels.map(lbl => (
-              <div
-                key={lbl.id}
-                className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-2 text-xs"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">{lbl.name}</span>
-                    {lbl.system && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                        <Lock className="w-2.5 h-2.5" />
-                        System
+          <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+            {rootLabels(labels).map((root) => {
+              const kids = childrenOf(labels, root.id);
+              return (
+                <div key={root.id} className="space-y-1.5">
+                  <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-3 flex items-center justify-between gap-2 text-xs">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{root.name}</span>
+                        {root.system && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
+                            <Lock className="w-2.5 h-2.5" />
+                            System
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-slate-400 text-[11px] mt-0.5">
+                        {root.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${root.badgeBg}`}>
+                        {root.color}
                       </span>
-                    )}
+                      {canParentHaveChildren(root) && (
+                        <button
+                          type="button"
+                          onClick={() => openAddSubcategory(root)}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-semibold"
+                          title="Add subcategory"
+                        >
+                          + Sub
+                        </button>
+                      )}
+                      {!root.system && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => openEditLabel(root)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                            title="Edit label"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteLabel(root)}
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                            title="Remove label"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-slate-400 text-[11px] mt-0.5">{lbl.description}</p>
+                  {kids.map((child) => (
+                    <div
+                      key={child.id}
+                      className="ml-5 bg-slate-950/70 border border-slate-800/60 rounded-xl p-3 flex items-center justify-between gap-2 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <span className="font-semibold text-slate-200">
+                          {child.name}
+                        </span>
+                        <p className="text-slate-500 text-[11px] mt-0.5">
+                          {child.description || 'Subcategory'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => openEditLabel(child)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+                          title="Edit subcategory"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLabel(child)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
+                          title="Remove subcategory"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${lbl.badgeBg}`}>
-                    {lbl.color}
-                  </span>
-                  {!lbl.system && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => openEditLabel(lbl)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
-                        title="Edit label"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteLabel(lbl)}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400"
-                        title="Remove label"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -856,10 +966,10 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
           <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
             {metrics.map(m => {
-              const primaryDef = labels.find((l) => l.id === m.primaryLabelId);
+              const primaryName = labelPathName(labels, m.primaryLabelId);
               const secondaryNames = (m.labelIds || [])
                 .filter((id) => id !== m.primaryLabelId)
-                .map((id) => labels.find((l) => l.id === id)?.name || id);
+                .map((id) => labelPathName(labels, id));
               const mode = m.aggregationMode ?? defaultAggregationMode(m);
               return (
                 <div
@@ -872,7 +982,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                     <p className="text-slate-400 text-[10px] mt-0.5">
                       Primary:{' '}
                       <strong className="text-blue-300">
-                        {primaryDef?.name || m.primaryLabelId}
+                        {primaryName}
                       </strong>
                       {secondaryNames.length > 0 && (
                         <>
@@ -950,7 +1060,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4 text-white">
             <h3 className="text-lg font-bold">
-              {editingLabel ? 'Edit Category Label' : 'Add Custom Category Label'}
+              {editingLabel
+                ? 'Edit Category Label'
+                : newLabelParentId
+                  ? `Add subcategory of ${labels.find((l) => l.id === newLabelParentId)?.name || 'category'}`
+                  : 'Add Custom Category Label'}
             </h3>
             <form onSubmit={handleSaveLabel} className="space-y-3 text-xs sm:text-sm">
               <div>
@@ -1027,41 +1141,72 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                   </p>
                 ) : (
                   <>
-                    <div className="flex flex-wrap gap-2 bg-slate-950 border border-slate-800 rounded-xl p-3">
-                      {labels
+                    <div className="space-y-2 bg-slate-950 border border-slate-800 rounded-xl p-3">
+                      {rootLabels(labels)
                         .filter((l) => l.id !== 'attendance')
-                        .map((l) => {
-                          const checked = metricLabelIds.includes(l.id);
+                        .map((root) => {
+                          const kids = childrenOf(labels, root.id);
+                          const rootChecked = metricLabelIds.includes(root.id);
+                          const rootLocked = metricLabelLocked(root.id);
                           return (
-                            <label
-                              key={l.id}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] cursor-pointer transition-colors ${
-                                checked
-                                  ? 'border-blue-500/50 bg-blue-500/15 text-blue-200'
-                                  : 'border-slate-700 text-slate-400 hover:border-slate-500'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                className="sr-only"
-                                checked={checked}
-                                onChange={() => {
-                                  setMetricLabelIds((prev) => {
-                                    const next = checked
-                                      ? prev.filter((id) => id !== l.id)
-                                      : [...prev, l.id];
-                                    if (
-                                      !next.includes(metricPrimaryLabelId) &&
-                                      next.length > 0
-                                    ) {
-                                      setMetricPrimaryLabelId(next[0]);
-                                    }
-                                    return next;
-                                  });
-                                }}
-                              />
-                              {l.name}
-                            </label>
+                            <div key={root.id} className="space-y-1.5">
+                              <label
+                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] transition-colors ${
+                                  rootLocked && !rootChecked
+                                    ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600'
+                                    : rootChecked
+                                      ? 'border-blue-500/50 bg-blue-500/15 text-blue-200 cursor-pointer'
+                                      : 'border-slate-700 text-slate-400 hover:border-slate-500 cursor-pointer'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="sr-only"
+                                  checked={rootChecked}
+                                  disabled={rootLocked && !rootChecked}
+                                  onChange={() =>
+                                    toggleMetricLabel(root.id, !rootChecked)
+                                  }
+                                />
+                                {root.name}
+                              </label>
+                              {kids.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pl-4">
+                                  {kids.map((child) => {
+                                    const checked = metricLabelIds.includes(
+                                      child.id,
+                                    );
+                                    const locked = metricLabelLocked(child.id);
+                                    return (
+                                      <label
+                                        key={child.id}
+                                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                                          locked && !checked
+                                            ? 'opacity-40 cursor-not-allowed border-slate-800 text-slate-600'
+                                            : checked
+                                              ? 'border-blue-500/50 bg-blue-500/15 text-blue-200 cursor-pointer'
+                                              : 'border-slate-700 text-slate-400 hover:border-slate-500 cursor-pointer'
+                                        }`}
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          className="sr-only"
+                                          checked={checked}
+                                          disabled={locked && !checked}
+                                          onChange={() =>
+                                            toggleMetricLabel(
+                                              child.id,
+                                              !checked,
+                                            )
+                                          }
+                                        />
+                                        {child.name}
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
                           );
                         })}
                     </div>
@@ -1078,19 +1223,16 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                       required
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                     >
-                      {metricLabelIds.map((id) => {
-                        const name =
-                          labels.find((l) => l.id === id)?.name || id;
-                        return (
+                      {metricLabelIds.map((id) => (
                           <option key={id} value={id}>
-                            {name}
+                            {labelPathName(labels, id)}
                           </option>
-                        );
-                      })}
+                        ))}
                     </select>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Metric appears under every selected category; only the
-                      primary feeds that category&apos;s formula standing.
+                      A metric can belong to multiple parent categories, but
+                      only once inside a parent (parent or one subcategory).
+                      Only the primary feeds formula standing.
                     </p>
                   </>
                 )}

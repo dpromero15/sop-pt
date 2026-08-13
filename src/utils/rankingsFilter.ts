@@ -5,6 +5,11 @@ import {
 } from '../types';
 import { formatMetricValue } from './scoring';
 import { metricInCategory, metricPrimaryLabelId } from './metricLabels';
+import {
+  metricInLabelTree,
+  metricsForCategoryScope,
+  type CategorySubScope,
+} from './labelTree';
 
 export type RankingsSortMode = 'total' | 'label' | 'metric';
 
@@ -21,7 +26,17 @@ export type RankingsMetricSelection = string | 'none';
 export function metricsForCategory(
   metrics: MetricDefinition[],
   selectedLabelId: string | 'all',
+  labels?: LabelDefinition[],
+  subScope: CategorySubScope = 'all',
 ): MetricDefinition[] {
+  if (labels) {
+    return metricsForCategoryScope(
+      metrics,
+      selectedLabelId,
+      subScope,
+      labels,
+    );
+  }
   if (selectedLabelId === 'all') return metrics;
   return metrics.filter((m) => metricInCategory(m, selectedLabelId));
 }
@@ -34,6 +49,7 @@ export function selectionAfterCategoryChange(
   labelId: string | 'all',
   previousMetricId: RankingsMetricSelection,
   metrics: MetricDefinition[],
+  labels?: LabelDefinition[],
 ): { selectedMetricId: RankingsMetricSelection; sortBy: RankingsSortMode } {
   if (labelId === 'all') {
     const stillValidMetric =
@@ -47,9 +63,12 @@ export function selectionAfterCategoryChange(
 
   const inCategory =
     previousMetricId !== 'none' &&
-    metrics.some(
-      (m) => m.id === previousMetricId && metricInCategory(m, labelId),
-    );
+    metrics.some((m) => {
+      if (m.id !== previousMetricId) return false;
+      return labels
+        ? metricInLabelTree(m, labelId, labels)
+        : metricInCategory(m, labelId);
+    });
 
   if (inCategory) {
     return { selectedMetricId: previousMetricId, sortBy: 'metric' };

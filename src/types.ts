@@ -37,6 +37,11 @@ export interface LabelDefinition {
   iconName?: string;
   /** Built-in labels (e.g. attendance) cannot be deleted or cleared. */
   system?: boolean;
+  /**
+   * When set, this label is a subcategory of that parent.
+   * Max depth is 1 (parent → child). Attendance cannot be a parent or child.
+   */
+  parentLabelId?: string;
 }
 
 export type MetricType = 'time_seconds' | 'count' | 'percentage' | 'rating_10' | 'attendance';

@@ -572,4 +572,111 @@ describe('runLocalMigrations', () => {
     });
     expect(players.find((p: { id: string }) => p.id === 'p2').age).toBeUndefined();
   });
+
+  it('normalizes label parents and tree-duplicate metrics via v14', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(13));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const labels = [
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'speed',
+        name: 'Speed',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+      },
+      {
+        id: 'acceleration',
+        name: 'Acceleration',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+        parentLabelId: 'speed',
+      },
+      {
+        id: 'too_deep',
+        name: 'Deep',
+        description: '',
+        color: 'blue',
+        badgeBg: '',
+        badgeText: '',
+        parentLabelId: 'acceleration',
+      },
+    ];
+    const metrics = [
+      {
+        id: 'm_40m',
+        name: '40m',
+        labelIds: ['speed', 'acceleration'],
+        primaryLabelId: 'speed',
+        type: 'time_seconds',
+        unit: 's',
+        higherIsBetter: false,
+        aggregationMode: 'best',
+      },
+    ];
+    const formula = {
+      id: 'default_formula',
+      name: 'Balanced',
+      weights: [
+        { labelId: 'attendance', weightPercent: 20, enabled: true },
+        { labelId: 'speed', weightPercent: 70, enabled: true },
+        { labelId: 'acceleration', weightPercent: 10, enabled: true },
+      ],
+    };
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.LABELS),
+      JSON.stringify(labels),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.METRICS),
+      JSON.stringify(metrics),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.FORMULA),
+      JSON.stringify(formula),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const nextLabels = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.LABELS))!,
+    );
+    expect(
+      nextLabels.find((l: { id: string }) => l.id === 'too_deep')
+        ?.parentLabelId,
+    ).toBeUndefined();
+
+    const nextMetrics = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.METRICS))!,
+    );
+    expect(nextMetrics[0]).toMatchObject({
+      labelIds: ['acceleration'],
+      primaryLabelId: 'acceleration',
+    });
+
+    const nextFormula = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.FORMULA))!,
+    );
+    expect(nextFormula.weights.map((w: { labelId: string }) => w.labelId)).toEqual(
+      ['attendance', 'speed'],
+    );
+  });
 });
