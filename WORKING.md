@@ -13,7 +13,7 @@ _(none)_
 ## Ready to ship
 
 ### #127 — Print professional rankings sheet with unlabeled metric cut lines
-- **Status:** implemented
+- **Status:** implemented — open [PR #128](https://github.com/dpromero15/sop-pt/pull/128)
 - **Notes:** Rankings Print uses the current scope (Statistical + one metric, or Coaches Rank). All players ranked; metric/category/global cuts as unlabeled rules. No `Cut @` labels.
 - **Touchpoints:** `rankingsPrint.ts`, `RankingsView.tsx`, `rankingBoundaries.ts`, `App.tsx`
 
