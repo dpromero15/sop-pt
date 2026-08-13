@@ -38,6 +38,7 @@ import { PlayerScoreCard } from './logger/PlayerScoreCard';
 import { DenseScoreEditor } from './logger/DenseScoreEditor';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { SessionTitleEditor } from './logger/SessionTitleEditor';
+import { activePlayers as selectActivePlayers } from '../utils/playerStatus';
 import { flushNow } from '../services/storage/cloudSync';
 
 type WorkflowStep = 'plan' | 'attendance' | 'score' | 'summary';
@@ -83,7 +84,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const openSessions = useMemo(() => filterOpenSessions(sessions), [sessions]);
   const selectedSession = openSessions.find((s) => s.id === selectedSessionId) ?? null;
   const activePlayers = useMemo(
-    () => players.filter((p) => p.status === 'active'),
+    () => selectActivePlayers(players),
     [players],
   );
   const activePlayerIds = useMemo(() => activePlayers.map((p) => p.id), [activePlayers]);

@@ -758,4 +758,40 @@ describe('calculatePlayerRankings', () => {
     expect(ranking.totalScore).toBe(100);
     expect(ranking.adjustedTotalScore).toBe(100);
   });
+
+  it('omits inactive players from rankings and percentile pools', () => {
+    const cut = player('p-cut', 'Cut');
+    cut.status = 'inactive';
+    const entries: MetricEntry[] = [
+      {
+        id: 'e-live',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_juggle',
+        value: 10,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e-cut',
+        sessionId: 's1',
+        playerId: 'p-cut',
+        metricId: 'm_juggle',
+        value: 100,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const rankings = calculatePlayerRankings(
+      [players[0], cut],
+      entries,
+      metrics,
+      labels,
+      formula,
+    );
+
+    expect(rankings.map((r) => r.player.id)).toEqual(['p1']);
+    // Solo live pool — cut player's 100 must not pull the percentile down.
+    expect(rankings[0].labelScores.technical.score).toBe(100);
+    expect(rankings[0].overallRank).toBe(1);
+  });
 });

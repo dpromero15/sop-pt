@@ -42,9 +42,12 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 ### Player fields
 
-`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `age?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
+`id`, `name`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
 
+- **`birthYear`:** Calendar year of birth. Replaces legacy `age` (schema **v13** converts `age` → `asOfYear - age` and drops `age`).
+- **`grade`:** Current school grade `9` | `10` | `11` | `12` (Freshman–Senior). Optional; not inferred from birth year.
 - **`deletedAt`:** ISO timestamp when the player was soft-deleted. Unset = live. `getPlayers()` excludes these; snapshots/backups keep them so cloud replace-collection does not wipe trash. Restore clears the flag. Records older than **90 days** are hard-deleted on boot (bumps, compliance, equipment assignment cascade).
+- **`status`:** `active` | `injured` | `inactive`. Inactive (cut) players stay in storage with their logs but are omitted from live roster lists, rankings, percentile pools, team averages, logger, compliance, and equipment assign. Reactivate from Players → Inactive. Injured remains on the live roster.
 - **`rankingIneligible`:** Coach-set flag. `true` excludes the player from Adjusted Rank (bottom of the list). Missing/false = included. Compliance checklist badges are informational and do not change Adjusted place.
 
 ### Session fields
@@ -66,6 +69,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Ghost categories (v10):** Unused Thunder FC sample labels (Speed, Fitness, …) with no metrics are removed; orphan formula weights and metrics pointing at missing labels are pruned so Rankings tabs / Active Weights match Config. Fresh teams seed Attendance-only labels/metrics/formula (not the full demo catalog).
 - **Soft delete (v11):** Optional `deletedAt` on players and sessions. Single delete is restoreable for 90 days; `clearAllPlayers` stays a permanent wipe. Purge runs after migrations on boot.
 - **Compliance consequences (v12):** `blocksEquipment` (default false). Recommended CRHS set: Physical = No practice; Grade Check = eligibility kind (inverted checkbox, **Ineligible**); CRHS Policy + CHSSAA Policy = No play; Team fee = No play + No equipment. Config **Compliance manager** can apply that set and toggle consequences. Equipment assign is blocked when a No equipment item is incomplete.
+- **Player demographics (v13):** `age` → `birthYear` (`asOfYear - age`); optional `grade` 9–12. Repair re-run drops leftover `age`.
 
 ### Metric definition fields
 

@@ -1,11 +1,17 @@
 import type { Player, PlayerPosition } from '../types';
+import {
+  birthYearFromAge,
+  parseBirthYear,
+  parsePlayerGrade,
+} from './playerDemographics';
 
 export const PLAYER_CSV_HEADERS = [
   'name',
   'jerseyNumber',
   'position',
   'preferredFoot',
-  'age',
+  'birthYear',
+  'grade',
   'avatarUrl',
   'notes',
 ] as const;
@@ -70,7 +76,8 @@ export function buildPlayerCsvTemplate(): string {
     '99',
     'CM',
     'Right',
-    '15',
+    '2011',
+    '10',
     '',
     'Sample player row — replace with your roster',
   ];
@@ -110,7 +117,9 @@ export function parseAndValidatePlayerCsv(
   const jerseyIdx = colIndex('jerseyNumber');
   const positionIdx = colIndex('position');
   const footIdx = colIndex('preferredFoot');
+  const birthYearIdx = colIndex('birthYear');
   const ageIdx = colIndex('age');
+  const gradeIdx = colIndex('grade');
   const avatarIdx = colIndex('avatarUrl');
   const notesIdx = colIndex('notes');
 
@@ -122,6 +131,7 @@ export function parseAndValidatePlayerCsv(
   }
 
   const seenJerseys = new Set(existingJerseyNumbers);
+  const asOfYear = new Date().getFullYear();
 
   for (let i = 1; i < lines.length; i++) {
     const rowNum = i + 1;
@@ -179,15 +189,39 @@ export function parseAndValidatePlayerCsv(
       }
     }
 
-    let age: number | undefined;
-    if (ageIdx >= 0) {
+    let birthYear: number | undefined;
+    if (birthYearIdx >= 0) {
+      const raw = (cells[birthYearIdx] || '').trim();
+      if (raw) {
+        const parsed = parseBirthYear(raw, asOfYear);
+        if (parsed === undefined) {
+          errors.push(`Row ${rowNum}: invalid birthYear "${raw}" — omitted.`);
+        } else {
+          birthYear = parsed;
+        }
+      }
+    }
+    if (birthYear === undefined && ageIdx >= 0) {
       const ageRaw = (cells[ageIdx] || '').trim();
       if (ageRaw) {
         const parsed = Number(ageRaw);
         if (!Number.isFinite(parsed) || parsed < 1 || parsed > 99) {
           errors.push(`Row ${rowNum}: invalid age "${ageRaw}" — omitted.`);
         } else {
-          age = Math.round(parsed);
+          birthYear = birthYearFromAge(parsed, asOfYear);
+        }
+      }
+    }
+
+    let grade: Player['grade'];
+    if (gradeIdx >= 0) {
+      const raw = (cells[gradeIdx] || '').trim();
+      if (raw) {
+        const parsed = parsePlayerGrade(raw);
+        if (parsed === undefined) {
+          errors.push(`Row ${rowNum}: invalid grade "${raw}" — omitted.`);
+        } else {
+          grade = parsed;
         }
       }
     }
@@ -203,7 +237,8 @@ export function parseAndValidatePlayerCsv(
       jerseyNumber,
       position: positionRaw as PlayerPosition,
       preferredFoot,
-      age,
+      birthYear,
+      grade,
       avatarUrl,
       notes,
       status: 'active',

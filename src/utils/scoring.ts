@@ -11,6 +11,7 @@ import { aggregateMetricValue, percentileAmong } from './metricAggregation';
 import { metricScoresInCategory } from './metricLabels';
 import { ATTENDANCE_METRIC_ID } from './sessionMetrics';
 import { visibleRankingLabels } from './formulaWeights';
+import { rosterPlayers } from './playerStatus';
 
 /** Used when the team blob has attendance entries but no attendance metric row. */
 const ATTENDANCE_METRIC_FALLBACK: MetricDefinition = {
@@ -144,6 +145,7 @@ export function assignCompetitionRanks(
  * - **Adjusted** uses metrics with `includeInAdjustedTotal !== false`; missing
  *   values count as 0 when `treatNoScoreAsZero !== false`, otherwise omitted.
  * Pool places (`overallRank` / `adjustedRank`) are competition ranks from those scores.
+ * Inactive players are omitted from the pool (no list row, no percentile / average).
  */
 export function calculatePlayerRankings(
   players: Player[],
@@ -152,6 +154,7 @@ export function calculatePlayerRankings(
   labels: LabelDefinition[],
   formula: ScoringFormulaConfig,
 ): PlayerRanking[] {
+  const roster = rosterPlayers(players);
   const rankingLabels = visibleRankingLabels(labels);
   const rankingMetrics = metricsForRankings(metrics);
 
@@ -168,7 +171,7 @@ export function calculatePlayerRankings(
 
   // Aggregated raw value per player × metric (null = unscored).
   const aggByPlayer = new Map<string, Map<string, number | null>>();
-  for (const player of players) {
+  for (const player of roster) {
     const playerEntries = entries.filter((e) => e.playerId === player.id);
     const byMetric = new Map<string, number | null>();
     for (const m of rankingMetrics) {
@@ -181,14 +184,14 @@ export function calculatePlayerRankings(
   const squadByMetric = new Map<string, number[]>();
   for (const m of rankingMetrics) {
     const values: number[] = [];
-    for (const player of players) {
+    for (const player of roster) {
       const v = aggByPlayer.get(player.id)?.get(m.id);
       if (v !== null && v !== undefined) values.push(v);
     }
     squadByMetric.set(m.id, values);
   }
 
-  const rankings: PlayerRanking[] = players.map((player) => {
+  const rankings: PlayerRanking[] = roster.map((player) => {
     const playerEntries = entries.filter((e) => e.playerId === player.id);
     const playerAgg = aggByPlayer.get(player.id)!;
     const labelScoresRecord: Record<string, PlayerLabelScore> = {};

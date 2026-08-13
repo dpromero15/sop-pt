@@ -1,10 +1,8 @@
 import type { CoachBallot, Player, PlayerRanking } from '../types';
 import { assignCompetitionRanks } from './scoring';
+import { activePlayers } from './playerStatus';
 
-/** Active roster used for complete coach ballots. */
-export function activePlayers(players: Player[]): Player[] {
-  return players.filter((p) => p.status === 'active');
-}
+export { activePlayers } from './playerStatus';
 
 /**
  * A ballot is complete when every active player has a unique ordinal 1…N.

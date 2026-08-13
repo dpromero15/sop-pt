@@ -8,7 +8,10 @@ import type {
 import { compareRankings } from './rankingsFilter';
 import {
   buildRankingsPrintDocument,
+  computePrintScale,
+  printColumnCount,
   rankingsPrintHtml,
+  splitPrintRows,
 } from './rankingsPrint';
 
 const metrics: MetricDefinition[] = [
@@ -130,6 +133,10 @@ describe('buildRankingsPrintDocument', () => {
     expect(html).toContain('breakout');
     expect(html).not.toMatch(/Cut @/i);
     expect(html).toMatch(/border-bottom:\s*2px dotted/);
+    expect(html).toMatch(/size:\s*letter portrait/);
+    expect(html).toMatch(/height:\s*11in/);
+    expect(html).toMatch(/page-break-inside:\s*avoid/);
+    expect(html).toContain('class="columns cols-1"');
   });
 
   it('prints Coaches Rank with the same unlabeled cut lines', () => {
@@ -161,5 +168,54 @@ describe('buildRankingsPrintDocument', () => {
     expect(doc.rows[0].showCutBelow).toBe(true);
     expect(doc.rows[1].showCutBelow).toBe(true);
     expect(rankingsPrintHtml(doc)).not.toMatch(/Cut @/i);
+  });
+
+  it('splits a large roster across columns so the sheet stays one page', () => {
+    const pool = Array.from({ length: 36 }, (_, i) =>
+      ranking(`p${i + 1}`, 4.5 + i * 0.01),
+    );
+    const doc = buildRankingsPrintDocument({
+      teamName: 'Thunder FC',
+      rankings: pool,
+      sortBy: 'metric',
+      selectedLabelId: 'speed',
+      selectedMetricId: 'm_40m',
+      metrics,
+      labels,
+      totalMode: 'overall',
+      cutLines: [18, 36],
+    });
+    const html = rankingsPrintHtml(doc);
+    expect(printColumnCount(doc.rows.length)).toBe(2);
+    expect(html).toContain('class="columns cols-2"');
+    expect(html.match(/<table>/g)?.length).toBe(2);
+    expect(html).toMatch(/overflow:\s*hidden/);
+    expect(html).toMatch(/page-break-after:\s*avoid/);
+  });
+});
+
+describe('print layout helpers', () => {
+  it('uses one column until a letter page would overflow', () => {
+    expect(printColumnCount(18)).toBe(1);
+    expect(printColumnCount(22)).toBe(1);
+    expect(printColumnCount(23)).toBe(2);
+    expect(printColumnCount(44)).toBe(2);
+    expect(printColumnCount(45)).toBe(3);
+  });
+
+  it('splits rows evenly across columns', () => {
+    const rows = Array.from({ length: 25 }, (_, i) => i);
+    expect(splitPrintRows(rows, 2)).toEqual([
+      rows.slice(0, 13),
+      rows.slice(13),
+    ]);
+  });
+
+  it('scales overflowing content onto the sheet and leaves fitting content alone', () => {
+    expect(computePrintScale(700, 900, 740, 980)).toBe(1);
+    expect(computePrintScale(700, 1200, 740, 980)).toBeCloseTo(
+      (980 / 1200) * 0.98,
+      5,
+    );
   });
 });

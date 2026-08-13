@@ -11,6 +11,7 @@ import { migration009MetricMultiLabels } from './migrations/009_metric_multi_lab
 import { migration010PruneGhostCategories } from './migrations/010_prune_ghost_categories';
 import { migration011SoftDeleteFields } from './migrations/011_soft_delete_fields';
 import { migration012ComplianceConsequences } from './migrations/012_compliance_consequences';
+import { migration013PlayerBirthYearGrade } from './migrations/013_player_birth_year_grade';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -100,5 +101,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'blocksEquipment + CRHS recommended set; Grade Check becomes eligibility.',
     up: migration012ComplianceConsequences,
+  },
+  {
+    id: 13,
+    name: 'player_birth_year_grade',
+    description:
+      'Map player age → birthYear and keep optional grade (9–12).',
+    up: migration013PlayerBirthYearGrade,
   },
 ];

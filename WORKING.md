@@ -17,9 +17,27 @@ _(none)_
 - **Notes:** Pencil on Sessions inspector and Quick Insert logger header renames via `updateSession`. Empty titles rejected.
 - **Touchpoints:** `SessionTitleEditor.tsx`, `SessionsView.tsx`, `QuickInsertView.tsx`
 
+### #135 — Inactive players stay in data but leave roster lists and averages
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** `status: 'inactive'` hides the player from live lists, rankings, percentile pools, and team averages. Record + logs kept; Players → Inactive can reactivate.
+- **Touchpoints:** `playerStatus.ts`, `scoring.ts`, `PlayersView.tsx`, `ComplianceBoardView.tsx`, `EquipmentConfigPanel.tsx`
+
+### #136 — Player grade plus birth year instead of age
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** `age` → `birthYear` via schema **v13**; optional grade 9–12 (Freshman–Senior). CSV accepts legacy `age` column.
+- **Touchpoints:** `playerDemographics.ts`, `013_player_birth_year_grade.ts`, `PlayersView.tsx`, `playerCsv.ts`
+
+### #137 — Fit rankings print sheet on one page
+- **Status:** implemented
+- **Notes:** Letter sheet is a fixed 8.5×11in box; type/padding tighten with roster size; 23+ players go two (or three) columns; leftover overflow scales to fit. Cut lines unchanged.
+- **Touchpoints:** `src/utils/rankingsPrint.ts`, `src/utils/rankingsPrint.test.ts`
+
 **Suggested PR Closes:**
 ```
 Closes #133
+Closes #135
+Closes #136
+Closes #137
 ```
 
 ## Still open (this release)
@@ -51,6 +69,7 @@ _(none)_
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - Soft delete: schema **v11** (`011_soft_delete_fields`).
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
+- Player birth year + grade: schema **v13** (`013_player_birth_year_grade`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (220 tests) 2026-08-13 — #133.
+- **QA:** `npm run lint` + `npm test` (236 tests) 2026-08-13 — #133 #135 #136 #137.
