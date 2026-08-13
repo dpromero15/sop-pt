@@ -75,7 +75,7 @@ export function compareOptionalRankValue(
   return higherIsBetter ? b - a : a - b;
 }
 
-function metricAggregatedValue(
+export function metricAggregatedValue(
   ranking: PlayerRanking,
   metricId: string,
   labelId: string,

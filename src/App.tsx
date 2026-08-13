@@ -397,6 +397,7 @@ export default function App() {
               if (can('dataEntry')) handleSelectTab('quick-insert');
             }}
             rankingBoundaries={rankingBoundaries}
+            team={team}
             allowBumps={can('adjustedBumps')}
           />
         )}

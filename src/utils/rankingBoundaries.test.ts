@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeRankingBoundaries,
   resolveActiveCutLines,
+  resolvePrintCutLines,
 } from './rankingBoundaries';
 import type { RankingBoundariesConfig } from '../types';
 
@@ -82,5 +83,33 @@ describe('resolveActiveCutLines', () => {
         totalMode: 'formula',
       }),
     ).toEqual([]);
+  });
+});
+
+describe('resolvePrintCutLines', () => {
+  it('uses metric cuts when present', () => {
+    expect(
+      resolvePrintCutLines({
+        boundaries: base,
+        selectedMetricId: 'm_40m_dash',
+        totalMode: 'overall',
+      }),
+    ).toEqual([5, 10]);
+  });
+
+  it('falls back to global 18 / 36 for Statistical and Coaches', () => {
+    expect(
+      resolvePrintCutLines({
+        boundaries: base,
+        selectedLabelId: 'all',
+        totalMode: 'overall',
+      }),
+    ).toEqual([18, 36]);
+    expect(
+      resolvePrintCutLines({
+        boundaries: base,
+        totalMode: 'coaches',
+      }),
+    ).toEqual([18, 36]);
   });
 });
