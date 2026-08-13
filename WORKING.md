@@ -13,7 +13,7 @@ _(none)_
 ## Ready to ship
 
 ### #125 — Compliance shows many players Ineligible when Grade Check is not actually flagged
-- **Status:** implemented
+- **Status:** implemented — open [PR #126](https://github.com/dpromero15/sop-pt/pull/126)
 - **Notes:** Flag kinds (eligibility / disciplinary) default to cleared when unset. Only explicit `complete: false` raises Ineligible / sit-out. Paperwork and fees still default incomplete.
 - **Touchpoints:** `eligibility.ts`, `complianceConsequences.ts`, `ComplianceBoardView.tsx`, `PlayersView.tsx`
 
