@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Cloud, CloudOff, Loader2, RefreshCw } from 'lucide-react';
 import {
+  flushNow,
   getCloudSyncStatus,
   subscribeCloudSync,
   type SyncUiStatus,
@@ -43,6 +44,14 @@ export const SyncStatusChip: React.FC = () => {
 
   if (!can('cloudSync') && state.status === 'local-only') return null;
 
+  const retryable =
+    state.status === 'pending' ||
+    state.status === 'error' ||
+    state.status === 'offline';
+  const chipText =
+    state.status === 'pending' && state.detail === 'Retrying…'
+      ? 'Retrying…'
+      : LABEL[state.status];
   const tone =
     state.status === 'synced'
       ? 'border-emerald-500/30 text-emerald-300 bg-emerald-500/10'
@@ -61,25 +70,38 @@ export const SyncStatusChip: React.FC = () => {
 
   return (
     <div ref={rootRef} className="relative">
-      <button
-        type="button"
-        title={state.detail || LABEL[state.status]}
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tone}`}
+      <div
+        className={`inline-flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${tone}`}
       >
-        <Icon
-          className={`w-3 h-3 ${
-            state.status === 'hydrating' || state.status === 'syncing'
-              ? 'animate-spin'
-              : ''
-          }`}
-        />
-        <span className="max-w-[9rem] truncate">
-          {LABEL[state.status]}
-          {state.status === 'error' && state.detail ? ` · ${state.detail}` : ''}
-        </span>
-        {state.status === 'error' ? <RefreshCw className="w-3 h-3" /> : null}
-      </button>
+        <button
+          type="button"
+          title={chipText}
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex items-center gap-1"
+        >
+          <Icon
+            className={`w-3 h-3 ${
+              state.status === 'hydrating' || state.status === 'syncing'
+                ? 'animate-spin'
+                : ''
+            }`}
+          />
+          <span className="max-w-[9rem] truncate">{chipText}</span>
+        </button>
+        {retryable ? (
+          <button
+            type="button"
+            title="Retry sync now"
+            aria-label="Retry sync now"
+            onClick={() => {
+              void flushNow();
+            }}
+            className="p-0.5 rounded-full hover:bg-white/10"
+          >
+            <RefreshCw className="w-3 h-3" />
+          </button>
+        ) : null}
+      </div>
       {open && (
         <div className="absolute right-0 top-full mt-2 z-50 w-[min(22rem,calc(100vw-1.5rem))] rounded-xl border border-slate-700 bg-slate-900 p-3 shadow-xl space-y-2">
           <div className="flex items-center justify-between gap-2">

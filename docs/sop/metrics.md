@@ -19,15 +19,16 @@ Secondary categories are browse/org only. Example: 40m under Speed **and** Fitne
 
 Attendance is locked to the Attendance system label.
 
-## Subcategories (schema v14)
+## Subcategories (schema v14 + v16)
 
-Parent categories may have **one level** of subcategories (`LabelDefinition.parentLabelId`) and may also hold metrics directly.
+Parent categories may have **one level** of subcategories (`LabelDefinition.parentLabelIds`) and may also hold metrics directly. A subcategory may belong to **multiple** root parents (e.g. Endurance under Offense, Defense, and Midfield).
 
 | Rule | Behavior |
 |---|---|
 | Depth | Parent → child only. No sub-subcategories. Attendance cannot be a parent or child. |
 | Formula | One weight per **parent**. Subcategories are folders, not extra sliders. |
-| Parent standing | Includes metrics whose primary is the parent **or** any of its children. |
+| Primary parent | `primaryParentLabelId` — when a metric’s primary is the subcategory, only this parent receives formula standing. Other parents are browse-only so overall rank does not count the metric three times. |
+| Parent standing | Includes metrics whose primary is the parent **or** a child whose primary parent is this label. |
 | Tree uniqueness | Inside one parent tree a metric appears at most once (on the parent **or** in one subcategory). |
 | Cross-tree | The same metric may still belong to multiple unrelated parents (e.g. Speed / Acceleration **and** Fitness). |
 
@@ -99,7 +100,7 @@ Never-scored players sort last under an **Unscored** divider when ranking by Sta
 Config → Measured Metrics: add or **edit** name, **categories** (grouped parent + subcategory checkboxes) + **primary** category, type, unit, direction, aggregation, expected min/max, and Adjusted flags (Include in Adjusted total / Treat no score as 0).  
 Config → Formula: Attendance stays **always on** as a system default (cannot disable); coaches can change its weight percent. Subcategories do not get their own formula slider.
 
-Calculated fields were removed (schema v8); use aggregation mode **average** instead of a separate “40m Average” field. Multi-category metrics use schema v9 (`labelIds` / `primaryLabelId`). Subcategories use schema v14 (`parentLabelId`).
+Calculated fields were removed (schema v8); use aggregation mode **average** instead of a separate “40m Average” field. Multi-category metrics use schema v9 (`labelIds` / `primaryLabelId`). Subcategories use schema v14 (`parentLabelId`) and v16 (`parentLabelIds` + `primaryParentLabelId`).
 
 ## Touchpoints
 

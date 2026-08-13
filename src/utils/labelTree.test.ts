@@ -11,9 +11,12 @@ import {
   metricScoresInLabelTree,
   metricsForCategoryScope,
   normalizeLabelForest,
+  parentIdsOf,
+  primaryParentIdOf,
   resolveTreeMembership,
   rootLabels,
   standingLabelIdForScope,
+  toggleTreeMembership,
   treeIds,
 } from './labelTree';
 
@@ -55,7 +58,54 @@ const fitness: LabelDefinition = {
   badgeText: '',
 };
 
+const offense: LabelDefinition = {
+  id: 'offense',
+  name: 'Offense',
+  description: '',
+  color: 'amber',
+  badgeBg: '',
+  badgeText: '',
+};
+
+const defense: LabelDefinition = {
+  id: 'defense',
+  name: 'Defense',
+  description: '',
+  color: 'cyan',
+  badgeBg: '',
+  badgeText: '',
+};
+
+const midfield: LabelDefinition = {
+  id: 'midfield',
+  name: 'Midfield',
+  description: '',
+  color: 'indigo',
+  badgeBg: '',
+  badgeText: '',
+};
+
+const endurance: LabelDefinition = {
+  id: 'endurance',
+  name: 'Endurance',
+  description: '',
+  color: 'amber',
+  badgeBg: '',
+  badgeText: '',
+  parentLabelIds: ['offense', 'defense', 'midfield'],
+  primaryParentLabelId: 'offense',
+  parentLabelId: 'offense',
+};
+
 const forest = [ATTENDANCE_LABEL, speed, accel, top, fitness];
+const sharedForest = [
+  ATTENDANCE_LABEL,
+  offense,
+  defense,
+  midfield,
+  endurance,
+  fitness,
+];
 
 function metric(
   id: string,
@@ -100,6 +150,9 @@ describe('label forest', () => {
   it('formats nested display names', () => {
     expect(labelPathName(forest, 'speed')).toBe('Speed');
     expect(labelPathName(forest, 'acceleration')).toBe('Speed / Acceleration');
+    expect(labelPathName(sharedForest, 'endurance')).toBe(
+      'Endurance · Offense, Defense, Midfield',
+    );
   });
 
   it('allocates unique slugs', () => {
@@ -131,6 +184,24 @@ describe('normalizeLabelForest', () => {
     expect(labels.find((l) => l.id === 'attendance')?.parentLabelId).toBeUndefined();
     expect(labels.find((l) => l.id === 'too_deep')?.parentLabelId).toBeUndefined();
   });
+
+  it('keeps multiple valid root parents and a primary', () => {
+    const { labels, changed } = normalizeLabelForest([
+      offense,
+      defense,
+      midfield,
+      {
+        ...endurance,
+        parentLabelIds: ['offense', 'defense', 'midfield', 'missing', 'endurance'],
+        primaryParentLabelId: 'defense',
+      },
+    ]);
+    expect(changed).toBe(true);
+    const child = labels.find((l) => l.id === 'endurance');
+    expect(parentIdsOf(child!)).toEqual(['offense', 'defense', 'midfield']);
+    expect(primaryParentIdOf(child!)).toBe('defense');
+    expect(child?.parentLabelId).toBe('defense');
+  });
 });
 
 describe('resolveTreeMembership', () => {
@@ -153,6 +224,46 @@ describe('resolveTreeMembership', () => {
   });
 });
 
+describe('toggleTreeMembership', () => {
+  it('moves parent membership onto a subcategory without unchecking first', () => {
+    expect(
+      toggleTreeMembership(['speed'], 'acceleration', true, forest),
+    ).toEqual(['acceleration']);
+  });
+
+  it('switches sibling subcategories and back to the parent', () => {
+    expect(
+      toggleTreeMembership(['acceleration'], 'top_speed', true, forest),
+    ).toEqual(['top_speed']);
+    expect(
+      toggleTreeMembership(['top_speed'], 'speed', true, forest),
+    ).toEqual(['speed']);
+  });
+
+  it('leaves other parent trees intact', () => {
+    expect(
+      toggleTreeMembership(['speed', 'fitness'], 'acceleration', true, forest),
+    ).toEqual(['fitness', 'acceleration']);
+  });
+
+  it('unchecks the selected id', () => {
+    expect(
+      toggleTreeMembership(['acceleration', 'fitness'], 'acceleration', false, forest),
+    ).toEqual(['fitness']);
+  });
+
+  it('checking a shared subcategory clears every parent tree it belongs to', () => {
+    expect(
+      toggleTreeMembership(
+        ['offense', 'defense', 'fitness'],
+        'endurance',
+        true,
+        sharedForest,
+      ),
+    ).toEqual(['fitness', 'endurance']);
+  });
+});
+
 describe('membership / scoring in a tree', () => {
   const forty = metric('m_40m', ['acceleration'], 'acceleration');
   const dash = metric('m_dash', ['speed'], 'speed');
@@ -172,6 +283,18 @@ describe('membership / scoring in a tree', () => {
     expect(metricScoresInLabelTree(forty, 'fitness', forest)).toBe(false);
     expect(metricScoresInLabelTree(dual, 'fitness', forest)).toBe(false);
     expect(metricScoresInLabelTree(dual, 'speed', forest)).toBe(true);
+  });
+
+  it('shared subcategory browse appears under every parent; standing only on primary', () => {
+    const beep = metric('m_beep', ['endurance'], 'endurance');
+    expect(metricInLabelTree(beep, 'offense', sharedForest)).toBe(true);
+    expect(metricInLabelTree(beep, 'defense', sharedForest)).toBe(true);
+    expect(metricInLabelTree(beep, 'midfield', sharedForest)).toBe(true);
+    expect(metricInLabelTree(beep, 'fitness', sharedForest)).toBe(false);
+    expect(metricScoresInLabelTree(beep, 'offense', sharedForest)).toBe(true);
+    expect(metricScoresInLabelTree(beep, 'defense', sharedForest)).toBe(false);
+    expect(metricScoresInLabelTree(beep, 'midfield', sharedForest)).toBe(false);
+    expect(metricScoresInLabelTree(beep, 'endurance', sharedForest)).toBe(true);
   });
 
   it('scopes rank-by chips for All / Direct / subcategory', () => {
@@ -206,5 +329,6 @@ describe('deleteLabelBlockReason', () => {
       ]),
     ).toMatch(/reassign/i);
     expect(deleteLabelBlockReason('fitness', forest, [])).toBeNull();
+    expect(deleteLabelBlockReason('defense', sharedForest, [])).toBeNull();
   });
 });

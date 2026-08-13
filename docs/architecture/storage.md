@@ -72,15 +72,16 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Player demographics (v13):** `age` → `birthYear` (`asOfYear - age`); optional `grade` 9–12. Repair re-run drops leftover `age`.
 - **Label parents (v14):** Optional `parentLabelId` on labels (max depth 1). Invalid parents are cleared; metric `labelIds` keep at most one id per parent tree (prefer subcategory); subcategory formula weights are dropped.
 - **Player public ID (v15):** Short stable `publicId` (6 Crockford-like chars, unique per team) for printouts and the team ID legend. Distinct from internal `id`. Assigned on create; migration backfills existing squads. Rankings print can show IDs instead of names.
+- **Shared subcategories (v16):** `parentLabelIds[]` + `primaryParentLabelId` (legacy `parentLabelId` mirrored as the primary). A folder like Endurance can sit under several roots; only the primary parent receives formula standing so overall rank does not triple-count.
 
 ### Metric definition fields
 
 `id`, `name`, `labelIds`, `primaryLabelId`, `type`, `unit`, `higherIsBetter`, `aggregationMode`, `minExpectedValue?`, `maxExpectedValue?`, `description?`
 
-Labels also store optional `parentLabelId` (subcategory of a root label).
+Labels store optional `parentLabelIds` / `primaryParentLabelId` (subcategory of one or more root labels; `parentLabelId` is the legacy primary mirror).
 
 - **`labelIds`:** Categories where the metric appears in Rankings / Config filters (non-empty). At most one id from each parent tree.
-- **`primaryLabelId`:** Category that receives formula standing contribution (must be in `labelIds`). Secondary memberships are browse-only. A subcategory primary still rolls into the parent’s formula standing.
+- **`primaryLabelId`:** Category that receives formula standing contribution (must be in `labelIds`). Secondary memberships are browse-only. A subcategory primary rolls into **that child’s primary parent** only.
 - **`aggregationMode`:** `sum` | `best` | `latest` | `average` — how entries roll up for rankings (see [sop/metrics.md](../sop/metrics.md)). Attendance always averages present/late/absent regardless of stored mode.
 - **Migration:** missing `aggregationMode` is filled on load (`time_seconds` → `best`, goals/assists/tackles → `sum`, else `latest`). Legacy `labelId` is mapped to `labelIds` / `primaryLabelId` on load and via schema v9.
 

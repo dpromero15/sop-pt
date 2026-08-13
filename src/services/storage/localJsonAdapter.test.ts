@@ -301,6 +301,8 @@ describe('LocalJsonAdapter', () => {
       parentLabelId: 'speed',
     });
     expect(child.parentLabelId).toBe('speed');
+    expect(child.parentLabelIds).toEqual(['speed']);
+    expect(child.primaryParentLabelId).toBe('speed');
     expect(child.id).toBe('acceleration');
     expect(
       adapter.getFormula().weights.some((w) => w.labelId === child.id),
@@ -308,6 +310,51 @@ describe('LocalJsonAdapter', () => {
     expect(() => adapter.deleteLabel('speed')).toThrow(/subcategor/i);
     adapter.deleteLabel(child.id);
     expect(adapter.getLabels().some((l) => l.id === child.id)).toBe(false);
+  });
+
+  it('lets a subcategory belong to multiple parents and unlinks on parent delete', () => {
+    adapter.saveLabels([
+      {
+        id: 'attendance',
+        name: 'Attendance',
+        description: '',
+        color: 'emerald',
+        badgeBg: '',
+        badgeText: '',
+        system: true,
+      },
+      {
+        id: 'offense',
+        name: 'Offense',
+        description: '',
+        color: 'amber',
+        badgeBg: '',
+        badgeText: '',
+      },
+      {
+        id: 'defense',
+        name: 'Defense',
+        description: '',
+        color: 'cyan',
+        badgeBg: '',
+        badgeText: '',
+      },
+    ]);
+    const child = adapter.addLabel({
+      name: 'Endurance',
+      description: 'Shared',
+      color: 'amber',
+      badgeBg: '',
+      badgeText: '',
+      parentLabelIds: ['offense', 'defense'],
+      primaryParentLabelId: 'offense',
+    });
+    expect(child.parentLabelIds).toEqual(['offense', 'defense']);
+    expect(child.primaryParentLabelId).toBe('offense');
+    adapter.deleteLabel('defense');
+    const kept = adapter.getLabels().find((l) => l.id === child.id);
+    expect(kept?.parentLabelIds).toEqual(['offense']);
+    expect(kept?.primaryParentLabelId).toBe('offense');
   });
 
   it('does not seed Thunder FC sample categories on first read', () => {

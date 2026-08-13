@@ -38,8 +38,21 @@ export interface LabelDefinition {
   /** Built-in labels (e.g. attendance) cannot be deleted or cleared. */
   system?: boolean;
   /**
-   * When set, this label is a subcategory of that parent.
-   * Max depth is 1 (parent → child). Attendance cannot be a parent or child.
+   * Root parents when this label is a subcategory (max depth 1).
+   * Empty/absent = root category. A child may belong to multiple roots
+   * (e.g. Endurance under Offense, Defense, and Midfield).
+   * Attendance cannot be a parent or child.
+   */
+  parentLabelIds?: string[];
+  /**
+   * Parent that receives formula standing when a metric’s primary is this
+   * subcategory. Must be in `parentLabelIds`. Other parents are browse-only
+   * so the same metric is not counted multiple times in overall rank.
+   */
+  primaryParentLabelId?: string;
+  /**
+   * @deprecated Legacy single parent. Normalized to `parentLabelIds` +
+   * `primaryParentLabelId`; still written as the primary parent for older readers.
    */
   parentLabelId?: string;
 }

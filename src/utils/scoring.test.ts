@@ -754,6 +754,91 @@ describe('calculatePlayerRankings', () => {
     expect(ranking.totalScore).toBe(100);
   });
 
+  it('counts a shared-subcategory metric once via the primary parent', () => {
+    const offense: LabelDefinition = {
+      id: 'offense',
+      name: 'Offense',
+      description: '',
+      color: 'amber',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const defense: LabelDefinition = {
+      id: 'defense',
+      name: 'Defense',
+      description: '',
+      color: 'cyan',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const midfield: LabelDefinition = {
+      id: 'midfield',
+      name: 'Midfield',
+      description: '',
+      color: 'indigo',
+      badgeBg: '',
+      badgeText: '',
+    };
+    const endurance: LabelDefinition = {
+      id: 'endurance',
+      name: 'Endurance',
+      description: '',
+      color: 'amber',
+      badgeBg: '',
+      badgeText: '',
+      parentLabelIds: ['offense', 'defense', 'midfield'],
+      primaryParentLabelId: 'offense',
+      parentLabelId: 'offense',
+    };
+    const beep: MetricDefinition = {
+      id: 'm_beep',
+      name: 'Beep test',
+      labelIds: ['endurance'],
+      primaryLabelId: 'endurance',
+      type: 'count',
+      unit: 'level',
+      higherIsBetter: true,
+      aggregationMode: 'best',
+    };
+    const sharedFormula: ScoringFormulaConfig = {
+      id: 'f-shared',
+      name: 'Shared',
+      weights: [
+        { labelId: 'offense', weightPercent: 40, enabled: true },
+        { labelId: 'defense', weightPercent: 40, enabled: true },
+        { labelId: 'midfield', weightPercent: 20, enabled: true },
+      ],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_beep',
+        value: 12,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      [beep],
+      [offense, defense, midfield, endurance],
+      sharedFormula,
+    );
+
+    expect(ranking.labelScores.offense.metrics.map((m) => m.metricId)).toEqual([
+      'm_beep',
+    ]);
+    expect(ranking.labelScores.defense.metrics).toEqual([]);
+    expect(ranking.labelScores.midfield.metrics).toEqual([]);
+    expect(ranking.labelScores.defense.score).toBeNull();
+    expect(ranking.labelScores.midfield.score).toBeNull();
+    // Defense/midfield have no standing score, so overall is offense only — not 3×.
+    expect(ranking.totalScore).toBe(100);
+  });
+
   it('scores attendance into Statistical and Adjusted even if the label list omitted it', () => {
     const attFormula: ScoringFormulaConfig = {
       id: 'f-att-only',
