@@ -18,6 +18,7 @@ import { StorageService } from '../services/storage';
 import { SessionMetricPlanner } from './logger/SessionMetricPlanner';
 import { defaultMetricIdsForSessionType } from '../utils/sessionMetrics';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
+import { SessionTitleEditor } from './logger/SessionTitleEditor';
 
 interface SessionsViewProps {
   sessions: Session[];
@@ -246,7 +247,15 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                   <span className="text-xs text-purple-400 font-bold uppercase tracking-wider">
                     Session Inspector
                   </span>
-                  <h3 className="text-xl font-extrabold text-white">{selectedSession.title}</h3>
+                  <SessionTitleEditor
+                    title={selectedSession.title}
+                    readOnly={readOnly}
+                    onSave={(title) => {
+                      StorageService.updateSession({ ...selectedSession, title });
+                      onRefreshData();
+                      setSelectedSession({ ...selectedSession, title });
+                    }}
+                  />
                   <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                     <span className={`font-bold uppercase tracking-wider ${
                       selectedSession.status === 'open' ? 'text-emerald-400' : 'text-slate-500'

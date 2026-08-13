@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Users, 
   Search, 
@@ -49,6 +49,13 @@ import { ComplianceBoardView } from './ComplianceBoardView';
 import { defaultAvatarFor } from '../constants/avatars';
 import { flushNow } from '../services/storage/cloudSync';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
+import { isInactivePlayer, rosterPlayers } from '../utils/playerStatus';
+import {
+  PLAYER_GRADES,
+  formatPlayerGrade,
+  parseBirthYear,
+  parsePlayerGrade,
+} from '../utils/playerDemographics';
 
 type PlayersPane = 'roster' | 'coaches' | 'compliance';
 
@@ -95,10 +102,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formJersey, setFormJersey] = useState<number>(10);
   const [formPosition, setFormPosition] = useState<PlayerPosition>('CM');
   const [formFoot, setFormFoot] = useState<'Left' | 'Right' | 'Both'>('Right');
-  const [formAge, setFormAge] = useState<number>(15);
+  const [formBirthYear, setFormBirthYear] = useState('');
+  const [formGrade, setFormGrade] = useState('');
   const [formAvatar, setFormAvatar] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formRankingIneligible, setFormRankingIneligible] = useState(false);
+  const [formInactive, setFormInactive] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
 
@@ -106,9 +115,15 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     if (!allowCoachesRating && pane === 'coaches') setPane('roster');
   }, [allowCoachesRating, pane]);
 
+  const liveRoster = useMemo(() => rosterPlayers(players), [players]);
+  const inactiveRoster = useMemo(
+    () => players.filter(isInactivePlayer),
+    [players],
+  );
+
   const paneTitle =
     pane === 'roster'
-      ? `Registered Players (${players.length})`
+      ? `Registered Players (${liveRoster.length})`
       : pane === 'coaches'
         ? 'Coaches Rating'
         : 'Compliance';
@@ -133,15 +148,26 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormJersey(player.jerseyNumber);
     setFormPosition(player.position);
     setFormFoot(player.preferredFoot);
-    setFormAge(player.age || 15);
+    setFormBirthYear(player.birthYear ? String(player.birthYear) : '');
+    setFormGrade(player.grade ? String(player.grade) : '');
     setFormAvatar(player.avatarUrl || '');
     setFormNotes(player.notes || '');
     setFormRankingIneligible(player.rankingIneligible === true);
+    setFormInactive(player.status === 'inactive');
   };
 
   const handleSavePlayerForm = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) return;
+
+    const nextStatus: Player['status'] = formInactive
+      ? 'inactive'
+      : editingPlayer?.status === 'injured'
+        ? 'injured'
+        : 'active';
+
+    const birthYear = parseBirthYear(formBirthYear);
+    const grade = parsePlayerGrade(formGrade);
 
     if (editingPlayer) {
       StorageService.updatePlayer({
@@ -150,10 +176,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         jerseyNumber: formJersey,
         position: formPosition,
         preferredFoot: formFoot,
-        age: formAge,
+        birthYear,
+        grade,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
         notes: formNotes,
         rankingIneligible: formRankingIneligible || undefined,
+        status: nextStatus,
       });
       setEditingPlayer(null);
     } else {
@@ -162,9 +190,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         jerseyNumber: formJersey,
         position: formPosition,
         preferredFoot: formFoot,
-        age: formAge,
+        birthYear,
+        grade,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
-        status: 'active',
+        status: nextStatus,
         notes: formNotes,
         rankingIneligible: formRankingIneligible || undefined,
       });
@@ -174,7 +203,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     // Reset Form
     setFormName('');
     setFormNotes('');
+    setFormBirthYear('');
+    setFormGrade('');
     setFormRankingIneligible(false);
+    setFormInactive(false);
     onRefreshData();
   };
 
@@ -253,8 +285,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     void flushNow();
   };
 
-  // Filter logic
-  const filteredPlayers = players.filter(p => {
+  // Filter logic (live roster only — inactive sit in their own section)
+  const matchesRosterFilters = (p: Player) => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.jerseyNumber.toString() === searchQuery;
 
@@ -264,13 +296,15 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     if (positionFilter === 'FWD') return matchesSearch && ['LW', 'RW', 'ST'].includes(p.position);
 
     return matchesSearch;
-  });
+  };
+  const filteredPlayers = liveRoster.filter(matchesRosterFilters);
+  const filteredInactive = inactiveRoster.filter(matchesRosterFilters);
 
   // Calculate scores lookup map
   const entries = StorageService.getEntries();
   const formula = StorageService.getFormula();
   const rankings = applyEligibilityToAdjustedRanks(
-    calculatePlayerRankings(players, entries, metrics, labels, formula),
+    calculatePlayerRankings(liveRoster, entries, metrics, labels, formula),
   );
   const rankingMap = new Map(rankings.map(r => [r.player.id, r]));
 
@@ -338,7 +372,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   setFormName('');
                   setFormJersey(Math.max(1, players.length + 1));
                   setFormNotes('');
+                  setFormBirthYear('');
+                  setFormGrade('');
                   setFormRankingIneligible(false);
+                  setFormInactive(false);
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-emerald-500/20"
               >
@@ -510,12 +547,22 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
                           #{player.jerseyNumber} • {player.position}
                         </span>
+                        {player.grade != null && (
+                          <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold border border-slate-700">
+                            Gr {formatPlayerGrade(player.grade)}
+                          </span>
+                        )}
                         <span className="text-slate-400 text-xs font-medium">
                           {player.preferredFoot} Foot
                         </span>
                         {player.rankingIneligible && (
                           <span className="px-2 py-0.5 rounded text-[11px] font-bold border bg-rose-500/15 text-rose-300 border-rose-500/30">
                             Ineligible
+                          </span>
+                        )}
+                        {player.status === 'injured' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold border bg-amber-500/15 text-amber-300 border-amber-500/30">
+                            Injured
                           </span>
                         )}
                         {consequenceBadges.map((key) => (
@@ -567,6 +614,29 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
                 <div className="flex items-center gap-2">
                   {!readOnlyRoster && (
+                  <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        !confirm(
+                          `Mark ${player.name} inactive? They stay in the database but leave roster lists, rankings, and averages.`,
+                        )
+                      ) {
+                        return;
+                      }
+                      StorageService.updatePlayer({
+                        ...player,
+                        status: 'inactive',
+                      });
+                      onRefreshData();
+                    }}
+                    className="px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all active:scale-95 bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700"
+                    title="Keep the player and their logs, but hide from lists and averages"
+                  >
+                    Mark inactive
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {
@@ -590,6 +660,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   >
                     {player.rankingIneligible ? 'Clear ineligible' : 'Mark ineligible'}
                   </button>
+                  </>
                   )}
                   <button
                     onClick={(e) => handleStartEdit(player, e)}
@@ -616,6 +687,68 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
           );
         })}
       </div>
+
+      {filteredPlayers.length === 0 && filteredInactive.length === 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/40 px-4 py-8 text-center text-sm text-slate-500">
+          {players.length === 0
+            ? 'No players registered yet.'
+            : 'No players match this search.'}
+        </div>
+      )}
+
+      {filteredInactive.length > 0 && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-100">
+              Inactive ({filteredInactive.length})
+            </h3>
+            <p className="text-xs text-slate-500">
+              Cut from the live squad. Records and logs are kept but excluded
+              from lists, rankings, and averages. Reactivate to restore them.
+            </p>
+          </div>
+          <ul className="space-y-2">
+            {filteredInactive.map((player) => (
+              <li
+                key={player.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/50 px-3 py-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => onSelectPlayer(player)}
+                  className="min-w-0 text-left"
+                >
+                  <div className="font-semibold text-slate-100 truncate">
+                    {player.name}{' '}
+                    <span className="text-slate-400 font-medium">
+                      #{player.jerseyNumber}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    {player.position} · not on live roster
+                  </div>
+                </button>
+                {!readOnlyRoster && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      StorageService.updatePlayer({
+                        ...player,
+                        status: 'active',
+                      });
+                      onRefreshData();
+                    }}
+                    className="inline-flex items-center gap-1.5 shrink-0 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-xs font-semibold px-2.5 py-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reactivate
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {(() => {
         const deleted = StorageService.getDeletedPlayers();
@@ -749,16 +882,33 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 font-semibold mb-1">Age</label>
+                  <label className="block text-slate-400 font-semibold mb-1">Birth year</label>
                   <input
                     type="number"
-                    min={6}
-                    max={50}
-                    value={formAge}
-                    onChange={(e) => setFormAge(parseInt(e.target.value) || 15)}
+                    min={new Date().getFullYear() - 50}
+                    max={new Date().getFullYear() - 5}
+                    placeholder="e.g. 2010"
+                    value={formBirthYear}
+                    onChange={(e) => setFormBirthYear(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">Current grade</label>
+                <select
+                  value={formGrade}
+                  onChange={(e) => setFormGrade(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                >
+                  <option value="">Not set</option>
+                  {PLAYER_GRADES.map((g) => (
+                    <option key={g} value={g}>
+                      {formatPlayerGrade(g)}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -771,6 +921,24 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
+              <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
+                <span>
+                  <span className="block text-slate-200 font-semibold">
+                    Inactive (cut / not on squad)
+                  </span>
+                  <span className="block text-[10px] text-slate-500 font-normal mt-0.5">
+                    Keeps the player and their logs. Hides them from roster
+                    lists, rankings, logger, and team averages.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={formInactive}
+                  onChange={(e) => setFormInactive(e.target.checked)}
+                  className="mt-1 rounded border-slate-600"
+                />
+              </label>
 
               <label className="flex items-start justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2.5">
                 <span>

@@ -100,6 +100,9 @@ export type PlayerPosition =
   | 'RW' 
   | 'ST';
 
+/** US high-school grade. */
+export type PlayerGrade = 9 | 10 | 11 | 12;
+
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
 
 export interface Player {
@@ -109,8 +112,16 @@ export interface Player {
   position: PlayerPosition;
   preferredFoot: 'Left' | 'Right' | 'Both';
   avatarUrl?: string;
-  age?: number;
+  /** Calendar year of birth (e.g. 2010). Prefer this over a drifting age. */
+  birthYear?: number;
+  /** Current school grade (9–12). */
+  grade?: PlayerGrade;
   joinedDate: string; // YYYY-MM-DD
+  /**
+   * `active` = on squad. `injured` = on squad, flagged. `inactive` = cut /
+   * not used — record and logs stay, but the player is omitted from live
+   * lists, rankings, and averages.
+   */
   status: 'active' | 'injured' | 'inactive';
   notes?: string;
   /**

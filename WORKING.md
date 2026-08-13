@@ -12,14 +12,32 @@ _(none)_
 
 ## Ready to ship
 
-### #131 — Lock session logger to a fixed unzoomed phone cockpit
+### #133 — Allow editing saved session names
 - **Status:** implemented
-- **Notes:** Quick Insert fills the phone viewport with zoom locked. Attendance swipes no longer pinch-zoom or rubber-band the page; Out / Here / Continue stay on screen.
-- **Touchpoints:** `viewportLock.ts`, `index.css`, `App.tsx`, `QuickInsertView.tsx`, `AttendanceSwipeDeck.tsx`, `Navigation.tsx`
+- **Notes:** Pencil on Sessions inspector and Quick Insert logger header renames via `updateSession`. Empty titles rejected.
+- **Touchpoints:** `SessionTitleEditor.tsx`, `SessionsView.tsx`, `QuickInsertView.tsx`
+
+### #135 — Inactive players stay in data but leave roster lists and averages
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** `status: 'inactive'` hides the player from live lists, rankings, percentile pools, and team averages. Record + logs kept; Players → Inactive can reactivate.
+- **Touchpoints:** `playerStatus.ts`, `scoring.ts`, `PlayersView.tsx`, `ComplianceBoardView.tsx`, `EquipmentConfigPanel.tsx`
+
+### #136 — Player grade plus birth year instead of age
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** `age` → `birthYear` via schema **v13**; optional grade 9–12 (Freshman–Senior). CSV accepts legacy `age` column.
+- **Touchpoints:** `playerDemographics.ts`, `013_player_birth_year_grade.ts`, `PlayersView.tsx`, `playerCsv.ts`
+
+### #137 — Fit rankings print sheet on one page
+- **Status:** implemented
+- **Notes:** Letter sheet is a fixed 8.5×11in box; type/padding tighten with roster size; 23+ players go two (or three) columns; leftover overflow scales to fit. Cut lines unchanged.
+- **Touchpoints:** `src/utils/rankingsPrint.ts`, `src/utils/rankingsPrint.test.ts`
 
 **Suggested PR Closes:**
 ```
-Closes #131
+Closes #133
+Closes #135
+Closes #136
+Closes #137
 ```
 
 ## Still open (this release)
@@ -45,11 +63,13 @@ _(none)_
 - Grade Check default-cleared shipped via [#126](https://github.com/dpromero15/sop-pt/pull/126) (`Closes #125`).
 - Rankings print + unlabeled breakouts shipped via [#128](https://github.com/dpromero15/sop-pt/pull/128) (`Closes #127`).
 - Manual Adjusted ineligible shipped via [#130](https://github.com/dpromero15/sop-pt/pull/130) (`Closes #129`).
+- Session logger cockpit shipped via [#132](https://github.com/dpromero15/sop-pt/pull/132) (`Closes #131`).
 - Calculated fields catalog cleared in schema **v8**; prefer metric `aggregationMode: 'average'`.
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing).
 - Ghost categories: schema **v10** (`010_prune_ghost_categories`).
 - Soft delete: schema **v11** (`011_soft_delete_fields`).
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
+- Player birth year + grade: schema **v13** (`013_player_birth_year_grade`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (220 tests) 2026-08-13 — #131.
+- **QA:** `npm run lint` + `npm test` (236 tests) 2026-08-13 — #133 #135 #136 #137.

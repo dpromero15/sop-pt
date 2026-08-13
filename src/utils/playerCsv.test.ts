@@ -17,8 +17,8 @@ describe('playerCsv', () => {
   it('parses valid rows with defaults', () => {
     const csv = [
       PLAYER_CSV_HEADERS.join(','),
-      'Jamie Doe,7,ST,,,',
-      'Sam Lee,11,CM,Left,16,,Captain',
+      'Jamie Doe,7,ST,,,,',
+      'Sam Lee,11,CM,Left,2010,11,,Captain',
     ].join('\n');
 
     const result = parseAndValidatePlayerCsv(csv, new Set());
@@ -37,10 +37,19 @@ describe('playerCsv', () => {
       jerseyNumber: 11,
       position: 'CM',
       preferredFoot: 'Left',
-      age: 16,
+      birthYear: 2010,
+      grade: 11,
       notes: 'Captain',
       status: 'active',
     });
+  });
+
+  it('accepts a legacy age column as birthYear', () => {
+    const csv = ['name,jerseyNumber,position,age', 'Pat,8,ST,15'].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set());
+    expect(result.ok).toHaveLength(1);
+    expect(result.ok[0].birthYear).toBe(new Date().getFullYear() - 15);
+    expect(result.ok[0].grade).toBeUndefined();
   });
 
   it('skips duplicate jersey numbers and invalid positions', () => {

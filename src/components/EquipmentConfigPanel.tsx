@@ -4,6 +4,7 @@ import type { EquipmentGroup, EquipmentItem, Player } from '../types';
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
 import { isEligibleForEquipment } from '../utils/complianceConsequences';
+import { rosterPlayers } from '../utils/playerStatus';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 
 interface EquipmentConfigPanelProps {
@@ -44,19 +45,21 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
   const playerName = (id?: string) =>
     players.find((p) => p.id === id)?.name ?? 'Unknown';
 
+  const assignablePlayers = useMemo(() => rosterPlayers(players), [players]);
+
   const equipmentOkByPlayer = useMemo(() => {
     const reqs = StorageService.getComplianceRequirements();
     const compliance = StorageService.getPlayerCompliance();
     return new Map(
-      players.map((p) => [
+      assignablePlayers.map((p) => [
         p.id,
         isEligibleForEquipment(p.id, reqs, compliance),
       ]),
     );
-  }, [players]);
+  }, [assignablePlayers]);
 
   const firstEquipmentEligibleId =
-    players.find((p) => equipmentOkByPlayer.get(p.id))?.id ?? '';
+    assignablePlayers.find((p) => equipmentOkByPlayer.get(p.id))?.id ?? '';
 
   const handleAddGroup = () => {
     const name = groupName.trim();
@@ -273,7 +276,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
                 onChange={(e) => setAssignPlayerId(e.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               >
-                {players.map((p) => {
+                {assignablePlayers.map((p) => {
                   const ok = equipmentOkByPlayer.get(p.id) === true;
                   return (
                     <option key={p.id} value={p.id} disabled={!ok}>

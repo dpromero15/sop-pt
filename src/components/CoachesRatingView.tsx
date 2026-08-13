@@ -152,7 +152,8 @@ const RankRow: React.FC<RankRowProps> = ({
                 </strong>
               </span>
               <span>Foot: {player.preferredFoot}</span>
-              {player.age != null && <span>Age {player.age}</span>}
+              {player.grade != null && <span>Gr {player.grade}</span>}
+              {player.birthYear != null && <span>Born {player.birthYear}</span>}
               {ranking?.recentTrend && ranking.recentTrend !== 'stable' && (
                 <span
                   className={

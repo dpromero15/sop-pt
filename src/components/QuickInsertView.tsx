@@ -37,6 +37,8 @@ import { AttendanceMaintenanceList } from './logger/AttendanceMaintenanceList';
 import { PlayerScoreCard } from './logger/PlayerScoreCard';
 import { DenseScoreEditor } from './logger/DenseScoreEditor';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
+import { SessionTitleEditor } from './logger/SessionTitleEditor';
+import { activePlayers as selectActivePlayers } from '../utils/playerStatus';
 import { flushNow } from '../services/storage/cloudSync';
 
 type WorkflowStep = 'plan' | 'attendance' | 'score' | 'summary';
@@ -82,7 +84,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
   const openSessions = useMemo(() => filterOpenSessions(sessions), [sessions]);
   const selectedSession = openSessions.find((s) => s.id === selectedSessionId) ?? null;
   const activePlayers = useMemo(
-    () => players.filter((p) => p.status === 'active'),
+    () => selectActivePlayers(players),
     [players],
   );
   const activePlayerIds = useMemo(() => activePlayers.map((p) => p.id), [activePlayers]);
@@ -465,9 +467,18 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
               <Zap className="h-3.5 w-3.5 shrink-0" />
               Session logger
             </div>
-            <p className="truncate text-sm font-bold text-slate-50">
-              {selectedSession?.title ?? 'Sideline'}
-            </p>
+            {selectedSession ? (
+              <SessionTitleEditor
+                title={selectedSession.title}
+                size="sm"
+                onSave={(title) => {
+                  StorageService.updateSession({ ...selectedSession, title });
+                  onRefreshData();
+                }}
+              />
+            ) : (
+              <p className="truncate text-sm font-bold text-slate-50">Sideline</p>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
             <SaveAndSyncButton

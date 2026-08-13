@@ -124,6 +124,11 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   <span className="px-2.5 py-1 rounded-xl bg-emerald-500/20 text-emerald-400 font-black text-sm border border-emerald-500/30">
                     #{player.jerseyNumber}
                   </span>
+                  {player.status === 'inactive' && (
+                    <span className="px-2 py-0.5 rounded-lg bg-slate-700/80 text-slate-300 text-[11px] font-bold border border-slate-600">
+                      Inactive
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 mt-2">
@@ -133,9 +138,14 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
                     Foot: {player.preferredFoot}
                   </span>
-                  {player.age && (
+                  {player.grade != null && (
                     <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
-                      Age: {player.age}
+                      Grade {player.grade}
+                    </span>
+                  )}
+                  {player.birthYear != null && (
+                    <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
+                      Born {player.birthYear}
                     </span>
                   )}
                 </div>

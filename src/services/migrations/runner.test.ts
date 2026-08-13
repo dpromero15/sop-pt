@@ -537,4 +537,39 @@ describe('runLocalMigrations', () => {
       scoped.some((r: { id: string }) => r.id === 'req_chssaa_policy'),
     ).toBe(true);
   });
+
+  it('maps player age to birthYear via v13', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(12));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const asOf = new Date().getFullYear();
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', name: 'Ada', age: 16, grade: 11 },
+        { id: 'p2', name: 'Bea', birthYear: 2009, age: 15 },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const players = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+    );
+    expect(players.find((p: { id: string }) => p.id === 'p1')).toMatchObject({
+      birthYear: asOf - 16,
+      grade: 11,
+    });
+    expect(players.find((p: { id: string }) => p.id === 'p1').age).toBeUndefined();
+    expect(players.find((p: { id: string }) => p.id === 'p2')).toMatchObject({
+      birthYear: 2009,
+    });
+    expect(players.find((p: { id: string }) => p.id === 'p2').age).toBeUndefined();
+  });
 });

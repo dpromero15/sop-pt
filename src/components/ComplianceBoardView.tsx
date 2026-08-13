@@ -22,6 +22,7 @@ import {
   consequenceLabelsForRequirement,
   playerConsequenceBadges,
 } from '../utils/complianceConsequences';
+import { rosterPlayers } from '../utils/playerStatus';
 
 type ComplianceMode = 'triage' | 'board';
 type IncompleteScope = 'blocking' | 'all';
@@ -54,7 +55,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
   );
 
   const sortedPlayers = useMemo(() => {
-    const next = [...players];
+    const next = rosterPlayers(players);
     next.sort((a, b) => {
       if (playerSort === 'jersey') {
         const jersey = a.jerseyNumber - b.jerseyNumber;

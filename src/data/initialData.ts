@@ -254,7 +254,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CAM',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(0),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Team captain, excellent playmaker and vision.'
@@ -266,7 +267,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'RW',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(1),
-    age: 16,
+    birthYear: 2010,
+    grade: 11,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Blazing speed on the wing, sharp crossing.'
@@ -278,7 +280,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'ST',
     preferredFoot: 'Left',
     avatarUrl: defaultAvatarFor(2),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-09-01',
     status: 'active',
     notes: 'Clinical finisher inside the 18-yard box.'
@@ -290,7 +293,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CB',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(3),
-    age: 16,
+    birthYear: 2010,
+    grade: 11,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Strong in aerial duels, great defensive organizer.'
@@ -302,7 +306,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'GK',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(4),
-    age: 16,
+    birthYear: 2010,
+    grade: 11,
     joinedDate: '2025-08-20',
     status: 'active',
     notes: 'Quick reflexes, solid distribution.'
@@ -314,7 +319,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CDM',
     preferredFoot: 'Both',
     avatarUrl: defaultAvatarFor(5),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'High work rate, intercepts key opposition passes.'
@@ -326,7 +332,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'LW',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(6),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-08-18',
     status: 'active',
     notes: 'Direct dribbler, cuts inside with high power.'
@@ -338,7 +345,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CM',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(7),
-    age: 16,
+    birthYear: 2010,
+    grade: 11,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Box-to-box midfielder, high stamina.'
@@ -350,7 +358,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'LB',
     preferredFoot: 'Left',
     avatarUrl: defaultAvatarFor(8),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-08-25',
     status: 'active',
     notes: 'Solid overlapping runs, reliable 1v1 defender.'
@@ -362,7 +371,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'RB',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(9),
-    age: 16,
+    birthYear: 2010,
+    grade: 11,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Tough tackler, discipline is improving.'
@@ -374,7 +384,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CB',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(10),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-09-10',
     status: 'active',
     notes: 'Great positioning and composure under pressure.'
@@ -386,7 +397,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'ST',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(11),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-10-01',
     status: 'active',
     notes: 'Super-sub forward, rapid acceleration.'
@@ -398,7 +410,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'CM',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(12),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-09-01',
     status: 'injured',
     notes: 'Ankle sprain in recovery, doing light rehab.'
@@ -410,7 +423,8 @@ export const INITIAL_PLAYERS: Player[] = [
     position: 'GK',
     preferredFoot: 'Left',
     avatarUrl: defaultAvatarFor(13),
-    age: 15,
+    birthYear: 2011,
+    grade: 10,
     joinedDate: '2025-08-15',
     status: 'active',
     notes: 'Backup keeper, vocal leader on bench.'
