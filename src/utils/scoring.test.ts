@@ -686,4 +686,76 @@ describe('calculatePlayerRankings', () => {
     // Only speed category contributes (50% weight with a score)
     expect(ranking.totalScore).toBe(100);
   });
+
+  it('scores attendance into Statistical and Adjusted even if the label list omitted it', () => {
+    const attFormula: ScoringFormulaConfig = {
+      id: 'f-att-only',
+      name: 'Attendance',
+      weights: [{ labelId: 'attendance', weightPercent: 20, enabled: true }],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        id: 'e2',
+        sessionId: 's2',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 50,
+        timestamp: '2026-01-02T00:00:00.000Z',
+      },
+    ];
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      metrics,
+      labels.filter((l) => l.id !== 'attendance'),
+      attFormula,
+    );
+
+    expect(ranking.attendanceRate).toBe(75);
+    expect(ranking.labelScores.attendance.score).toBe(75);
+    expect(ranking.labelScores.attendance.adjustedScore).toBe(75);
+    expect(ranking.labelScores.attendance.entryCount).toBe(1);
+    expect(ranking.totalScore).toBe(75);
+    expect(ranking.adjustedTotalScore).toBe(75);
+    expect(ranking.overallRank).toBe(1);
+    expect(ranking.adjustedRank).toBe(1);
+  });
+
+  it('scores attendance entries when the metrics list has no attendance row', () => {
+    const attFormula: ScoringFormulaConfig = {
+      id: 'f-att-only',
+      name: 'Attendance',
+      weights: [{ labelId: 'attendance', weightPercent: 20, enabled: true }],
+    };
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_attendance',
+        value: 100,
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    ];
+    const [ranking] = calculatePlayerRankings(
+      players,
+      entries,
+      metrics.filter((m) => m.type !== 'attendance'),
+      labels,
+      attFormula,
+    );
+
+    expect(ranking.attendanceRate).toBe(100);
+    expect(ranking.labelScores.attendance.score).toBe(100);
+    expect(ranking.totalScore).toBe(100);
+    expect(ranking.adjustedTotalScore).toBe(100);
+  });
 });

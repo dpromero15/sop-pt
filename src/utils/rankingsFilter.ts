@@ -83,7 +83,9 @@ function metricAggregatedValue(
   const detail = ranking.labelScores[labelId]?.metrics.find(
     (m) => m.metricId === metricId,
   );
-  return detail?.aggregatedValue ?? null;
+  if (detail?.aggregatedValue != null) return detail.aggregatedValue;
+  if (metricId === 'm_attendance') return ranking.attendanceRate;
+  return null;
 }
 
 /** Standing / coaches sum for the active total mode. */
@@ -117,8 +119,11 @@ export function labelScoreForMode(
   totalMode: RankingsTotalMode,
 ): number | null {
   const ls = ranking.labelScores[labelId];
-  if (!ls) return null;
-  return totalMode === 'adjusted' ? ls.adjustedScore : ls.score;
+  const fromLabel =
+    totalMode === 'adjusted' ? ls?.adjustedScore : ls?.score;
+  if (fromLabel != null) return fromLabel;
+  if (labelId === 'attendance') return ranking.attendanceRate;
+  return null;
 }
 
 /** Whether total sort treats higher values as better (false for coaches ordinal sums). */
@@ -172,6 +177,75 @@ export function isUnscoredForRankMode(
   }
 
   return totalForMode(ranking, totalMode) === null;
+}
+
+/**
+ * Whether the current Rankings filter has anything to show
+ * (Statistical / Adjusted include attendance-only logs).
+ */
+export function scopeHasRankingsData(opts: {
+  rankings: PlayerRanking[];
+  hasLoggedData: boolean;
+  sortBy: RankingsSortMode;
+  selectedLabelId: string | 'all';
+  selectedMetricId: RankingsMetricSelection;
+  metrics: MetricDefinition[];
+  totalMode: RankingsTotalMode;
+  individualCoachOrdinals?: Map<string, number> | null;
+}): boolean {
+  const {
+    rankings,
+    hasLoggedData,
+    sortBy,
+    selectedLabelId,
+    selectedMetricId,
+    metrics,
+    totalMode,
+    individualCoachOrdinals,
+  } = opts;
+
+  if (totalMode === 'coaches') {
+    if (individualCoachOrdinals && individualCoachOrdinals.size > 0) {
+      return true;
+    }
+    return rankings.some((r) => r.coachesTotalSum !== null);
+  }
+
+  if (!hasLoggedData) return false;
+
+  if (sortBy === 'metric' && selectedMetricId !== 'none') {
+    const metric = metrics.find((m) => m.id === selectedMetricId);
+    if (!metric) return false;
+    const primaryId = metricPrimaryLabelId(metric);
+    const isAttendance =
+      metric.type === 'attendance' || metric.id === 'm_attendance';
+    return rankings.some((r) => {
+      if (metricAggregatedValue(r, metric.id, primaryId) != null) return true;
+      return isAttendance && r.attendanceRate != null;
+    });
+  }
+
+  if (selectedLabelId !== 'all') {
+    if (selectedLabelId === 'attendance') {
+      return rankings.some(
+        (r) =>
+          r.attendanceRate != null ||
+          (r.labelScores.attendance?.entryCount ?? 0) > 0 ||
+          r.labelScores.attendance?.score != null ||
+          r.labelScores.attendance?.adjustedScore != null,
+      );
+    }
+    if (totalMode === 'adjusted') {
+      return rankings.some(
+        (r) => r.labelScores[selectedLabelId]?.adjustedScore != null,
+      );
+    }
+    return rankings.some(
+      (r) => (r.labelScores[selectedLabelId]?.entryCount ?? 0) > 0,
+    );
+  }
+
+  return rankings.some(playerHasLoggedStanding);
 }
 
 export function compareRankings(

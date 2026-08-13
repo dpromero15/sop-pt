@@ -27,11 +27,17 @@ _(none)_
 - **Notes:** Board shows when attendance exists even if formula total is null. Coaches ballot auto-saves on reorder + flushNow. Sessions empty copy calls out sync wipe.
 - **Touchpoints:** `rankingsFilter.ts`, `RankingsView.tsx`, `CoachesRatingView.tsx`, `SessionsView.tsx`
 
+### #123 — Attendance still empty on Statistical Rank and Adjusted Rank
+- **Status:** implemented
+- **Notes:** Scoring always includes the Attendance label/metric so session logs feed Statistical + Adjusted standing. Attendance category / metric views treat `attendanceRate` as data (not empty-cat).
+- **Touchpoints:** `scoring.ts`, `rankingsFilter.ts`, `RankingsView.tsx`
+
 **Suggested PR Closes:**
 ```
 Closes #119
 Closes #120
 Closes #121
+Closes #123
 ```
 
 ## Still open (this release)
@@ -59,4 +65,4 @@ _(none)_
 - Compliance consequences: schema **v12** (`012_compliance_consequences`).
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
-- **QA:** `npm run lint` + `npm test` (202 tests) 2026-08-12 — #117/#119/#120/#121.
+- **QA:** `npm run lint` + `npm test` (208 tests) 2026-08-12 — #119/#120/#121/#123.
