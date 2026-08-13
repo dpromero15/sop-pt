@@ -29,12 +29,16 @@ import {
   applyEligibilityToAdjustedRanks,
   completeFromChecked,
   eligiblePlayerIdSet,
-  isEligibleToPlay,
-  isEligibleToPractice,
   isRequirementChecked,
   missingBlockingRequirements,
-  missingPracticeBlockingRequirements,
 } from '../utils/eligibility';
+import {
+  CONSEQUENCE_BADGE_CLASS,
+  CONSEQUENCE_LABEL,
+  consequenceLabelsForRequirement,
+  playerConsequenceBadges,
+  polarityHint,
+} from '../utils/complianceConsequences';
 import {
   buildPlayerCsvTemplate,
   downloadCsv,
@@ -470,22 +474,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPlayers.map(player => {
           const rInfo = rankingMap.get(player.id);
-          const eligible = isEligibleToPlay(
-            player.id,
-            complianceRequirements,
-            playerCompliance,
-          );
-          const practiceEligible = isEligibleToPractice(
-            player.id,
-            complianceRequirements,
-            playerCompliance,
-          );
           const missing = missingBlockingRequirements(
             player.id,
             complianceRequirements,
             playerCompliance,
           );
-          const missingPractice = missingPracticeBlockingRequirements(
+          const consequenceBadges = playerConsequenceBadges(
             player.id,
             complianceRequirements,
             playerCompliance,
@@ -516,22 +510,15 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         <span className="text-slate-400 text-xs font-medium">
                           {player.preferredFoot} Foot
                         </span>
-                        {!eligible && (
+                        {consequenceBadges.map((key) => (
                           <span
-                            className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 text-[11px] font-bold border border-rose-500/30"
+                            key={key}
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold border ${CONSEQUENCE_BADGE_CLASS[key]}`}
                             title={missing.map((m) => m.name).join(', ')}
                           >
-                            Ineligible
+                            {CONSEQUENCE_LABEL[key]}
                           </span>
-                        )}
-                        {!practiceEligible && (
-                          <span
-                            className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[11px] font-bold border border-amber-500/30"
-                            title={missingPractice.map((m) => m.name).join(', ')}
-                          >
-                            No practice
-                          </span>
-                        )}
+                        ))}
                       </div>
                     </div>
                   </div>
@@ -778,16 +765,17 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                       >
                         <span className="min-w-0">
                           {req.name}
-                          {req.blocksPlay && (
-                            <span className="ml-1.5 text-[10px] uppercase text-rose-300">
-                              blocks play
+                          {consequenceLabelsForRequirement(req).map((label) => (
+                            <span
+                              key={label}
+                              className="ml-1.5 text-[10px] uppercase text-rose-300"
+                            >
+                              {label}
                             </span>
-                          )}
-                          {req.blocksPractice && (
-                            <span className="ml-1.5 text-[10px] uppercase text-amber-300">
-                              blocks practice
-                            </span>
-                          )}
+                          ))}
+                          <span className="block text-[10px] text-slate-500 font-normal">
+                            {polarityHint(req)}
+                          </span>
                         </span>
                         <input
                           type="checkbox"

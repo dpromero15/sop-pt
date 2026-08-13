@@ -1,19 +1,37 @@
 import React, { useState } from 'react';
-import { ClipboardList, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ClipboardList, Pencil, Plus, Trash2, Sparkles } from 'lucide-react';
 import type { ComplianceRequirement, RequirementKind } from '../types';
 import { StorageService } from '../services/storage';
+import { isFlagRequirement } from '../utils/eligibility';
+import {
+  consequenceLabelsForRequirement,
+  mergeRecommendedCompliance,
+  polarityHint,
+} from '../utils/complianceConsequences';
 
 interface ComplianceConfigPanelProps {
   requirements: ComplianceRequirement[];
   onRefreshData: () => void;
 }
 
-const KIND_OPTIONS: { value: RequirementKind; label: string }[] = [
-  { value: 'paperwork', label: 'Paperwork' },
-  { value: 'fee', label: 'Fee' },
-  { value: 'eligibility', label: 'Eligibility' },
-  { value: 'disciplinary', label: 'Disciplinary' },
-  { value: 'other', label: 'Other' },
+const KIND_OPTIONS: { value: RequirementKind; label: string; hint: string }[] = [
+  {
+    value: 'paperwork',
+    label: 'Paperwork',
+    hint: 'Check when the form is on file.',
+  },
+  { value: 'fee', label: 'Fee', hint: 'Check when the fee is paid.' },
+  {
+    value: 'eligibility',
+    label: 'Eligibility / grade check',
+    hint: 'Check to FLAG (ineligible). Uncheck when cleared.',
+  },
+  {
+    value: 'disciplinary',
+    label: 'Disciplinary',
+    hint: 'Check to FLAG (sit-out / card). Uncheck after served.',
+  },
+  { value: 'other', label: 'Other', hint: 'Check when complete.' },
 ];
 
 export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
@@ -26,6 +44,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
   const [kind, setKind] = useState<RequirementKind>('paperwork');
   const [blocksPlay, setBlocksPlay] = useState(true);
   const [blocksPractice, setBlocksPractice] = useState(false);
+  const [blocksEquipment, setBlocksEquipment] = useState(false);
   const [description, setDescription] = useState('');
 
   const openAdd = () => {
@@ -34,6 +53,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     setKind('paperwork');
     setBlocksPlay(true);
     setBlocksPractice(false);
+    setBlocksEquipment(false);
     setDescription('');
     setIsOpen(true);
   };
@@ -44,6 +64,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     setKind(req.kind);
     setBlocksPlay(req.blocksPlay);
     setBlocksPractice(req.blocksPractice);
+    setBlocksEquipment(req.blocksEquipment === true);
     setDescription(req.description ?? '');
     setIsOpen(true);
   };
@@ -51,14 +72,18 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
   const handleSave = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const payload = {
+      name: trimmed,
+      kind,
+      blocksPlay,
+      blocksPractice,
+      blocksEquipment,
+      description: description.trim() || undefined,
+    };
     if (editing) {
       StorageService.updateComplianceRequirement({
         ...editing,
-        name: trimmed,
-        kind,
-        blocksPlay,
-        blocksPractice,
-        description: description.trim() || undefined,
+        ...payload,
       });
     } else {
       const maxOrder = requirements.reduce(
@@ -66,11 +91,7 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
         0,
       );
       StorageService.addComplianceRequirement({
-        name: trimmed,
-        kind,
-        blocksPlay,
-        blocksPractice,
-        description: description.trim() || undefined,
+        ...payload,
         sortOrder: maxOrder + 1,
       });
     }
@@ -86,29 +107,63 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
     onRefreshData();
   };
 
+  const handleApplyRecommended = () => {
+    if (
+      !confirm(
+        'Apply the recommended CRHS set (Physical, Grade Check, CRHS Policy, CHSSAA Policy, Team fee)? Existing items with those ids are updated; extra items such as red-card sit-out are kept.',
+      )
+    ) {
+      return;
+    }
+    StorageService.saveComplianceRequirements(
+      mergeRecommendedCompliance(requirements),
+    );
+    onRefreshData();
+  };
+
+  const kindMeta = KIND_OPTIONS.find((o) => o.value === kind);
+  const previewReq: ComplianceRequirement = {
+    id: 'preview',
+    name: name || 'Requirement',
+    kind,
+    blocksPlay,
+    blocksPractice,
+    blocksEquipment,
+    sortOrder: 0,
+  };
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-slate-100 font-semibold">
           <ClipboardList className="w-5 h-5 text-amber-400" />
-          <span>Compliance Requirements</span>
+          <span>Compliance manager</span>
         </div>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-sm font-semibold px-3 py-1.5"
-        >
-          <Plus className="w-4 h-4" />
-          Add
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleApplyRecommended}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-950 hover:bg-slate-800 text-slate-200 text-sm font-semibold px-3 py-1.5"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            Recommended set
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 text-sm font-semibold px-3 py-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            Add
+          </button>
+        </div>
       </div>
       <p className="text-sm text-slate-400">
-        Define paperwork, fees, eligibility, and disciplinary items. Toggle{' '}
-        <span className="text-slate-200">Blocks play</span> /{' '}
-        <span className="text-slate-200">Blocks practice</span> so incomplete
-        items remove a player from match eligibility or practice. Paperwork and
-        fees: check when done. Eligibility and red-card sit-out: check to raise
-        a flag; uncheck after they have served.
+        Each item has a <span className="text-slate-200">kind</span> (how the
+        checkbox works) and <span className="text-slate-200">consequences</span>{' '}
+        (what happens when it is incomplete or flagged). Eligibility / grade
+        check and disciplinary: check to raise a flag. Paperwork and fees: check
+        when done.
       </p>
       <ul className="space-y-2">
         {requirements.map((req) => (
@@ -122,20 +177,19 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
                 <span className="text-[11px] uppercase tracking-wide text-slate-500 border border-slate-700 rounded px-1.5 py-0.5">
                   {req.kind}
                 </span>
-                {req.blocksPlay && (
-                  <span className="text-[11px] uppercase tracking-wide text-rose-300 border border-rose-500/40 rounded px-1.5 py-0.5">
-                    Blocks play
+                {consequenceLabelsForRequirement(req).map((label) => (
+                  <span
+                    key={label}
+                    className="text-[11px] uppercase tracking-wide text-rose-200 border border-rose-500/40 rounded px-1.5 py-0.5"
+                  >
+                    {label}
                   </span>
-                )}
-                {req.blocksPractice && (
-                  <span className="text-[11px] uppercase tracking-wide text-amber-300 border border-amber-500/40 rounded px-1.5 py-0.5">
-                    Blocks practice
-                  </span>
-                )}
+                ))}
               </div>
-              {req.description && (
-                <p className="text-xs text-slate-500 mt-1">{req.description}</p>
-              )}
+              <p className="text-xs text-slate-500 mt-1">
+                {polarityHint(req)}
+                {req.description ? ` ${req.description}` : ''}
+              </p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
               <button
@@ -173,17 +227,18 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                placeholder="e.g. Grade Check"
                 className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs text-slate-400">Kind</span>
+              <span className="text-xs text-slate-400">Kind (checkbox meaning)</span>
               <select
                 value={kind}
                 onChange={(e) => {
                   const next = e.target.value as RequirementKind;
                   setKind(next);
-                  if (next === 'disciplinary' && !editing) {
+                  if (next === 'eligibility' || next === 'disciplinary') {
                     setBlocksPlay(true);
                     setBlocksPractice(false);
                   }
@@ -196,25 +251,44 @@ export const ComplianceConfigPanel: React.FC<ComplianceConfigPanelProps> = ({
                   </option>
                 ))}
               </select>
+              <span className="text-xs text-amber-200/90">{kindMeta?.hint}</span>
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={blocksPlay}
-                onChange={(e) => setBlocksPlay(e.target.checked)}
-                className="rounded border-slate-600"
-              />
-              Blocks play when incomplete
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-200">
-              <input
-                type="checkbox"
-                checked={blocksPractice}
-                onChange={(e) => setBlocksPractice(e.target.checked)}
-                className="rounded border-slate-600"
-              />
-              Blocks practice when incomplete
-            </label>
+            <fieldset className="space-y-2">
+              <legend className="text-xs text-slate-400">
+                When incomplete / flagged
+              </legend>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={blocksPlay}
+                  onChange={(e) => setBlocksPlay(e.target.checked)}
+                  className="rounded border-slate-600"
+                />
+                {kind === 'eligibility' ? 'Ineligible' : 'No play'}
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={blocksPractice}
+                  onChange={(e) => setBlocksPractice(e.target.checked)}
+                  className="rounded border-slate-600"
+                />
+                No practice
+              </label>
+              <label className="flex items-center gap-2 text-sm text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={blocksEquipment}
+                  onChange={(e) => setBlocksEquipment(e.target.checked)}
+                  className="rounded border-slate-600"
+                />
+                No equipment
+              </label>
+              <p className="text-[11px] text-slate-500">
+                Preview: {consequenceLabelsForRequirement(previewReq).join(', ') || 'no block'}
+                {isFlagRequirement(previewReq) ? ' · flag checkbox' : ' · complete checkbox'}
+              </p>
+            </fieldset>
             <label className="block space-y-1">
               <span className="text-xs text-slate-400">Description</span>
               <textarea

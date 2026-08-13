@@ -129,10 +129,12 @@ export interface ComplianceRequirement {
   id: string;
   name: string;
   kind: RequirementKind;
-  /** Incomplete + blocksPlay ⇒ ineligible for Adjusted / specialty ranks. */
+  /** Incomplete + blocksPlay ⇒ no match play (eligibility kind shows Ineligible). */
   blocksPlay: boolean;
   /** Incomplete + blocksPractice ⇒ flagged as unable to attend practice. */
   blocksPractice: boolean;
+  /** Incomplete + blocksEquipment ⇒ cannot be issued kit. */
+  blocksEquipment?: boolean;
   description?: string;
   sortOrder: number;
 }

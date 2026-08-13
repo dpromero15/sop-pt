@@ -171,7 +171,12 @@ describe('runLocalMigrations', () => {
       )!,
     );
     expect(scoped.find((r: { id: string }) => r.id === 'req_sports_physical'))
-      .toMatchObject({ blocksPractice: false });
+      .toMatchObject({
+        name: 'Physical',
+        blocksPlay: false,
+        blocksPractice: true,
+        blocksEquipment: false,
+      });
     expect(
       scoped.some((r: { id: string }) => r.id === 'req_red_card_sitout'),
     ).toBe(true);
@@ -453,5 +458,83 @@ describe('runLocalMigrations', () => {
       store.getItem(scopedStorageKey('t1', STORAGE_KEYS.SESSIONS))!,
     );
     expect(sessions[0].deletedAt).toBeUndefined();
+  });
+
+  it('applies CRHS consequences and Grade Check eligibility via v12', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(11));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      STORAGE_KEYS.TEAM,
+      JSON.stringify({ id: 't1', name: 'Test FC' }),
+    );
+    const legacyReqs = [
+      {
+        id: 'req_sports_physical',
+        name: 'Sports Physical',
+        kind: 'paperwork',
+        blocksPlay: true,
+        blocksPractice: true,
+        sortOrder: 1,
+      },
+      {
+        id: 'req_grade_check',
+        name: 'Grade Check',
+        kind: 'paperwork',
+        blocksPlay: true,
+        blocksPractice: false,
+        sortOrder: 2,
+      },
+      {
+        id: 'req_season_fee',
+        name: 'Season Fee',
+        kind: 'fee',
+        blocksPlay: true,
+        blocksPractice: false,
+        sortOrder: 3,
+      },
+    ];
+    store.setItem(
+      STORAGE_KEYS.COMPLIANCE_REQUIREMENTS,
+      JSON.stringify(legacyReqs),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.COMPLIANCE_REQUIREMENTS),
+      JSON.stringify(legacyReqs),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const scoped = JSON.parse(
+      store.getItem(
+        scopedStorageKey('t1', STORAGE_KEYS.COMPLIANCE_REQUIREMENTS),
+      )!,
+    );
+    expect(scoped.find((r: { id: string }) => r.id === 'req_sports_physical'))
+      .toMatchObject({
+        name: 'Physical',
+        blocksPlay: false,
+        blocksPractice: true,
+        blocksEquipment: false,
+      });
+    expect(scoped.find((r: { id: string }) => r.id === 'req_grade_check'))
+      .toMatchObject({
+        kind: 'eligibility',
+        blocksPlay: true,
+      });
+    expect(scoped.find((r: { id: string }) => r.id === 'req_season_fee'))
+      .toMatchObject({
+        name: 'Team fee',
+        blocksPlay: true,
+        blocksEquipment: true,
+      });
+    expect(scoped.some((r: { id: string }) => r.id === 'req_crhs_policy')).toBe(
+      true,
+    );
+    expect(
+      scoped.some((r: { id: string }) => r.id === 'req_chssaa_policy'),
+    ).toBe(true);
   });
 });
