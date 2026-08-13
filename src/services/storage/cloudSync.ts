@@ -3,6 +3,7 @@ import { StorageService } from '../storage';
 import { ApiAdapter, type ConfigName } from './apiAdapter';
 import { getApiBaseUrl, isForceLocal } from './connectionStatus';
 import { STORAGE_KEYS } from './storageKeys';
+import { __resetSyncLogForTests, appendSyncLog } from './syncLog';
 import type { TeamSnapshot } from './types';
 
 export type SyncUiStatus =
@@ -72,9 +73,17 @@ let flushing = false;
 let startedBrowserHooks = false;
 
 function emit(next: SyncUiStatus, nextDetail?: string) {
+  const changed = next !== status || nextDetail !== detail;
   status = next;
   detail = nextDetail;
   listeners.forEach((fn) => fn(status, detail));
+  if (!changed) return;
+  const level =
+    next === 'error' ? 'error' : next === 'offline' ? 'warn' : 'info';
+  appendSyncLog(level, nextDetail || next, {
+    status: next,
+    teamId: boundTeamId,
+  });
 }
 
 export function getCloudSyncStatus(): {
@@ -82,6 +91,12 @@ export function getCloudSyncStatus(): {
   detail?: string;
 } {
   return { status, detail };
+}
+
+export function getPendingSyncBuckets(teamId?: string): SyncBucket[] {
+  const id = teamId ?? boundTeamId;
+  if (!id) return [];
+  return [...dirtyFor(id)];
 }
 
 export function subscribeCloudSync(listener: Listener): () => void {
@@ -123,11 +138,22 @@ function dirtyFor(teamId: string): Set<SyncBucket> {
 function markDirty(teamId: string, bucket: SyncBucket) {
   const all = readOutbox();
   const set = new Set(all[teamId] ?? []);
+  const already = set.has(bucket);
   set.add(bucket);
   all[teamId] = [...set];
   writeOutbox(all);
   if (status !== 'syncing' && status !== 'hydrating') {
     emit('pending');
+  }
+  if (flushing) {
+    if (!already) {
+      appendSyncLog('info', `Queued ${bucket} during flush`, {
+        buckets: [bucket],
+        teamId,
+        status: 'pending',
+      });
+    }
+    return;
   }
   const data = payloadFor(bucket, StorageService.getSnapshot());
   const emptySquad =
@@ -314,6 +340,11 @@ async function flushTeam(teamId: string): Promise<void> {
 
   flushing = true;
   emit('syncing');
+  appendSyncLog('info', `Flushing ${buckets.join(', ')}`, {
+    buckets,
+    teamId,
+    status: 'syncing',
+  });
   const api = new ApiAdapter(getApiBaseUrl());
   const snap = StorageService.getSnapshot();
   const done: SyncBucket[] = [];
@@ -336,7 +367,15 @@ async function flushTeam(teamId: string): Promise<void> {
     }
     clearDirty(teamId, done);
     backoffIdx = 0;
-    emit(dirtyFor(teamId).size > 0 ? 'pending' : 'synced');
+    const still = dirtyFor(teamId);
+    emit(still.size > 0 ? 'pending' : 'synced');
+    if (still.size > 0) {
+      appendSyncLog('info', `Flush done; still pending ${[...still].join(', ')}`, {
+        buckets: [...still],
+        teamId,
+        status: 'pending',
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Sync failed';
     emit(
@@ -353,6 +392,9 @@ async function flushTeam(teamId: string): Promise<void> {
     }, wait);
   } finally {
     flushing = false;
+    if (dirtyFor(teamId).size > 0 && status !== 'error' && status !== 'offline') {
+      scheduleFlushSoon();
+    }
   }
 }
 
@@ -418,7 +460,7 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
   StorageService.setTeamScope(teamId, { holdSeeds: cloudEnabled() });
 
   unsubStorage = StorageService.subscribe((key) => {
-    if (!key || !boundTeamId || flushing) return;
+    if (!key || !boundTeamId) return;
     const bucket = KEY_TO_BUCKET[key];
     if (bucket) markDirty(boundTeamId, bucket);
   });
@@ -516,6 +558,7 @@ export function stopCloudSync(): void {
 /** Test helper — not used in production UI. */
 export function __resetCloudSyncForTests(): void {
   stopCloudSync();
+  __resetSyncLogForTests();
   emit('local-only');
   backoffIdx = 0;
   flushing = false;

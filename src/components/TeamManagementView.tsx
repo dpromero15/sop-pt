@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Save, Shield } from 'lucide-react';
 import type { Team } from '../types';
 import { StorageService, pushTeamToCloud } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
 
 interface TeamManagementViewProps {
   onRefreshData: () => void;
@@ -26,6 +27,7 @@ export const TeamManagementView: React.FC<TeamManagementViewProps> = ({
     setSaving(true);
     try {
       StorageService.saveTeam(form);
+      await flushNow();
       try {
         await pushTeamToCloud();
       } catch {

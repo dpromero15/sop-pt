@@ -6,6 +6,7 @@ import type {
   PlayerComplianceState,
 } from '../types';
 import { StorageService } from '../services/storage';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 import {
   completeFromChecked,
   isFlagRequirement,
@@ -210,6 +211,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!readOnly && <SaveAndSyncButton compact />}
           <label className="inline-flex items-center gap-1.5 text-xs text-slate-400">
             <span className="sr-only">Sort players</span>
             <select

@@ -2,7 +2,9 @@ import React, { useMemo, useState } from 'react';
 import { Package, Plus, RotateCcw, Trash2, UserPlus } from 'lucide-react';
 import type { EquipmentGroup, EquipmentItem, Player } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
 import { isEligibleForEquipment } from '../utils/complianceConsequences';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 
 interface EquipmentConfigPanelProps {
   groups: EquipmentGroup[];
@@ -62,6 +64,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
     const g = StorageService.addEquipmentGroup({ name });
     setGroupName('');
     setSelectedGroupId(g.id);
+    void flushNow();
     onRefreshData();
   };
 
@@ -74,6 +77,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
       return;
     }
     StorageService.deleteEquipmentGroup(id);
+    void flushNow();
     onRefreshData();
   };
 
@@ -82,6 +86,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
     if (!label || !activeGroupId) return;
     StorageService.addEquipmentItem({ groupId: activeGroupId, label });
     setItemLabel('');
+    void flushNow();
     onRefreshData();
   };
 
@@ -98,14 +103,18 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
     StorageService.assignEquipmentItem(assignItemId, assignPlayerId);
     setAssignItemId(null);
     setAssignPlayerId('');
+    void flushNow();
     onRefreshData();
   };
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/40 p-5 space-y-4">
-      <div className="flex items-center gap-2 text-slate-100 font-semibold">
-        <Package className="w-5 h-5 text-sky-400" />
-        <span>Equipment Inventory</span>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-slate-100 font-semibold">
+          <Package className="w-5 h-5 text-sky-400" />
+          <span>Equipment Inventory</span>
+        </div>
+        <SaveAndSyncButton compact />
       </div>
       <p className="text-sm text-slate-400">
         Create groups of individual items, assign them to players, and return
@@ -220,6 +229,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
                       type="button"
                       onClick={() => {
                         StorageService.returnEquipmentItem(item.id);
+                        void flushNow();
                         onRefreshData();
                       }}
                       className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-amber-300 hover:bg-slate-800"
@@ -232,6 +242,7 @@ export const EquipmentConfigPanel: React.FC<EquipmentConfigPanelProps> = ({
                     type="button"
                     onClick={() => {
                       StorageService.deleteEquipmentItem(item.id);
+                      void flushNow();
                       onRefreshData();
                     }}
                     className="p-1.5 rounded-lg text-slate-500 hover:text-rose-300"

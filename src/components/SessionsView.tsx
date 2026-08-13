@@ -17,6 +17,7 @@ import { Session, SessionType, Player, MetricDefinition, MetricEntry } from '../
 import { StorageService } from '../services/storage';
 import { SessionMetricPlanner } from './logger/SessionMetricPlanner';
 import { defaultMetricIdsForSessionType } from '../utils/sessionMetrics';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 
 interface SessionsViewProps {
   sessions: Session[];
@@ -133,19 +134,24 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
             </p>
           </div>
 
-          {!readOnly && (
-          <button
-            onClick={() => {
-              setFormTitle('');
-              setFormMetricIds(defaultMetricIdsForSessionType(formType));
-              onOpenAddModal();
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-extrabold text-xs sm:text-sm transition-all active:scale-95 shrink-0 shadow-lg shadow-purple-500/20"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Create Session</span>
-          </button>
-          )}
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {!readOnly && (
+              <SaveAndSyncButton compact />
+            )}
+            {!readOnly && (
+            <button
+              onClick={() => {
+                setFormTitle('');
+                setFormMetricIds(defaultMetricIdsForSessionType(formType));
+                onOpenAddModal();
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-extrabold text-xs sm:text-sm transition-all active:scale-95 shadow-lg shadow-purple-500/20"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Create Session</span>
+            </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -290,10 +296,20 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                 </h4>
 
                 {activeSessionEntries.length === 0 ? (
-                  <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-8 text-center">
+                  <div className="bg-slate-950 border border-slate-800/80 rounded-xl p-8 text-center space-y-2">
                     <p className="text-slate-400 text-xs">
-                      No metrics logged yet for this session. Tap <strong>"Insert Data For Session"</strong> to record attendance, sprint times, or match stats!
+                      No entries stored for this session. Tap{' '}
+                      <strong>"Insert Data For Session"</strong> to record
+                      attendance (and any scores).
                     </p>
+                    {allEntries.length === 0 && sessions.length > 0 && (
+                      <p className="text-amber-200/90 text-[11px]">
+                        Sessions exist but this browser has zero metric entries.
+                        If you already took attendance, cloud sync may have
+                        overwritten local logs — tap the nav sync chip → Sync
+                        now, or log attendance again.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2 max-h-96 overflow-y-auto pr-1">

@@ -51,6 +51,7 @@ import {
   isUnscoredForRankMode,
   labelScoreForMode,
   metricsForCategory,
+  playerHasLoggedStanding,
   RankingsMetricSelection,
   RankingsSortMode,
   RankingsTotalMode,
@@ -60,6 +61,7 @@ import {
   totalForMode,
 } from '../utils/rankingsFilter';
 import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 
 const SPECIALTY_POSITIONS: PlayerPosition[] = [
   'GK',
@@ -429,10 +431,13 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     }
 
     if (totalMode === 'adjusted') {
-      return rankings.some((r) => r.adjustedTotalScore !== null);
+      return rankings.some(
+        (r) =>
+          r.adjustedTotalScore !== null || playerHasLoggedStanding(r),
+      );
     }
 
-    return rankings.some((r) => r.totalScore !== null);
+    return rankings.some(playerHasLoggedStanding);
   }, [
     hasLoggedData,
     rankings,
@@ -624,6 +629,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <SaveAndSyncButton compact />
             <button
               onClick={onOpenFormulaConfig}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 font-medium text-xs sm:text-sm transition-all active:scale-95"

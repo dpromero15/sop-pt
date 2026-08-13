@@ -26,6 +26,8 @@ import {
   Player,
 } from '../types';
 import { StorageService } from '../services/storage';
+import { flushNow } from '../services/storage/cloudSync';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { TeamManagementView } from './TeamManagementView';
 import { ComplianceConfigPanel } from './ComplianceConfigPanel';
 import { EquipmentConfigPanel } from './EquipmentConfigPanel';
@@ -183,6 +185,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     const plus = Math.max(0, Math.floor(Number(plusBudgetDraft) || 0));
     const minus = Math.max(0, Math.floor(Number(minusBudgetDraft) || 0));
     StorageService.saveBumpBudget({ plusBudget: plus, minusBudget: minus });
+    void flushNow();
     onRefreshData();
     showToast('✓ Adjusted bump budget saved');
   };
@@ -275,9 +278,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       ...formula,
       weights: updatedWeights
     });
-
+    void flushNow();
     onRefreshData();
-    showToast('✓ Total score formula weights saved successfully!');
+    showToast('✓ Formula saved — syncing to cloud');
   };
 
   // Formula Presets — only touch categories that currently exist.
@@ -351,6 +354,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         description: newLabelDesc.trim() || editingLabel.description,
       });
       closeLabelModal();
+      void flushNow();
       onRefreshData();
       showToast('✓ Category label updated!');
       return;
@@ -370,6 +374,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
     }));
 
     closeLabelModal();
+    void flushNow();
     onRefreshData();
     showToast('✓ New category label added!');
   };
@@ -386,6 +391,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         delete next[lbl.id];
         return next;
       });
+      void flushNow();
       onRefreshData();
       showToast('✓ Category label removed!');
     } catch (err) {
@@ -412,6 +418,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
         : { weightPercent: 10, enabled: true };
     });
     setWeightsMap(map);
+    void flushNow();
     onRefreshData();
     showToast('✓ Non-system labels cleared!');
   };
@@ -425,6 +432,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       return;
     }
     StorageService.clearNonSystemMetrics();
+    void flushNow();
     onRefreshData();
     showToast('✓ Non-system metrics cleared!');
   };
@@ -471,6 +479,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
     resetMetricForm();
     setIsMetricModalOpen(false);
+    void flushNow();
     onRefreshData();
   };
 
@@ -720,6 +729,19 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             );
           })}
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <p className="text-xs text-slate-500">
+            Sliders stay local until you save. Save also flushes JIT so other devices pick up the formula.
+          </p>
+          <button
+            type="button"
+            onClick={handleSaveFormula}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-rose-500/20 transition-all active:scale-95"
+          >
+            <Check className="w-4 h-4" />
+            <span>Save Weights Formula</span>
+          </button>
+        </div>
       </div>
 
       {/* SECTION 2: CATEGORY LABELS & METRIC DEFINITIONS */}
@@ -733,6 +755,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             </h3>
 
             <div className="flex items-center gap-1.5">
+              <SaveAndSyncButton compact />
               <button
                 type="button"
                 onClick={handleClearNonSystemLabels}
@@ -813,6 +836,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
             </h3>
 
             <div className="flex items-center gap-1.5">
+              <SaveAndSyncButton compact />
               <button
                 type="button"
                 onClick={handleClearNonSystemMetrics}

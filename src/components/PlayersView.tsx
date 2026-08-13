@@ -48,6 +48,7 @@ import { CoachesRatingView } from './CoachesRatingView';
 import { ComplianceBoardView } from './ComplianceBoardView';
 import { defaultAvatarFor } from '../constants/avatars';
 import { flushNow } from '../services/storage/cloudSync';
+import { SaveAndSyncButton } from './SaveAndSyncButton';
 
 type PlayersPane = 'roster' | 'coaches' | 'compliance';
 
@@ -299,6 +300,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
 
           {pane === 'roster' && !readOnlyRoster && (
             <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <SaveAndSyncButton compact />
               <button
                 type="button"
                 onClick={handleExportCsvTemplate}
