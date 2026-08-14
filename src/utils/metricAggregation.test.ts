@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateMetricValue,
   averageMetricValue,
+  bestMetricValue,
   defaultAggregationMode,
+  latestMetricValue,
+  metricValueTriple,
   migrateMetricsAggregation,
   percentileAmong,
   perSessionRate,
@@ -202,6 +205,31 @@ describe('average and per-session', () => {
         entry('m_goals', 1, '2026-01-08T10:00:00Z', 's2'),
       ]),
     ).toBe(1.5);
+  });
+});
+
+describe('latest / best / triple', () => {
+  const entries = [
+    entry('m_40m', 5.5, '2026-01-01T10:00:00Z'),
+    entry('m_40m', 4.9, '2026-01-08T10:00:00Z'),
+    entry('m_40m', 5.1, '2026-01-15T10:00:00Z'),
+  ];
+
+  it('picks the most recent entry', () => {
+    expect(latestMetricValue(entries)).toBe(5.1);
+  });
+
+  it('picks all-time best by direction', () => {
+    expect(bestMetricValue(entries, false)).toBe(4.9);
+    expect(bestMetricValue(entries, true)).toBe(5.5);
+  });
+
+  it('builds average / latest / best together', () => {
+    expect(metricValueTriple(entries, dash)).toEqual({
+      average: 5.17,
+      latest: 5.1,
+      best: 4.9,
+    });
   });
 });
 

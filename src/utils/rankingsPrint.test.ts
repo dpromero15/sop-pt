@@ -170,6 +170,72 @@ describe('buildRankingsPrintDocument', () => {
     expect(html).not.toContain('>p1<');
   });
 
+  it('prints Avg / Latest / Best columns when entries are provided', () => {
+    const pool = [ranking('p1', 5.5), ranking('p2', 4.8)];
+    const entries = [
+      {
+        id: 'e1',
+        sessionId: 's1',
+        playerId: 'p1',
+        metricId: 'm_40m',
+        value: 5.5,
+        timestamp: '2026-01-01T10:00:00Z',
+      },
+      {
+        id: 'e2',
+        sessionId: 's2',
+        playerId: 'p1',
+        metricId: 'm_40m',
+        value: 5.1,
+        timestamp: '2026-01-15T10:00:00Z',
+      },
+      {
+        id: 'e3',
+        sessionId: 's1',
+        playerId: 'p2',
+        metricId: 'm_40m',
+        value: 4.8,
+        timestamp: '2026-01-08T10:00:00Z',
+      },
+    ];
+    const doc = buildRankingsPrintDocument({
+      teamName: 'Thunder FC',
+      rankings: pool,
+      sortBy: 'metric',
+      selectedLabelId: 'speed',
+      selectedMetricId: 'm_40m',
+      metrics,
+      labels,
+      totalMode: 'overall',
+      cutLines: [],
+      entries,
+      printedAt: new Date('2026-08-13T12:00:00Z'),
+    });
+
+    expect(doc.showMetricStats).toBe(true);
+    expect(doc.scopeLine).toMatch(/Avg \/ Latest \/ All-time best/);
+    expect(doc.teamStatsLine).toMatch(/Team · Avg/);
+    expect(doc.teamStatsLine).toMatch(/Latest best/);
+    expect(doc.teamStatsLine).toMatch(/All-time/);
+    expect(doc.rows[0].stats).toEqual({
+      average: '5.30s',
+      latest: '5.10s',
+      best: '5.10s',
+    });
+    expect(doc.rows[1].stats).toEqual({
+      average: '4.80s',
+      latest: '4.80s',
+      best: '4.80s',
+    });
+
+    const html = rankingsPrintHtml(doc);
+    expect(html).toContain('>Avg<');
+    expect(html).toContain('>Latest<');
+    expect(html).toContain('>Best<');
+    expect(html).toContain('team-stats');
+    expect(html).not.toContain('>Pos<');
+  });
+
   it('builds a name/ID legend for the live roster', () => {
     const players: Player[] = [
       {

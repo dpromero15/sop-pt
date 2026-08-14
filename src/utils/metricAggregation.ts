@@ -182,6 +182,49 @@ export function averageMetricValue(validEntries: MetricEntry[]): number | null {
   return Math.round((sum / valid.length) * 100) / 100;
 }
 
+/** Most recent valid entry by timestamp. */
+export function latestMetricValue(validEntries: MetricEntry[]): number | null {
+  const valid = validEntries.filter((e) => e.value >= 0);
+  if (valid.length === 0) return null;
+  const sorted = [...valid].sort(
+    (a, b) =>
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+  return sorted[0].value;
+}
+
+/** All-time best (min or max by direction). */
+export function bestMetricValue(
+  validEntries: MetricEntry[],
+  higherIsBetter: boolean,
+): number | null {
+  const valid = validEntries.filter((e) => e.value >= 0);
+  if (valid.length === 0) return null;
+  const values = valid.map((e) => e.value);
+  return higherIsBetter ? Math.max(...values) : Math.min(...values);
+}
+
+export interface MetricValueTriple {
+  average: number | null;
+  latest: number | null;
+  best: number | null;
+}
+
+/** Average, most recent, and all-time best for one player + metric. */
+export function metricValueTriple(
+  playerEntries: MetricEntry[],
+  metric: Pick<MetricDefinition, 'id' | 'higherIsBetter' | 'type'>,
+): MetricValueTriple {
+  const valid = playerEntries.filter(
+    (e) => e.metricId === metric.id && e.value >= 0,
+  );
+  return {
+    average: averageMetricValue(valid),
+    latest: latestMetricValue(valid),
+    best: bestMetricValue(valid, metric.higherIsBetter),
+  };
+}
+
 /**
  * Per-session rate: sum / number of sessions that have at least one entry.
  */

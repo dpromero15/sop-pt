@@ -13,6 +13,7 @@ import {
 import {
   Player,
   MetricDefinition,
+  MetricEntry,
   LabelDefinition,
   ScoringFormulaConfig,
   PlayerRanking,
@@ -102,6 +103,8 @@ interface RankingsViewProps {
   formula: ScoringFormulaConfig;
   /** False when no metric entries exist (e.g. all sessions deleted). */
   hasLoggedData: boolean;
+  /** Raw session entries — used for Avg / Latest / Best on metric printouts. */
+  entries: MetricEntry[];
   coaches: Coach[];
   coachBallots: CoachBallot[];
   bumpCoachId: string;
@@ -292,6 +295,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   metrics,
   formula,
   hasLoggedData,
+  entries,
   coaches,
   coachBallots,
   bumpCoachId,
@@ -644,6 +648,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           totalMode: effectiveTotalMode,
         }),
         nameMode,
+        entries,
       }),
     );
     setPrintMenuOpen(false);
