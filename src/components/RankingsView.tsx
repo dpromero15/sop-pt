@@ -26,6 +26,10 @@ import {
   Team,
 } from '../types';
 import {
+  PLAYER_POSITION_CODES,
+  formatPlayerPosition,
+} from '../utils/playerPositions';
+import {
   bumpBudgetRemaining,
   bumpUsage,
   canApplyBump,
@@ -83,18 +87,7 @@ import {
 import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 
-const SPECIALTY_POSITIONS: PlayerPosition[] = [
-  'GK',
-  'CB',
-  'LB',
-  'RB',
-  'CDM',
-  'CM',
-  'CAM',
-  'LW',
-  'RW',
-  'ST',
-];
+const SPECIALTY_POSITIONS: PlayerPosition[] = [...PLAYER_POSITION_CODES];
 
 interface RankingsViewProps {
   rankings: PlayerRanking[];
@@ -494,6 +487,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     return (
       r.player.name.toLowerCase().includes(q) ||
       r.player.position.toLowerCase().includes(q) ||
+      formatPlayerPosition(r.player.position).toLowerCase().includes(q) ||
       r.player.jerseyNumber.toString() === searchQuery ||
       displayPublicId(r.player).toLowerCase().includes(q)
     );
@@ -597,7 +591,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           : 'Unscored';
       const bump = r.adjustedBump ?? 0;
       const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${r.player.position},${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
+      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${formatPlayerPosition(r.player.position)},${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -916,13 +910,13 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                 }`}
               >
-                {pos}
+                {formatPlayerPosition(pos)}
               </button>
             ))}
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
             {specialtyPosition
-              ? `Specialty ${specialtyPosition}: re-ranked among that position (manual Ineligible at bottom).`
+              ? `Specialty ${formatPlayerPosition(specialtyPosition)}: re-ranked among that position (manual Ineligible at bottom).`
               : effectiveTotalMode === 'overall'
                 ? 'Pool place from scored metrics only (gaps omitted).'
                 : effectiveTotalMode === 'adjusted'
@@ -1601,7 +1595,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                         {item.player.name}
                       </h3>
                       <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-bold">
-                        {item.player.position}
+                        {formatPlayerPosition(item.player.position)}
                       </span>
                     </div>
 

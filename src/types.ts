@@ -1,3 +1,5 @@
+import type { PlayerPositionCode } from './utils/playerPositions';
+
 export interface Team {
   id: string;
   name: string;
@@ -106,17 +108,8 @@ export interface CalculatedFieldDefinition {
   unit: string;
 }
 
-export type PlayerPosition = 
-  | 'GK' 
-  | 'CB' 
-  | 'LB' 
-  | 'RB' 
-  | 'CDM' 
-  | 'CM' 
-  | 'CAM' 
-  | 'LW' 
-  | 'RW' 
-  | 'ST';
+/** Short position code; display with tactical number via `formatPlayerPosition`. */
+export type PlayerPosition = PlayerPositionCode;
 
 /** US high-school grade. */
 export type PlayerGrade = 9 | 10 | 11 | 12;

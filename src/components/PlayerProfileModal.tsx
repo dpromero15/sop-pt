@@ -28,6 +28,7 @@ import {
 } from 'recharts';
 import { Player, LabelDefinition, MetricEntry, MetricDefinition } from '../types';
 import { calculatePlayerRankings } from '../utils/scoring';
+import { formatPlayerPosition } from '../utils/playerPositions';
 import { visibleRankingLabels } from '../utils/formulaWeights';
 import { defaultAvatarFor } from '../constants/avatars';
 import { StorageService } from '../services/storage';
@@ -149,7 +150,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     ID {displayPublicId(player)}
                   </button>
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
-                    Position: {player.position}
+                    Position: {formatPlayerPosition(player.position)}
                   </span>
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
                     Foot: {player.preferredFoot}

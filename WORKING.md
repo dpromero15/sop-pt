@@ -17,9 +17,15 @@ _(none)_
 - **Notes:** Metric Rankings prints use Avg / Latest / Best columns; header has Team · Avg · Latest best · All-time. Rank order still follows the metric’s aggregation mode. Non-metric prints unchanged.
 - **Touchpoints:** `src/utils/metricAggregation.ts`, `src/utils/rankingsPrint.ts`, `RankingsView.tsx`, `App.tsx`
 
+### #151 — Expand soccer positions with tactical numbers (WB, False 9, etc.)
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Positions show classic tactical numbers (e.g. `ST (9)`, `False 9 (9)`, `CDM (6)`). Added WB / LWB / RWB, RM / LM, SS, CF, F9. Roster DEF/MID/FWD filters and CSV accept the new codes; stored values remain short codes.
+- **Touchpoints:** `src/utils/playerPositions.ts`, `src/types.ts`, `PlayersView.tsx`, `RankingsView.tsx`, `playerCsv.ts`
+
 **Suggested PR Closes:**
 ```
 Closes #149
+Closes #151
 ```
 
 ## Still open (this release)
@@ -48,4 +54,4 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (289 tests) 2026-08-13 — #149.
+- **QA:** `npm run lint` + `npm test` (293 tests) 2026-08-14 — #149 + #151.

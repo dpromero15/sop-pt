@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, List, RotateCcw, UserCheck, X, Ban, Clock } from 'lucide-react';
 import type { AttendanceStatus, Player } from '../../types';
 import { toggleLateStatus } from '../../utils/sessionMetrics';
+import { formatPlayerPosition } from '../../utils/playerPositions';
 
 interface AttendanceSwipeDeckProps {
   players: Player[];
@@ -466,7 +467,7 @@ export const AttendanceSwipeDeck: React.FC<AttendanceSwipeDeckProps> = ({
 
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-              #{activePlayer.jerseyNumber} · {activePlayer.position}
+              #{activePlayer.jerseyNumber} · {formatPlayerPosition(activePlayer.position)}
             </p>
             <h3 className="mt-1 text-2xl font-bold leading-tight text-slate-50 sm:text-3xl">
             {activePlayer.name}

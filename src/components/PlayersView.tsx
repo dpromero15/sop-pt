@@ -26,6 +26,13 @@ import {
   ComplianceRequirement,
   PlayerComplianceState,
 } from '../types';
+import {
+  DEF_POSITIONS,
+  FWD_POSITIONS,
+  MID_POSITIONS,
+  PLAYER_POSITIONS,
+  formatPlayerPosition,
+} from '../utils/playerPositions';
 import { StorageService } from '../services/storage';
 import { calculatePlayerRankings } from '../utils/scoring';
 import {
@@ -340,9 +347,12 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       displayPublicId(p).toLowerCase().includes(q);
 
     if (positionFilter === 'GK') return matchesSearch && p.position === 'GK';
-    if (positionFilter === 'DEF') return matchesSearch && ['CB', 'LB', 'RB'].includes(p.position);
-    if (positionFilter === 'MID') return matchesSearch && ['CDM', 'CM', 'CAM'].includes(p.position);
-    if (positionFilter === 'FWD') return matchesSearch && ['LW', 'RW', 'ST'].includes(p.position);
+    if (positionFilter === 'DEF')
+      return matchesSearch && DEF_POSITIONS.includes(p.position);
+    if (positionFilter === 'MID')
+      return matchesSearch && MID_POSITIONS.includes(p.position);
+    if (positionFilter === 'FWD')
+      return matchesSearch && FWD_POSITIONS.includes(p.position);
 
     return matchesSearch;
   };
@@ -611,7 +621,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                           {displayPublicId(player)}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
-                          #{player.jerseyNumber} • {player.position}
+                          #{player.jerseyNumber} • {formatPlayerPosition(player.position)}
                         </span>
                         {player.grade != null && (
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold border border-slate-700">
@@ -791,7 +801,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-500">
-                    {displayPublicId(player)} · {player.position} · not on live roster
+                    {displayPublicId(player)} · {formatPlayerPosition(player.position)} · not on live roster
                   </div>
                 </button>
                 {!readOnlyRoster && (
@@ -982,8 +992,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                           onChange={(e) => setFormPosition(e.target.value as PlayerPosition)}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                         >
-                          {['GK', 'CB', 'LB', 'RB', 'CDM', 'CM', 'CAM', 'LW', 'RW', 'ST'].map(pos => (
-                            <option key={pos} value={pos}>{pos}</option>
+                          {PLAYER_POSITIONS.map(({ code, label }) => (
+                            <option key={code} value={code}>
+                              {label}
+                            </option>
                           ))}
                         </select>
                       </div>

@@ -23,6 +23,7 @@ import {
   playerConsequenceBadges,
 } from '../utils/complianceConsequences';
 import { rosterPlayers } from '../utils/playerStatus';
+import { formatPlayerPosition } from '../utils/playerPositions';
 
 type ComplianceMode = 'triage' | 'board';
 type IncompleteScope = 'blocking' | 'all';
@@ -307,7 +308,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                     <div className="font-extrabold text-white">
                       {player.name}{' '}
                       <span className="text-slate-400 font-semibold text-sm">
-                        #{player.jerseyNumber} · {player.position}
+                        #{player.jerseyNumber} · {formatPlayerPosition(player.position)}
                       </span>
                     </div>
                     <div className="mt-1 flex flex-wrap gap-1.5">
@@ -454,7 +455,7 @@ export const ComplianceBoardView: React.FC<ComplianceBoardViewProps> = ({
                           </span>
                         </div>
                         <div className="text-[10px] text-slate-500">
-                          {player.position}
+                          {formatPlayerPosition(player.position)}
                           {badges.map((key) => (
                             <span
                               key={key}

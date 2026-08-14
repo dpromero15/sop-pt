@@ -1,6 +1,7 @@
 import React from 'react';
 import type { AttendanceStatus, Player } from '../../types';
 import { countAttendanceByStatus } from '../../utils/sessionMetrics';
+import { formatPlayerPosition } from '../../utils/playerPositions';
 
 interface AttendanceMaintenanceListProps {
   players: Player[];
@@ -80,7 +81,7 @@ export const AttendanceMaintenanceList: React.FC<AttendanceMaintenanceListProps>
                 <p className="truncate text-sm font-medium leading-tight text-slate-100">
                   {player.name}
                 </p>
-                <p className="text-[10px] leading-tight text-slate-600">{player.position}</p>
+                <p className="text-[10px] leading-tight text-slate-600">{formatPlayerPosition(player.position)}</p>
               </div>
               <div
                 role="group"

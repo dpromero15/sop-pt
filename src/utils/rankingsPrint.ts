@@ -7,6 +7,7 @@ import type {
 } from '../types';
 import { displayPublicId } from './playerPublicId';
 import { rosterPlayers } from './playerStatus';
+import { formatPlayerPosition } from './playerPositions';
 import { metricPrimaryLabelId } from './metricLabels';
 import { metricValueTriple } from './metricAggregation';
 import {
@@ -359,7 +360,7 @@ export function buildRankingsPrintDocument(opts: {
           ? displayPublicId(ranking.player)
           : ranking.player.name,
       jersey: ranking.player.jerseyNumber,
-      position: ranking.player.position,
+      position: formatPlayerPosition(ranking.player.position),
       value: printValue(
         ranking,
         sortBy,
@@ -406,7 +407,7 @@ export function buildPlayerIdLegendDocument(opts: {
       publicId: displayPublicId(player),
       name: player.name,
       jersey: player.jerseyNumber,
-      position: player.position,
+      position: formatPlayerPosition(player.position),
     }));
 
   return {

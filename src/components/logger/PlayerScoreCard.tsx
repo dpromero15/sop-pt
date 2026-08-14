@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Minus, Plus, Play, Square, RotateCcw, SkipForward } from 'lucide-react';
 import type { MetricDefinition, Player } from '../../types';
+import { formatPlayerPosition } from '../../utils/playerPositions';
 
 interface PlayerScoreCardProps {
   player: Player;
@@ -97,7 +98,7 @@ export const PlayerScoreCard: React.FC<PlayerScoreCardProps> = ({
           <h3 className="mt-1 text-2xl font-bold text-slate-50">
             #{player.jerseyNumber} {player.name}
           </h3>
-          <p className="text-sm text-slate-400">{player.position}</p>
+          <p className="text-sm text-slate-400">{formatPlayerPosition(player.position)}</p>
         </div>
         <button
           type="button"
