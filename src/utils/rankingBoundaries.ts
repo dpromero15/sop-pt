@@ -1,8 +1,10 @@
 import type {
   PlayerPosition,
+  PlayerRankingPool,
   RankingBoundariesConfig,
   RankingCutPair,
 } from '../types';
+import { DEFAULT_POOL_CUTS, PLAYER_RANKING_POOLS } from './playerRankingPools';
 
 function normalizeCut(value: unknown, fallback: number): number {
   const n = Math.floor(Number(value));
@@ -39,12 +41,19 @@ export function normalizeRankingBoundaries(
   const primaryCut = normalizeCut(raw?.primaryCut, 18);
   const secondaryCut = normalizeCut(raw?.secondaryCut, 36);
   const fallbacks = { primaryCut, secondaryCut };
+  const storedPoolCuts = raw?.poolCuts ?? {};
   return {
     primaryCut,
     secondaryCut,
     specialtyCuts: { GK: 4, ...(raw?.specialtyCuts ?? {}) },
     categoryCuts: normalizePairMap(raw?.categoryCuts, fallbacks),
     metricCuts: normalizePairMap(raw?.metricCuts, fallbacks),
+    poolCuts: Object.fromEntries(
+      PLAYER_RANKING_POOLS.map((pool) => [
+        pool.id,
+        normalizePair(storedPoolCuts[pool.id], DEFAULT_POOL_CUTS[pool.id]),
+      ]),
+    ),
   };
 }
 
@@ -55,6 +64,8 @@ export type ResolveCutLinesArgs = {
   selectedLabelId?: string | null;
   /** Metric or calculated-field id when ranking by one measure. */
   selectedMetricId?: string | null;
+  /** Player pool when viewing Coaches Rank by roster role. */
+  selectedRankingPool?: PlayerRankingPool | null;
   /** Overall cuts only apply on Adjusted (non-specialty) lists. */
   totalMode?: string;
 };
@@ -68,9 +79,17 @@ export function resolveActiveCutLines({
   specialtyPosition,
   selectedLabelId,
   selectedMetricId,
+  selectedRankingPool,
   totalMode = 'adjusted',
 }: ResolveCutLinesArgs): number[] {
   const b = normalizeRankingBoundaries(boundaries);
+
+  if (totalMode === 'coaches' && selectedRankingPool) {
+    const pair = b.poolCuts?.[selectedRankingPool];
+    return pair
+      ? [pair.primaryCut, pair.secondaryCut].sort((a, c) => a - c)
+      : [];
+  }
 
   if (specialtyPosition) {
     const cut =

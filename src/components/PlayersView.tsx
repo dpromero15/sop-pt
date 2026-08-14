@@ -19,6 +19,7 @@ import {
 import {
   Player,
   PlayerPosition,
+  PlayerRankingPool,
   LabelDefinition,
   MetricDefinition,
   Coach,
@@ -67,6 +68,11 @@ import {
   parsePlayerGrade,
 } from '../utils/playerDemographics';
 import { displayPublicId } from '../utils/playerPublicId';
+import {
+  PLAYER_RANKING_POOLS,
+  defaultRankingPoolForPosition,
+  rankingPoolForPlayer,
+} from '../utils/playerRankingPools';
 import {
   buildPlayerIdLegendDocument,
   openPlayerIdLegendPrint,
@@ -120,6 +126,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formName, setFormName] = useState('');
   const [formJersey, setFormJersey] = useState<number>(10);
   const [formPosition, setFormPosition] = useState<PlayerPosition>('CM');
+  const [formRankingPool, setFormRankingPool] =
+    useState<PlayerRankingPool>('central-midfield');
   const [formFoot, setFormFoot] = useState<'Left' | 'Right' | 'Both'>('Right');
   const [formBirthYear, setFormBirthYear] = useState('');
   const [formGrade, setFormGrade] = useState('');
@@ -176,6 +184,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormName(player.name);
     setFormJersey(player.jerseyNumber);
     setFormPosition(player.position);
+    setFormRankingPool(rankingPoolForPlayer(player));
     setFormFoot(player.preferredFoot);
     setFormBirthYear(player.birthYear ? String(player.birthYear) : '');
     setFormGrade(player.grade ? String(player.grade) : '');
@@ -208,6 +217,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         name: formName,
         jerseyNumber: formJersey,
         position: formPosition,
+        rankingPool: formRankingPool,
         preferredFoot: formFoot,
         birthYear,
         grade,
@@ -222,6 +232,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         name: formName,
         jerseyNumber: formJersey,
         position: formPosition,
+        rankingPool: formRankingPool,
         preferredFoot: formFoot,
         birthYear,
         grade,
@@ -238,6 +249,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormNotes('');
     setFormBirthYear('');
     setFormGrade('');
+    setFormRankingPool(defaultRankingPoolForPosition('CM'));
     setFormRankingIneligible(false);
     setFormInactive(false);
     onRefreshData();
@@ -989,7 +1001,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         <label className="block text-slate-400 font-semibold mb-1">Position *</label>
                         <select
                           value={formPosition}
-                          onChange={(e) => setFormPosition(e.target.value as PlayerPosition)}
+                          onChange={(e) => {
+                            const position = e.target.value as PlayerPosition;
+                            setFormPosition(position);
+                            setFormRankingPool(defaultRankingPoolForPosition(position));
+                          }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                         >
                           {PLAYER_POSITIONS.map(({ code, label }) => (
@@ -999,6 +1015,29 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                           ))}
                         </select>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">
+                        Coaches Rank pool
+                      </label>
+                      <select
+                        value={formRankingPool}
+                        onChange={(e) =>
+                          setFormRankingPool(e.target.value as PlayerRankingPool)
+                        }
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
+                      >
+                        {PLAYER_RANKING_POOLS.map((pool) => (
+                          <option key={pool.id} value={pool.id}>
+                            {pool.label}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[10px] text-slate-500">
+                        Defaults from position; change it when this player competes
+                        for a different roster role.
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-3">

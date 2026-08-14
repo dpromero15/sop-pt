@@ -262,6 +262,7 @@ export function buildRankingsPrintDocument(opts: {
   labels: LabelDefinition[];
   totalMode: RankingsTotalMode;
   coachesScopeLabel?: string;
+  rankingPoolLabel?: string;
   completeBallotCount?: number;
   individualOrdinals?: Map<string, number> | null;
   cutLines: number[];
@@ -281,6 +282,7 @@ export function buildRankingsPrintDocument(opts: {
     labels,
     totalMode,
     coachesScopeLabel = 'All coaches',
+    rankingPoolLabel,
     completeBallotCount = 0,
     individualOrdinals,
     cutLines,
@@ -307,11 +309,26 @@ export function buildRankingsPrintDocument(opts: {
   let teamStatsLine: string | undefined;
 
   if (totalMode === 'coaches') {
-    title = 'Coaches Rank';
+    title = rankingPoolLabel
+      ? `Coaches Rank · ${rankingPoolLabel}`
+      : 'Coaches Rank';
     valueHeader = individualOrdinals ? 'Ordinal' : 'Average';
-    scopeLine = individualOrdinals
+    const ballotScope = individualOrdinals
       ? `${coachesScopeLabel} · complete ballot`
       : `${coachesScopeLabel} · complete ballots`;
+    if (rankingPoolLabel) {
+      const lineMeaning =
+        cuts.length > 1
+          ? `Substitutes after ${cuts[0]} · cuts after ${cuts[cuts.length - 1]}`
+          : cuts.length === 1
+            ? `Cuts after ${cuts[0]}`
+            : '';
+      scopeLine = [ballotScope, 'position pool', lineMeaning]
+        .filter(Boolean)
+        .join(' · ');
+    } else {
+      scopeLine = ballotScope;
+    }
   } else if (activeMetric) {
     title = activeMetric.name;
     valueHeader = showMetricStats ? 'Best' : 'Value';

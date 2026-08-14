@@ -4,6 +4,8 @@ import {
   activePlayers,
   attachCoachesTotals,
   coachBallotOrdinals,
+  coachPoolBallotOrdinals,
+  coachesRankingsForPool,
   computeCoachesTotals,
   isCompleteBallot,
 } from './coachesRating';
@@ -139,5 +141,54 @@ describe('attachCoachesTotals', () => {
     const next = attachCoachesTotals(rankings, [player('a')], []);
     expect(next[0].coachesTotalSum).toBeNull();
     expect(next[0].coachesRank).toBeNull();
+  });
+});
+
+describe('position-pool coach rankings', () => {
+  const players = [
+    { ...player('a'), position: 'LB' as const, rankingPool: 'wingbacks' as const },
+    { ...player('b'), position: 'RB' as const, rankingPool: 'wingbacks' as const },
+    { ...player('c'), position: 'CB' as const, rankingPool: 'center-defense' as const },
+  ];
+  const ballot: CoachBallot = {
+    coachId: 'c1',
+    ranks: { c: 1, b: 2, a: 3 },
+  };
+
+  it('re-numbers an individual complete ballot inside the selected pool', () => {
+    expect(
+      [...coachPoolBallotOrdinals(players, ballot, 'wingbacks').entries()],
+    ).toEqual([
+      ['b', 1],
+      ['a', 2],
+    ]);
+  });
+
+  it('filters and competition-ranks coach averages inside the pool', () => {
+    const rankings = attachCoachesTotals(
+      players.map((p) => ({
+        player: p,
+        totalScore: null,
+        adjustedTotalScore: null,
+        overallRank: null,
+        adjustedRank: null,
+        coachesTotalSum: null,
+        coachesRank: null,
+        adjustedBump: 0,
+        eligibleToPlay: true,
+        labelScores: {},
+        rank: null,
+        attendanceRate: null,
+        recentTrend: 'stable' as const,
+        calculatedValues: {},
+      })),
+      players,
+      [ballot],
+    );
+    const pooled = coachesRankingsForPool(rankings, 'wingbacks');
+    expect(pooled.map((r) => [r.player.id, r.coachesRank])).toEqual([
+      ['a', 2],
+      ['b', 1],
+    ]);
   });
 });

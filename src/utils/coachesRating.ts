@@ -1,6 +1,12 @@
-import type { CoachBallot, Player, PlayerRanking } from '../types';
+import type {
+  CoachBallot,
+  Player,
+  PlayerRanking,
+  PlayerRankingPool,
+} from '../types';
 import { assignCompetitionRanks } from './scoring';
 import { activePlayers } from './playerStatus';
+import { rankingPoolForPlayer } from './playerRankingPools';
 
 export { activePlayers } from './playerStatus';
 
@@ -93,6 +99,40 @@ export function coachBallotOrdinals(
     result.set(id, ballot.ranks[id]);
   }
   return result;
+}
+
+/** Re-rank one complete coach ballot from 1…N inside a player pool. */
+export function coachPoolBallotOrdinals(
+  players: Player[],
+  ballot: CoachBallot | undefined,
+  pool: PlayerRankingPool,
+): Map<string, number> {
+  const global = coachBallotOrdinals(players, ballot);
+  if (global.size === 0) return global;
+  const pooled = activePlayers(players)
+    .filter((player) => rankingPoolForPlayer(player) === pool)
+    .sort((a, b) => global.get(a.id)! - global.get(b.id)!);
+  return new Map(pooled.map((player, index) => [player.id, index + 1]));
+}
+
+/** Filter Coaches Rank to one pool and competition-rank coach averages locally. */
+export function coachesRankingsForPool(
+  rankings: PlayerRanking[],
+  pool: PlayerRankingPool,
+): PlayerRanking[] {
+  const pooled = rankings.filter(
+    (ranking) => rankingPoolForPlayer(ranking.player) === pool,
+  );
+  const values = pooled.map((ranking) => ranking.coachesTotalSum);
+  const scoredValues = values.map((value) =>
+    value == null ? Number.POSITIVE_INFINITY : value,
+  );
+  const localRanks = assignCompetitionRanks(scoredValues, false);
+  return pooled.map((ranking, index) => ({
+    ...ranking,
+    coachesRank:
+      ranking.coachesTotalSum == null ? null : localRanks[index],
+  }));
 }
 
 /** Merge coaches averages onto rankings (inactive / no ballots → null). */

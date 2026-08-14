@@ -5,14 +5,16 @@ import type {
   MetricDefinition,
   RankingBoundariesConfig,
   RankingCutPair,
+  PlayerRankingPool,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { normalizeRankingBoundaries } from '../utils/rankingBoundaries';
 import { labelPathName, metricInLabelTree } from '../utils/labelTree';
+import { PLAYER_RANKING_POOLS } from '../utils/playerRankingPools';
 
-type CutConfigMode = 'all' | 'scoped';
+type CutConfigMode = 'all' | 'pool' | 'scoped';
 
 interface RankingBoundariesPanelProps {
   boundaries: RankingBoundariesConfig;
@@ -62,6 +64,9 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
   const [measureId, setMeasureId] = useState('');
   const [scopedPrimary, setScopedPrimary] = useState('8');
   const [scopedSecondary, setScopedSecondary] = useState('16');
+  const [poolId, setPoolId] = useState<PlayerRankingPool>('wingbacks');
+  const [poolPrimary, setPoolPrimary] = useState('2');
+  const [poolSecondary, setPoolSecondary] = useState('3');
 
   useEffect(() => {
     setPrimary(String(normalized.primaryCut));
@@ -106,6 +111,13 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
     normalized.primaryCut,
     normalized.secondaryCut,
   ]);
+
+  useEffect(() => {
+    const definition = PLAYER_RANKING_POOLS.find((pool) => pool.id === poolId)!;
+    const pair = normalized.poolCuts?.[poolId] ?? definition;
+    setPoolPrimary(String(pair.primaryCut));
+    setPoolSecondary(String(pair.secondaryCut));
+  }, [normalized.poolCuts, poolId]);
 
   const handleSaveAll = () => {
     const primaryCut = Math.max(1, Math.floor(Number(primary) || 18));
@@ -161,6 +173,17 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
     onRefreshData();
   };
 
+  const handleSavePool = () => {
+    const definition = PLAYER_RANKING_POOLS.find((pool) => pool.id === poolId)!;
+    const pair = pairFromForm(poolPrimary, poolSecondary, definition);
+    StorageService.saveRankingBoundaries({
+      ...normalized,
+      poolCuts: { ...normalized.poolCuts, [poolId]: pair },
+    });
+    void flushNow();
+    onRefreshData();
+  };
+
   const scopedSaved = measureId
     ? Boolean(normalized.metricCuts[measureId])
     : Boolean(categoryId && normalized.categoryCuts[categoryId]);
@@ -191,6 +214,17 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
           }`}
         >
           All rankings
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('pool')}
+          className={`px-3 py-1.5 rounded-lg transition-colors ${
+            mode === 'pool'
+              ? 'bg-violet-600 text-white'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          By player pool
         </button>
         <button
           type="button"
@@ -245,6 +279,56 @@ export const RankingBoundariesPanel: React.FC<RankingBoundariesPanelProps> = ({
             className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950"
           >
             Save cut lines
+          </button>
+        </>
+      ) : mode === 'pool' ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">Player pool</span>
+              <select
+                value={poolId}
+                onChange={(e) => setPoolId(e.target.value as PlayerRankingPool)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              >
+                {PLAYER_RANKING_POOLS.map((pool) => (
+                  <option key={pool.id} value={pool.id}>
+                    {pool.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">Substitute starts after</span>
+              <input
+                type="number"
+                min={1}
+                value={poolPrimary}
+                onChange={(e) => setPoolPrimary(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block space-y-1">
+              <span className="text-xs text-slate-400">Actual cut after</span>
+              <input
+                type="number"
+                min={1}
+                value={poolSecondary}
+                onChange={(e) => setPoolSecondary(e.target.value)}
+                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+          <p className="text-[11px] text-slate-500">
+            The first line separates selected players from substitutes. The second
+            line separates substitutes from actual cuts.
+          </p>
+          <button
+            type="button"
+            onClick={handleSavePool}
+            className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-slate-950"
+          >
+            Save pool lines
           </button>
         </>
       ) : (

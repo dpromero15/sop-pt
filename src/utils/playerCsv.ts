@@ -1,4 +1,4 @@
-import type { Player, PlayerPosition } from '../types';
+import type { Player, PlayerPosition, PlayerRankingPool } from '../types';
 import {
   birthYearFromAge,
   parseBirthYear,
@@ -6,6 +6,11 @@ import {
 } from './playerDemographics';
 import { isPlayerPosition } from './playerPositions';
 import { normalizePublicId } from './playerPublicId';
+import {
+  PLAYER_RANKING_POOLS,
+  defaultRankingPoolForPosition,
+  isPlayerRankingPool,
+} from './playerRankingPools';
 
 export const PLAYER_CSV_HEADERS = [
   'name',
@@ -17,6 +22,7 @@ export const PLAYER_CSV_HEADERS = [
   'avatarUrl',
   'notes',
   'publicId',
+  'rankingPool',
 ] as const;
 
 const VALID_FEET = new Set(['Left', 'Right', 'Both']);
@@ -71,6 +77,7 @@ export function buildPlayerCsvTemplate(): string {
     '',
     'Sample player row — replace with your roster',
     '',
+    'central-midfield',
   ];
   return (
     PLAYER_CSV_HEADERS.join(',') +
@@ -108,6 +115,7 @@ export function parseAndValidatePlayerCsv(
   const nameIdx = colIndex('name');
   const jerseyIdx = colIndex('jerseyNumber');
   const positionIdx = colIndex('position');
+  const rankingPoolIdx = colIndex('rankingPool');
   const footIdx = colIndex('preferredFoot');
   const birthYearIdx = colIndex('birthYear');
   const ageIdx = colIndex('age');
@@ -167,6 +175,24 @@ export function parseAndValidatePlayerCsv(
       errors.push(`Row ${rowNum}: invalid position "${positionRaw}".`);
       skipped += 1;
       continue;
+    }
+
+    let rankingPool: PlayerRankingPool =
+      defaultRankingPoolForPosition(positionRaw);
+    if (rankingPoolIdx >= 0) {
+      const raw = (cells[rankingPoolIdx] || '').trim().toLowerCase();
+      const byLabel = PLAYER_RANKING_POOLS.find(
+        (pool) => pool.label.toLowerCase() === raw,
+      )?.id;
+      if (raw && !isPlayerRankingPool(raw) && !byLabel) {
+        errors.push(
+          `Row ${rowNum}: invalid rankingPool "${cells[rankingPoolIdx]}" — using position default.`,
+        );
+      } else if (isPlayerRankingPool(raw)) {
+        rankingPool = raw;
+      } else if (byLabel) {
+        rankingPool = byLabel;
+      }
     }
 
     let preferredFoot: Player['preferredFoot'] = 'Right';
@@ -254,6 +280,7 @@ export function parseAndValidatePlayerCsv(
       name,
       jerseyNumber,
       position: positionRaw as PlayerPosition,
+      rankingPool,
       preferredFoot,
       birthYear,
       grade,
