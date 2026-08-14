@@ -1,12 +1,15 @@
 import type {
   LabelDefinition,
   MetricDefinition,
+  MetricEntry,
   Player,
   PlayerRanking,
 } from '../types';
 import { displayPublicId } from './playerPublicId';
 import { rosterPlayers } from './playerStatus';
+import { formatPlayerPosition } from './playerPositions';
 import { metricPrimaryLabelId } from './metricLabels';
+import { metricValueTriple } from './metricAggregation';
 import {
   formatTeamMetricValue,
   isUnscoredForRankMode,
@@ -18,6 +21,12 @@ import {
   totalForMode,
 } from './rankingsFilter';
 
+export interface RankingsPrintMetricStats {
+  average: string;
+  latest: string;
+  best: string;
+}
+
 export interface RankingsPrintRow {
   playerId: string;
   place: number | null;
@@ -25,6 +34,8 @@ export interface RankingsPrintRow {
   jersey: number;
   position: string;
   value: string;
+  /** Avg / latest / all-time best when printing a measurable metric. */
+  stats?: RankingsPrintMetricStats;
   /** Unlabeled rule under this row (after this place). */
   showCutBelow: boolean;
 }
@@ -36,10 +47,14 @@ export interface RankingsPrintDocument {
   season: string;
   title: string;
   scopeLine: string;
+  /** Squad rollup under the title when printing a metric with stats. */
+  teamStatsLine?: string;
   printedAt: string;
   valueHeader: string;
   nameHeader: string;
   nameMode: RankingsPrintNameMode;
+  /** True when rows include Avg / Latest / Best columns. */
+  showMetricStats: boolean;
   rows: RankingsPrintRow[];
 }
 
@@ -184,6 +199,58 @@ function printValue(
   return total == null ? '—' : String(total);
 }
 
+function formatStatCell(
+  value: number | null,
+  metric: MetricDefinition,
+): string {
+  return value == null ? '—' : formatTeamMetricValue(value, metric);
+}
+
+function buildMetricStatsForPlayer(
+  ranking: PlayerRanking,
+  metric: MetricDefinition,
+  entries: MetricEntry[],
+): RankingsPrintMetricStats {
+  const playerEntries = entries.filter((e) => e.playerId === ranking.player.id);
+  const triple = metricValueTriple(playerEntries, metric);
+  return {
+    average: formatStatCell(triple.average, metric),
+    latest: formatStatCell(triple.latest, metric),
+    best: formatStatCell(triple.best, metric),
+  };
+}
+
+function buildTeamStatsLine(
+  rankings: PlayerRanking[],
+  metric: MetricDefinition,
+  entries: MetricEntry[],
+): string | undefined {
+  const averages: number[] = [];
+  const latests: number[] = [];
+  const bests: number[] = [];
+  for (const ranking of rankings) {
+    const playerEntries = entries.filter(
+      (e) => e.playerId === ranking.player.id,
+    );
+    const triple = metricValueTriple(playerEntries, metric);
+    if (triple.average != null) averages.push(triple.average);
+    if (triple.latest != null) latests.push(triple.latest);
+    if (triple.best != null) bests.push(triple.best);
+  }
+  if (averages.length === 0) return undefined;
+  const avg =
+    Math.round(
+      (averages.reduce((a, b) => a + b, 0) / averages.length) * 100,
+    ) / 100;
+  const latestBest = metric.higherIsBetter
+    ? Math.max(...latests)
+    : Math.min(...latests);
+  const allTimeBest = metric.higherIsBetter
+    ? Math.max(...bests)
+    : Math.min(...bests);
+  return `Team · Avg ${formatTeamMetricValue(avg, metric)} · Latest best ${formatTeamMetricValue(latestBest, metric)} · All-time ${formatTeamMetricValue(allTimeBest, metric)} · ${averages.length} of ${rankings.length} scored`;
+}
+
 export function buildRankingsPrintDocument(opts: {
   teamName: string;
   season?: string;
@@ -199,6 +266,8 @@ export function buildRankingsPrintDocument(opts: {
   individualOrdinals?: Map<string, number> | null;
   cutLines: number[];
   nameMode?: RankingsPrintNameMode;
+  /** Raw entries — enables Avg / Latest / Best columns on metric sheets. */
+  entries?: MetricEntry[];
   printedAt?: Date;
 }): RankingsPrintDocument {
   const {
@@ -216,6 +285,7 @@ export function buildRankingsPrintDocument(opts: {
     individualOrdinals,
     cutLines,
     nameMode = 'name',
+    entries = [],
     printedAt = new Date(),
   } = opts;
 
@@ -229,9 +299,12 @@ export function buildRankingsPrintDocument(opts: {
       ? labels.find((l) => l.id === selectedLabelId)
       : undefined;
 
+  const showMetricStats = Boolean(activeMetric && entries.length > 0);
+
   let title: string;
   let valueHeader: string;
   let scopeLine: string;
+  let teamStatsLine: string | undefined;
 
   if (totalMode === 'coaches') {
     title = 'Coaches Rank';
@@ -241,9 +314,17 @@ export function buildRankingsPrintDocument(opts: {
       : `${coachesScopeLabel} · complete ballots`;
   } else if (activeMetric) {
     title = activeMetric.name;
-    valueHeader = 'Value';
-    scopeLine =
-      totalMode === 'adjusted' ? 'Adjusted · single metric' : 'Statistical · single metric';
+    valueHeader = showMetricStats ? 'Best' : 'Value';
+    scopeLine = showMetricStats
+      ? totalMode === 'adjusted'
+        ? 'Adjusted · Avg / Latest / All-time best'
+        : 'Statistical · Avg / Latest / All-time best'
+      : totalMode === 'adjusted'
+        ? 'Adjusted · single metric'
+        : 'Statistical · single metric';
+    if (showMetricStats) {
+      teamStatsLine = buildTeamStatsLine(rankings, activeMetric, entries);
+    }
   } else if (activeLabel) {
     title = `${activeLabel.name} standing`;
     valueHeader = 'Standing';
@@ -267,6 +348,10 @@ export function buildRankingsPrintDocument(opts: {
           totalMode,
         );
     const place = unscored ? null : ++scoredCount;
+    const stats =
+      showMetricStats && activeMetric
+        ? buildMetricStatsForPlayer(ranking, activeMetric, entries)
+        : undefined;
     return {
       playerId: ranking.player.id,
       place,
@@ -275,7 +360,7 @@ export function buildRankingsPrintDocument(opts: {
           ? displayPublicId(ranking.player)
           : ranking.player.name,
       jersey: ranking.player.jerseyNumber,
-      position: ranking.player.position,
+      position: formatPlayerPosition(ranking.player.position),
       value: printValue(
         ranking,
         sortBy,
@@ -286,6 +371,7 @@ export function buildRankingsPrintDocument(opts: {
         individualOrdinals,
         completeBallotCount,
       ),
+      stats,
       showCutBelow: place != null && cuts.includes(place),
     };
   });
@@ -295,10 +381,12 @@ export function buildRankingsPrintDocument(opts: {
     season: season.trim(),
     title,
     scopeLine,
+    teamStatsLine,
     printedAt: formatPrintDate(printedAt),
     valueHeader,
     nameHeader: nameMode === 'publicId' ? 'ID' : 'Player',
     nameMode,
+    showMetricStats,
     rows,
   };
 }
@@ -319,7 +407,7 @@ export function buildPlayerIdLegendDocument(opts: {
       publicId: displayPublicId(player),
       name: player.name,
       jersey: player.jerseyNumber,
-      position: player.position,
+      position: formatPlayerPosition(player.position),
     }));
 
   return {
@@ -330,10 +418,17 @@ export function buildPlayerIdLegendDocument(opts: {
   };
 }
 
-function printRowHtml(row: RankingsPrintRow, nameMode: RankingsPrintNameMode): string {
+function printRowHtml(
+  row: RankingsPrintRow,
+  nameMode: RankingsPrintNameMode,
+  showMetricStats: boolean,
+): string {
   const place = row.place == null ? '—' : String(row.place);
   const cutClass = row.showCutBelow ? ' class="breakout"' : '';
   const nameClass = nameMode === 'publicId' ? 'name id' : 'name';
+  if (showMetricStats && row.stats) {
+    return `<tr${cutClass}><td class="rank">${place}</td><td class="jersey">#${row.jersey}</td><td class="${nameClass}">${escapeHtml(row.name)}</td><td class="value">${escapeHtml(row.stats.average)}</td><td class="value">${escapeHtml(row.stats.latest)}</td><td class="value">${escapeHtml(row.stats.best)}</td></tr>`;
+  }
   return `<tr${cutClass}><td class="rank">${place}</td><td class="jersey">#${row.jersey}</td><td class="${nameClass}">${escapeHtml(row.name)}</td><td class="pos">${escapeHtml(row.position)}</td><td class="value">${escapeHtml(row.value)}</td></tr>`;
 }
 
@@ -342,8 +437,26 @@ function printTableHtml(
   valueHeader: string,
   nameHeader: string,
   nameMode: RankingsPrintNameMode,
+  showMetricStats: boolean,
 ): string {
-  const body = rows.map((row) => printRowHtml(row, nameMode)).join('');
+  const body = rows
+    .map((row) => printRowHtml(row, nameMode, showMetricStats))
+    .join('');
+  if (showMetricStats) {
+    return `<table>
+    <thead>
+      <tr>
+        <th class="rank">Rank</th>
+        <th class="jersey">No.</th>
+        <th>${escapeHtml(nameHeader)}</th>
+        <th class="value">Avg</th>
+        <th class="value">Latest</th>
+        <th class="value">Best</th>
+      </tr>
+    </thead>
+    <tbody>${body}</tbody>
+  </table>`;
+  }
   return `<table>
     <thead>
       <tr>
@@ -366,9 +479,18 @@ export function rankingsPrintHtml(doc: RankingsPrintDocument): string {
   const density = printSheetDensity(rowsPerColumn);
   const tables = chunks
     .map((chunk) =>
-      printTableHtml(chunk, doc.valueHeader, doc.nameHeader, doc.nameMode),
+      printTableHtml(
+        chunk,
+        doc.valueHeader,
+        doc.nameHeader,
+        doc.nameMode,
+        doc.showMetricStats,
+      ),
     )
     .join('');
+  const teamStats = doc.teamStatsLine
+    ? `<p class="team-stats">${escapeHtml(doc.teamStatsLine)}</p>`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -424,6 +546,13 @@ export function rankingsPrintHtml(doc: RankingsPrintDocument): string {
       font-size: 8pt;
       color: #444;
     }
+    .team-stats {
+      margin: 3px 0 0;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 8pt;
+      font-weight: 600;
+      color: #222;
+    }
     .columns {
       display: grid;
       grid-template-columns: repeat(${columns}, minmax(0, 1fr));
@@ -477,6 +606,7 @@ export function rankingsPrintHtml(doc: RankingsPrintDocument): string {
         <p class="kicker">${escapeHtml(doc.teamName)}${seasonBit}</p>
         <h1>${escapeHtml(doc.title)}</h1>
         <p class="meta">${escapeHtml(doc.scopeLine)} · Printed ${escapeHtml(doc.printedAt)}</p>
+        ${teamStats}
       </header>
       <div class="columns cols-${columns}">${tables}</div>
     </div>

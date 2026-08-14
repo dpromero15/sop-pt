@@ -11,6 +11,7 @@ import type {
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
 import { activePlayers, isCompleteBallot } from '../utils/coachesRating';
+import { formatPlayerPosition } from '../utils/playerPositions';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { defaultAvatarFor } from '../constants/avatars';
 
@@ -134,7 +135,7 @@ const RankRow: React.FC<RankRowProps> = ({
                 #{player.jerseyNumber}
               </span>
               <span className="px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 text-[10px] font-bold shrink-0">
-                {player.position}
+                {formatPlayerPosition(player.position)}
               </span>
               {player.status === 'injured' && (
                 <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10px] font-semibold">

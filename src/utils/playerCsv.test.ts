@@ -88,4 +88,18 @@ describe('playerCsv', () => {
       true,
     );
   });
+
+  it('accepts wing-back and false-nine codes', () => {
+    const csv = [
+      PLAYER_CSV_HEADERS.join(','),
+      'Wing Back,2,WB',
+      'False Nine,9,F9',
+    ].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set());
+    expect(result.errors).toEqual([]);
+    expect(result.ok).toMatchObject([
+      { name: 'Wing Back', position: 'WB' },
+      { name: 'False Nine', position: 'F9' },
+    ]);
+  });
 });

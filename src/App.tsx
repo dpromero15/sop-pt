@@ -393,6 +393,7 @@ export default function App() {
             metrics={metrics}
             formula={formula}
             hasLoggedData={entries.length > 0}
+            entries={entries}
             coaches={coaches}
             coachBallots={coachBallots}
             bumpCoachId={bumpCoachId}

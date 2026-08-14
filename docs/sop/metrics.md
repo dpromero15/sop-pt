@@ -51,6 +51,8 @@ Set aggregation under Config → Measured Metrics → **How to use (aggregation)
 
 When a specific measurable metric tag is selected, the leaderboard shows the **aggregated raw value** with unit (e.g. `5.12s`, `14 goals`), sorted by that value and direction. An informational **Team** strip shows squad average, best, and how many players have scored that metric.
 
+**Print (single metric):** Rankings print sheets show **Avg**, **Latest** (most recent entry), and **Best** (all-time min/max by direction) per player, plus a team rollup line (`Team · Avg · Latest best · All-time`). Rank order still follows the metric’s configured aggregation mode. Formula / category / coaches prints stay single-value.
+
 ### Statistical Rank vs Adjusted Rank
 
 Standing scores are **squad pool percentiles** per metric (100 = best among players who have that metric logged) — **not** absolute min/max expected ranges (standards/benchmarks are deferred).
@@ -109,4 +111,5 @@ Calculated fields were removed (schema v8); use aggregation mode **average** ins
 - Aggregation: `src/utils/metricAggregation.ts`
 - Scoring: `src/utils/scoring.ts`
 - Rankings filter / team summary: `src/utils/rankingsFilter.ts`
+- Rankings print (Avg / Latest / Best): `src/utils/rankingsPrint.ts`
 - UI: `ConfigView.tsx`, `RankingsView.tsx`

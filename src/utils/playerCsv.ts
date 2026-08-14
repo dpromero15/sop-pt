@@ -4,6 +4,7 @@ import {
   parseBirthYear,
   parsePlayerGrade,
 } from './playerDemographics';
+import { isPlayerPosition } from './playerPositions';
 import { normalizePublicId } from './playerPublicId';
 
 export const PLAYER_CSV_HEADERS = [
@@ -17,19 +18,6 @@ export const PLAYER_CSV_HEADERS = [
   'notes',
   'publicId',
 ] as const;
-
-const VALID_POSITIONS = new Set<PlayerPosition>([
-  'GK',
-  'CB',
-  'LB',
-  'RB',
-  'CDM',
-  'CM',
-  'CAM',
-  'LW',
-  'RW',
-  'ST',
-]);
 
 const VALID_FEET = new Set(['Left', 'Right', 'Both']);
 
@@ -175,7 +163,7 @@ export function parseAndValidatePlayerCsv(
       continue;
     }
 
-    if (!VALID_POSITIONS.has(positionRaw as PlayerPosition)) {
+    if (!isPlayerPosition(positionRaw)) {
       errors.push(`Row ${rowNum}: invalid position "${positionRaw}".`);
       skipped += 1;
       continue;
