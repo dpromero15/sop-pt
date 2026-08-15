@@ -22,6 +22,7 @@ import {
   Coach,
   CoachBallot,
   PlayerPosition,
+  PlayerRankingPool,
   RankingBoundariesConfig,
   Team,
 } from '../types';
@@ -41,6 +42,8 @@ import {
 import {
   activePlayers,
   coachBallotOrdinals,
+  coachPoolBallotOrdinals,
+  coachesRankingsForPool,
   isCompleteBallot,
 } from '../utils/coachesRating';
 import { specialtyAdjustedRankings } from '../utils/eligibility';
@@ -56,6 +59,10 @@ import {
   type RankingsPrintNameMode,
 } from '../utils/rankingsPrint';
 import { displayPublicId } from '../utils/playerPublicId';
+import {
+  PLAYER_RANKING_POOLS,
+  formatPlayerRankingPool,
+} from '../utils/playerRankingPools';
 import { metricPrimaryLabelId } from '../utils/metricLabels';
 import {
   visibleActiveWeights,
@@ -330,6 +337,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const [totalMode, setTotalMode] = useState<RankingsTotalMode>('overall');
   /** 'average' = all complete ballots; otherwise a coach id. */
   const [coachesScope, setCoachesScope] = useState<string>('average');
+  const [coachesPoolMode, setCoachesPoolMode] = useState(false);
+  const [selectedRankingPool, setSelectedRankingPool] =
+    useState<PlayerRankingPool>('wingbacks');
   const [specialtyPosition, setSpecialtyPosition] =
     useState<PlayerPosition | null>(null);
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
@@ -348,8 +358,17 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     if (specialtyPosition) {
       return specialtyAdjustedRankings(rankings, specialtyPosition);
     }
+    if (totalMode === 'coaches' && coachesPoolMode) {
+      return coachesRankingsForPool(rankings, selectedRankingPool);
+    }
     return rankings;
-  }, [rankings, specialtyPosition]);
+  }, [
+    rankings,
+    specialtyPosition,
+    totalMode,
+    coachesPoolMode,
+    selectedRankingPool,
+  ]);
 
   const rosterPlayers = useMemo(
     () => rankings.map((r) => r.player),
@@ -357,30 +376,46 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   );
 
   const activeCutLines = useMemo(
-    () =>
-      resolveActiveCutLines({
+    () => [
+      ...new Set(
+        resolveActiveCutLines({
         boundaries: rankingBoundaries,
         specialtyPosition,
         selectedLabelId: standingLabelId,
         selectedMetricId,
+        selectedRankingPool:
+          effectiveTotalMode === 'coaches' && coachesPoolMode
+            ? selectedRankingPool
+            : null,
         totalMode: effectiveTotalMode,
-      }),
+        }),
+      ),
+    ],
     [
       rankingBoundaries,
       specialtyPosition,
       standingLabelId,
       selectedMetricId,
+      coachesPoolMode,
+      selectedRankingPool,
       effectiveTotalMode,
     ],
   );
 
+  const activePoolCuts =
+    effectiveTotalMode === 'coaches' && coachesPoolMode
+      ? (rankingBoundaries.poolCuts?.[selectedRankingPool] ??
+        PLAYER_RANKING_POOLS.find((pool) => pool.id === selectedRankingPool)!)
+      : null;
+
   const cutLinesUseListPlace = Boolean(
-    !specialtyPosition &&
+    (effectiveTotalMode === 'coaches' && coachesPoolMode) ||
+      (!specialtyPosition &&
       ((selectedMetricId &&
         rankingBoundaries.metricCuts?.[selectedMetricId]) ||
         (standingLabelId &&
           standingLabelId !== 'all' &&
-          rankingBoundaries.categoryCuts?.[standingLabelId])),
+          rankingBoundaries.categoryCuts?.[standingLabelId]))),
   );
 
   const activePlayerIds = useMemo(
@@ -406,8 +441,21 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   const individualCoachOrdinals = useMemo(() => {
     if (totalMode !== 'coaches' || coachesScope === 'average') return null;
     const ballot = coachBallots.find((b) => b.coachId === coachesScope);
-    return coachBallotOrdinals(rosterPlayers, ballot);
-  }, [totalMode, coachesScope, coachBallots, rosterPlayers]);
+    return coachesPoolMode
+      ? coachPoolBallotOrdinals(
+          rosterPlayers,
+          ballot,
+          selectedRankingPool,
+        )
+      : coachBallotOrdinals(rosterPlayers, ballot);
+  }, [
+    totalMode,
+    coachesScope,
+    coachBallots,
+    rosterPlayers,
+    coachesPoolMode,
+    selectedRankingPool,
+  ]);
 
   const scopedMetrics = useMemo(
     () =>
@@ -632,6 +680,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         labels,
         totalMode: effectiveTotalMode,
         coachesScopeLabel,
+        rankingPoolLabel:
+          effectiveTotalMode === 'coaches' && coachesPoolMode
+            ? formatPlayerRankingPool(selectedRankingPool)
+            : undefined,
         completeBallotCount,
         individualOrdinals: individualCoachOrdinals,
         cutLines: resolvePrintCutLines({
@@ -639,6 +691,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           specialtyPosition,
           selectedLabelId: standingLabelId,
           selectedMetricId,
+          selectedRankingPool:
+            effectiveTotalMode === 'coaches' && coachesPoolMode
+              ? selectedRankingPool
+              : null,
           totalMode: effectiveTotalMode,
         }),
         nameMode,
@@ -922,12 +978,66 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                 : effectiveTotalMode === 'adjusted'
                   ? 'Gaps count as 0; ±1 bumps apply. Breakout lines mark squad groups. Only a manual Ineligible mark on the player drops them to the bottom — compliance is informational.'
                   : coachesScope === 'average'
-                    ? 'Competition rank from the average of complete coach ballots (lower average = better). Add ballots under Players → Coaches Rating.'
-                    : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot (1 = best).`}{' '}
+                    ? `Competition rank from the average of complete coach ballots${coachesPoolMode ? ` within ${formatPlayerRankingPool(selectedRankingPool)}` : ''} (lower average = better). Add ballots under Players → Coaches Rating.`
+                    : `Ordinal ranks from ${coachesScopeLabel}'s complete ballot${coachesPoolMode ? ` within ${formatPlayerRankingPool(selectedRankingPool)}` : ''} (1 = best).`}{' '}
             {effectiveTotalMode !== 'coaches' &&
               !specialtyPosition &&
               'Applies to every category and formula standing.'}
           </p>
+          {totalMode === 'coaches' && (
+            <div className="mt-2 space-y-2">
+              <div
+                className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+                role="tablist"
+                aria-label="Coaches Rank scope"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!coachesPoolMode}
+                  onClick={() => setCoachesPoolMode(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                    !coachesPoolMode
+                      ? 'bg-violet-500 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Overall
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={coachesPoolMode}
+                  onClick={() => setCoachesPoolMode(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                    coachesPoolMode
+                      ? 'bg-violet-500 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  By position pool
+                </button>
+              </div>
+              {coachesPoolMode && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {PLAYER_RANKING_POOLS.map((pool) => (
+                    <button
+                      key={pool.id}
+                      type="button"
+                      onClick={() => setSelectedRankingPool(pool.id)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        selectedRankingPool === pool.id
+                          ? 'bg-violet-500/20 text-violet-200 border-violet-500/40'
+                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+                      }`}
+                    >
+                      {pool.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {totalMode === 'coaches' && (
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
               <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mr-0.5">
@@ -1504,11 +1614,29 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               {crossedCuts.map((cut) => (
                 <div
                   key={`breakout-${cut}-${item.player.id}`}
-                  className="flex items-center py-2"
+                  className="flex items-center gap-3 py-2"
                   role="separator"
-                  aria-label="Group breakout"
+                  aria-label={
+                    activePoolCuts
+                      ? cut === activePoolCuts.primaryCut &&
+                        activePoolCuts.primaryCut !== activePoolCuts.secondaryCut
+                        ? 'Substitutes'
+                        : 'Cuts'
+                      : 'Group breakout'
+                  }
                 >
                   <div className="h-0 flex-1 border-t border-dashed border-violet-400/70" />
+                  {activePoolCuts && (
+                    <>
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-violet-300">
+                        {cut === activePoolCuts.primaryCut &&
+                        activePoolCuts.primaryCut !== activePoolCuts.secondaryCut
+                          ? 'Substitutes'
+                          : 'Cuts'}
+                      </span>
+                      <div className="h-0 flex-1 border-t border-dashed border-violet-400/70" />
+                    </>
+                  )}
                 </div>
               ))}
               {showIneligibleDivider && (

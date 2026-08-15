@@ -1,10 +1,10 @@
-# Working ledger — release v2.11.0
+# Working ledger — release v2.12.0
 
 | Field | Value |
 |---|---|
-| **Release** | `2.11.0` |
-| **Branch** | `release/v2.11.0` |
-| **Last updated** | 2026-08-13 |
+| **Release** | `2.12.0` |
+| **Branch** | `release/v2.12.0` |
+| **Last updated** | 2026-08-14 |
 
 ## In progress
 
@@ -12,31 +12,27 @@ _(none)_
 
 ## Ready to ship
 
-### #149 — Printouts show average, latest, and all-time best for metrics
+### #152 — Add coach rankings by configurable position pool
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Metric Rankings prints use Avg / Latest / Best columns; header has Team · Avg · Latest best · All-time. Rank order still follows the metric’s aggregation mode. Non-metric prints unchanged.
-- **Touchpoints:** `src/utils/metricAggregation.ts`, `src/utils/rankingsPrint.ts`, `RankingsView.tsx`, `App.tsx`
-
-### #151 — Expand soccer positions with tactical numbers (WB, False 9, etc.)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Positions show classic tactical numbers (e.g. `ST (9)`, `False 9 (9)`, `CDM (6)`). Added WB / LWB / RWB, RM / LM, SS, CF, F9. Roster DEF/MID/FWD filters and CSV accept the new codes; stored values remain short codes.
-- **Touchpoints:** `src/utils/playerPositions.ts`, `src/types.ts`, `PlayersView.tsx`, `RankingsView.tsx`, `playerCsv.ts`
+- **Notes:** Player pool defaults from position and remains editable. Coaches Rank has Overall / By position pool tabs, pool-local ranks, and labeled substitute / actual-cut lines on screen and print.
+- **Defaults:** Wingbacks 2/3; Center Defense 2/3; Central Midfield 2/3; Forwards 2/6; Goalkeepers 1/1.
+- **Migration:** schema **v17** (`017_player_ranking_pool`) backfills existing players while preserving valid overrides.
+- **Touchpoints:** `playerRankingPools.ts`, `PlayersView.tsx`, `RankingsView.tsx`, `RankingBoundariesPanel.tsx`, `rankingBoundaries.ts`, `coachesRating.ts`, `rankingsPrint.ts`, `playerCsv.ts`
 
 **Suggested PR Closes:**
 ```
-Closes #149
-Closes #151
+Closes #152
 ```
 
 ## Still open (this release)
 
-_(none)_
+### #99 — System Admin team hub + shadow mode (attribution-first)
+- Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
+- **Status:** open backlog for `v2.12.0`; not part of #152.
 
 ## Deferred (later)
 
-### #99 — System Admin team hub + shadow mode (attribution-first)
-- Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
-- **Parked for:** `v2.12.0` (backlog; not on the 2.11 line)
+_(none)_
 
 ## Agent notes
 
@@ -44,6 +40,8 @@ _(none)_
 - `2.11.0` #139 shipped via [#141](https://github.com/dpromero15/sop-pt/pull/141).
 - `2.11.0` #142 + #143 shipped via [#144](https://github.com/dpromero15/sop-pt/pull/144).
 - `2.11.0` #140 + #145 + #146 + #147 shipped via [#148](https://github.com/dpromero15/sop-pt/pull/148).
+- `2.11.0` #149 + #151 shipped via [#150](https://github.com/dpromero15/sop-pt/pull/150).
+- Player ranking pools: schema **v17** (`017_player_ranking_pool`).
 - Label hierarchy: schema **v14** (`014_label_parent`); shared multi-parent: schema **v16** (`016_label_multi_parent`).
 - Player public IDs: schema **v15** (`015_player_public_id`).
 - Multi-category metrics: schema **v9** (`labelIds` + `primaryLabelId`; primary-only formula standing). Parent standing includes child primaries **only for that child’s primary parent** (shared folders do not triple-count).
@@ -54,4 +52,4 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (293 tests) 2026-08-14 — #149 + #151.
+- **QA:** `npm run lint` + `npm test` (300 tests) + `npm run build` 2026-08-14 — #152.

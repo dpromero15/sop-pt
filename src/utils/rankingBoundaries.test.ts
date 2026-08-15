@@ -28,6 +28,13 @@ describe('normalizeRankingBoundaries', () => {
     });
     expect(n.categoryCuts).toEqual({});
     expect(n.metricCuts).toEqual({});
+    expect(n.poolCuts).toMatchObject({
+      wingbacks: { primaryCut: 2, secondaryCut: 3 },
+      'center-defense': { primaryCut: 2, secondaryCut: 3 },
+      'central-midfield': { primaryCut: 2, secondaryCut: 3 },
+      forwards: { primaryCut: 2, secondaryCut: 6 },
+      goalkeepers: { primaryCut: 1, secondaryCut: 1 },
+    });
   });
 });
 
@@ -83,6 +90,16 @@ describe('resolveActiveCutLines', () => {
         totalMode: 'formula',
       }),
     ).toEqual([]);
+  });
+
+  it('uses substitute and actual-cut lines for Coaches Rank by pool', () => {
+    expect(
+      resolveActiveCutLines({
+        boundaries: base,
+        selectedRankingPool: 'forwards',
+        totalMode: 'coaches',
+      }),
+    ).toEqual([2, 6]);
   });
 });
 

@@ -309,6 +309,24 @@ describe('buildRankingsPrintDocument', () => {
     expect(rankingsPrintHtml(doc)).not.toMatch(/Cut @/i);
   });
 
+  it('labels substitute and actual-cut meaning on pool printouts', () => {
+    const doc = buildRankingsPrintDocument({
+      teamName: 'Thunder FC',
+      rankings: [ranking('a', 50, 1), ranking('b', 50, 2)],
+      sortBy: 'total',
+      selectedLabelId: 'all',
+      selectedMetricId: 'none',
+      metrics,
+      labels,
+      totalMode: 'coaches',
+      rankingPoolLabel: 'Forwards',
+      completeBallotCount: 2,
+      cutLines: [2, 6],
+    });
+    expect(doc.title).toBe('Coaches Rank · Forwards');
+    expect(doc.scopeLine).toContain('Substitutes after 2 · cuts after 6');
+  });
+
   it('splits a large roster across columns so the sheet stays one page', () => {
     const pool = Array.from({ length: 36 }, (_, i) =>
       ranking(`p${i + 1}`, 4.5 + i * 0.01),

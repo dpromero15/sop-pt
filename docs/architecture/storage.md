@@ -31,7 +31,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - Writes during an in-flight flush stay in the outbox and flush next (do not drop). Formula Save, bump budget Save, and Compliance manager Save call `flushNow`. Compliance board / manager have **Sync now**.
 - Sync chip + Admin **System sync log** keep a local ring buffer (`stm_sync_log_v1`, last 80 events) of hydrate/flush/error/queued-dirty.
 - `applySnapshot` persists empty arrays (so releasing `holdSeeds` does not reseed sample Thunder FC).
-- Ranking cut lines: overall `primaryCut`/`secondaryCut` plus optional `categoryCuts` / `metricCuts` maps (resolved specialty → metric → category → global).
+- Ranking cut lines: overall `primaryCut`/`secondaryCut` plus optional `categoryCuts` / `metricCuts` / `poolCuts` maps (resolved pool → specialty → metric → category → global). Pool lines default to Wingbacks 2/3, Center Defense 2/3, Central Midfield 2/3, Forwards 2/6, Goalkeepers 1/1.
 - If cloud is empty and this device has a roster (e.g. JSON import), the first enter **pushes** that squad.
 - Simulated auth / missing `VITE_API_BASE_URL` stays local-only.
 - SPA never talks to Firestore; Cloud Run Admin SDK remains the write path.
@@ -42,13 +42,14 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 ### Player fields
 
-`id`, `name`, `publicId?`, `jerseyNumber`, `position`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
+`id`, `name`, `publicId?`, `jerseyNumber`, `position`, `rankingPool?`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
 
 - **`birthYear`:** Calendar year of birth. Replaces legacy `age` (schema **v13** converts `age` → `asOfYear - age` and drops `age`).
 - **`grade`:** Current school grade `9` | `10` | `11` | `12` (Freshman–Senior). Optional; not inferred from birth year.
 - **`deletedAt`:** ISO timestamp when the player was soft-deleted. Unset = live. `getPlayers()` excludes these; snapshots/backups keep them so cloud replace-collection does not wipe trash. Restore clears the flag. Records older than **90 days** are hard-deleted on boot (bumps, compliance, equipment assignment cascade).
 - **`status`:** `active` | `injured` | `inactive`. Inactive (cut) players stay in storage with their logs but are omitted from live roster lists, rankings, percentile pools, team averages, logger, compliance, and equipment assign. Reactivate from Players → Inactive. Injured remains on the live roster.
 - **`rankingIneligible`:** Coach-set flag. `true` excludes the player from Adjusted Rank (bottom of the list). Missing/false = included. Compliance checklist badges are informational and do not change Adjusted place.
+- **`rankingPool`:** Editable Coaches Rank comparison pool. Defaults from `position`; schema **v17** backfills existing local and hydrated players without replacing a valid coach override.
 
 ### Session fields
 
@@ -73,6 +74,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Label parents (v14):** Optional `parentLabelId` on labels (max depth 1). Invalid parents are cleared; metric `labelIds` keep at most one id per parent tree (prefer subcategory); subcategory formula weights are dropped.
 - **Player public ID (v15):** Short stable `publicId` (6 Crockford-like chars, unique per team) for printouts and the team ID legend. Distinct from internal `id`. Assigned on create; migration backfills existing squads. Rankings print can show IDs instead of names.
 - **Shared subcategories (v16):** `parentLabelIds[]` + `primaryParentLabelId` (legacy `parentLabelId` mirrored as the primary). A folder like Endurance can sit under several roots; only the primary parent receives formula standing so overall rank does not triple-count.
+- **Player ranking pool (v17):** Assigns the editable Coaches Rank pool from each player's position. Repair is idempotent and preserves existing valid assignments.
 
 ### Metric definition fields
 

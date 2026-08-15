@@ -114,6 +114,14 @@ export type PlayerPosition = PlayerPositionCode;
 /** US high-school grade. */
 export type PlayerGrade = 9 | 10 | 11 | 12;
 
+/** Coach-defined comparison pool used by Coaches Rank. */
+export type PlayerRankingPool =
+  | 'wingbacks'
+  | 'center-defense'
+  | 'central-midfield'
+  | 'forwards'
+  | 'goalkeepers';
+
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
 
 export interface Player {
@@ -126,6 +134,8 @@ export interface Player {
   publicId?: string;
   jerseyNumber: number;
   position: PlayerPosition;
+  /** Defaults from position, but may be overridden for roster planning. */
+  rankingPool?: PlayerRankingPool;
   preferredFoot: 'Left' | 'Right' | 'Both';
   avatarUrl?: string;
   /** Calendar year of birth (e.g. 2010). Prefer this over a drifting age. */
@@ -219,6 +229,8 @@ export interface RankingBoundariesConfig {
   categoryCuts?: Record<string, RankingCutPair>;
   /** Optional cuts keyed by metric or calculated-field id. */
   metricCuts?: Record<string, RankingCutPair>;
+  /** Substitute / actual-cut lines keyed by coach ranking pool. */
+  poolCuts?: Partial<Record<PlayerRankingPool, RankingCutPair>>;
 }
 
 /** Training / testing / drill days are `session`; competitive games are `match`. */

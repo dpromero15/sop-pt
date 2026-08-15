@@ -19,6 +19,10 @@ import {
 } from '../types';
 import { defaultAvatarFor } from '../constants/avatars';
 import { publicIdFromSeed } from '../utils/playerPublicId';
+import {
+  DEFAULT_POOL_CUTS,
+  defaultRankingPoolForPosition,
+} from '../utils/playerRankingPools';
 
 export const DEFAULT_TEAM: Team = {
   id: 'team_thunder_fc_u16',
@@ -430,7 +434,11 @@ export const INITIAL_PLAYERS: Player[] = [
     status: 'active',
     notes: 'Backup keeper, vocal leader on bench.'
   }
-].map((p) => ({ ...p, publicId: publicIdFromSeed(p.id) })) as Player[];
+].map((p) => ({
+  ...p,
+  publicId: publicIdFromSeed(p.id),
+  rankingPool: defaultRankingPoolForPosition(p.position),
+})) as Player[];
 
 /** Sample roster starts eligible (blocking paperwork marked complete). */
 export const DEFAULT_PLAYER_COMPLIANCE: PlayerComplianceState =
@@ -656,4 +664,5 @@ export const DEFAULT_RANKING_BOUNDARIES: RankingBoundariesConfig = {
   specialtyCuts: { GK: 4 },
   categoryCuts: {},
   metricCuts: {},
+  poolCuts: DEFAULT_POOL_CUTS,
 };

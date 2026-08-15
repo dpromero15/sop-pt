@@ -769,4 +769,37 @@ describe('runLocalMigrations', () => {
       parentLabelId: 'offense',
     });
   });
+
+  it('backfills editable player ranking pools from position via v17', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(16));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', position: 'LB' },
+        { id: 'p2', position: 'CB' },
+        { id: 'p3', position: 'LW', rankingPool: 'central-midfield' },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    const players = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+    );
+    expect(players.map((p: { rankingPool: string }) => p.rankingPool)).toEqual([
+      'wingbacks',
+      'center-defense',
+      'central-midfield',
+    ]);
+
+    const repaired = repairLocalMigrations(store);
+    expect(repaired.error).toBeUndefined();
+    expect(
+      JSON.parse(
+        store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+      ).map((p: { rankingPool: string }) => p.rankingPool),
+    ).toEqual(['wingbacks', 'center-defense', 'central-midfield']);
+  });
 });
