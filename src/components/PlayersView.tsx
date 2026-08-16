@@ -16,28 +16,30 @@ import {
   Printer,
   Shield,
 } from 'lucide-react';
-import {
+import type {
   Player,
   PlayerPosition,
+  PlayerRanking,
   PlayerRankingPool,
   LabelDefinition,
   MetricDefinition,
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   ComplianceRequirement,
   PlayerComplianceState,
+  PositionDefinition,
 } from '../types';
 import {
-  DEF_POSITIONS,
-  FWD_POSITIONS,
-  MID_POSITIONS,
-  PLAYER_POSITIONS,
   formatPlayerPosition,
+  formatPlayerPositions,
+  formatPositionLabel,
+  playerHasPosition,
+  playerPositionCodes,
+  positionsForLine,
 } from '../utils/playerPositions';
 import { StorageService } from '../services/storage';
-import { calculatePlayerRankings } from '../utils/scoring';
 import {
-  applyEligibilityToAdjustedRanks,
   completeFromChecked,
   isRequirementChecked,
   isRequirementComplete,
@@ -87,9 +89,13 @@ interface PlayersViewProps {
   metrics: MetricDefinition[];
   coaches: Coach[];
   coachBallots: CoachBallot[];
+  coachPositionBallots: CoachPositionBallot[];
   complianceRequirements: ComplianceRequirement[];
   playerCompliance: PlayerComplianceState;
+  positions: PositionDefinition[];
+  rankings: PlayerRanking[];
   onSelectPlayer: (player: Player) => void;
+  onPrintPlacement?: (players: Player[]) => void;
   onRefreshData: () => void;
   isAddModalOpen: boolean;
   onCloseAddModal: () => void;
@@ -105,9 +111,13 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   metrics,
   coaches,
   coachBallots,
+  coachPositionBallots,
   complianceRequirements,
   playerCompliance,
+  positions,
+  rankings,
   onSelectPlayer,
+  onPrintPlacement,
   onRefreshData,
   isAddModalOpen,
   onCloseAddModal,
@@ -126,6 +136,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formName, setFormName] = useState('');
   const [formJersey, setFormJersey] = useState<number>(10);
   const [formPosition, setFormPosition] = useState<PlayerPosition>('CM');
+  const [formExtraPositions, setFormExtraPositions] = useState<string[]>([]);
   const [formRankingPool, setFormRankingPool] =
     useState<PlayerRankingPool>('central-midfield');
   const [formFoot, setFormFoot] = useState<'Left' | 'Right' | 'Both'>('Right');
@@ -169,7 +180,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     pane === 'roster'
       ? 'Manage your squad roster, positions, and individual score sheets.'
       : pane === 'coaches'
-        ? 'Add coaches and submit ordinal ballots — complete ballots feed Rankings → Coaches Rank.'
+        ? 'Add coaches and submit ordinal ballots. Squad ballots feed overall Coaches Rank; By position ballots are a separate depth-chart rank.'
         : 'See who is out of compliance and update paperwork for the whole squad.';
 
   const showToast = (msg: string) => {
@@ -184,6 +195,9 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormName(player.name);
     setFormJersey(player.jerseyNumber);
     setFormPosition(player.position);
+    setFormExtraPositions(
+      playerPositionCodes(player).filter((code) => code !== player.position),
+    );
     setFormRankingPool(rankingPoolForPlayer(player));
     setFormFoot(player.preferredFoot);
     setFormBirthYear(player.birthYear ? String(player.birthYear) : '');
@@ -217,6 +231,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         name: formName,
         jerseyNumber: formJersey,
         position: formPosition,
+        positions: playerPositionCodes({
+          position: formPosition,
+          positions: formExtraPositions,
+        }),
         rankingPool: formRankingPool,
         preferredFoot: formFoot,
         birthYear,
@@ -232,6 +250,10 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         name: formName,
         jerseyNumber: formJersey,
         position: formPosition,
+        positions: playerPositionCodes({
+          position: formPosition,
+          positions: formExtraPositions,
+        }),
         rankingPool: formRankingPool,
         preferredFoot: formFoot,
         birthYear,
@@ -250,6 +272,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormBirthYear('');
     setFormGrade('');
     setFormRankingPool(defaultRankingPoolForPosition('CM'));
+    setFormExtraPositions([]);
     setFormRankingIneligible(false);
     setFormInactive(false);
     onRefreshData();
@@ -281,6 +304,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         players: liveRoster,
       }),
     );
+  };
+
+  const handlePrintPlacementSheets = () => {
+    if (!onPrintPlacement || filteredPlayers.length === 0) return;
+    onPrintPlacement(filteredPlayers);
   };
 
   const handleImportCsv = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -358,26 +386,44 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
       p.jerseyNumber.toString() === searchQuery ||
       displayPublicId(p).toLowerCase().includes(q);
 
-    if (positionFilter === 'GK') return matchesSearch && p.position === 'GK';
+    if (positionFilter === 'GK')
+      return (
+        matchesSearch &&
+        positionsForLine('gk', positions).some((code) =>
+          playerHasPosition(p, code),
+        )
+      );
     if (positionFilter === 'DEF')
-      return matchesSearch && DEF_POSITIONS.includes(p.position);
+      return (
+        matchesSearch &&
+        positionsForLine('def', positions).some((code) =>
+          playerHasPosition(p, code),
+        )
+      );
     if (positionFilter === 'MID')
-      return matchesSearch && MID_POSITIONS.includes(p.position);
+      return (
+        matchesSearch &&
+        positionsForLine('mid', positions).some((code) =>
+          playerHasPosition(p, code),
+        )
+      );
     if (positionFilter === 'FWD')
-      return matchesSearch && FWD_POSITIONS.includes(p.position);
+      return (
+        matchesSearch &&
+        positionsForLine('fwd', positions).some((code) =>
+          playerHasPosition(p, code),
+        )
+      );
 
     return matchesSearch;
   };
   const filteredPlayers = liveRoster.filter(matchesRosterFilters);
   const filteredInactive = inactiveRoster.filter(matchesRosterFilters);
 
-  // Calculate scores lookup map
-  const entries = StorageService.getEntries();
-  const formula = StorageService.getFormula();
-  const rankings = applyEligibilityToAdjustedRanks(
-    calculatePlayerRankings(liveRoster, entries, metrics, labels, formula),
+  const rankingMap = useMemo(
+    () => new Map(rankings.map((row) => [row.player.id, row])),
+    [rankings],
   );
-  const rankingMap = new Map(rankings.map(r => [r.player.id, r]));
 
   return (
     <div className="space-y-6 pb-28">
@@ -414,6 +460,17 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                 <Printer className="w-4 h-4 text-slate-300" />
                 <span>Print ID legend</span>
               </button>
+              {onPrintPlacement && (
+                <button
+                  type="button"
+                  onClick={handlePrintPlacementSheets}
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs border border-slate-700 transition-all active:scale-95"
+                  title="Two-page placement sheet per player in the current list"
+                >
+                  <Printer className="w-4 h-4 text-emerald-400" />
+                  <span>Print placement sheets</span>
+                </button>
+              )}
               {!readOnlyRoster && (
               <>
               <button
@@ -552,9 +609,11 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         <CoachesRatingView
           coaches={coaches}
           ballots={coachBallots}
+          positionBallots={coachPositionBallots}
           players={players}
           rankings={rankings}
           labels={labels}
+          positions={positions}
           onRefreshData={onRefreshData}
         />
       ) : (
@@ -633,7 +692,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                           {displayPublicId(player)}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
-                          #{player.jerseyNumber} • {formatPlayerPosition(player.position)}
+                          #{player.jerseyNumber} • {formatPlayerPositions(player, positions)}
                         </span>
                         {player.grade != null && (
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold border border-slate-700">
@@ -749,6 +808,19 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                     {player.rankingIneligible ? 'Clear ineligible' : 'Mark ineligible'}
                   </button>
                   </>
+                  )}
+                  {onPrintPlacement && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPrintPlacement([player]);
+                      }}
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500/20 text-slate-400 hover:text-emerald-300 transition-all active:scale-95"
+                      title="Print placement sheet"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                    </button>
                   )}
                   <button
                     onClick={(e) => handleStartEdit(player, e)}
@@ -1005,16 +1077,58 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                             const position = e.target.value as PlayerPosition;
                             setFormPosition(position);
                             setFormRankingPool(defaultRankingPoolForPosition(position));
+                            setFormExtraPositions((prev) =>
+                              prev.filter((code) => code !== position),
+                            );
                           }}
                           className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-emerald-500"
                         >
-                          {PLAYER_POSITIONS.map(({ code, label }) => (
-                            <option key={code} value={code}>
-                              {label}
+                          {positions.map((position) => (
+                            <option key={position.code} value={position.code}>
+                              {formatPositionLabel(position)}
                             </option>
                           ))}
                         </select>
                       </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-400 font-semibold mb-1">
+                        Also plays
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {positions
+                          .filter((position) => position.code !== formPosition)
+                          .map((position) => {
+                            const checked = formExtraPositions.includes(
+                              position.code,
+                            );
+                            return (
+                              <button
+                                key={position.code}
+                                type="button"
+                                onClick={() =>
+                                  setFormExtraPositions((prev) =>
+                                    checked
+                                      ? prev.filter((code) => code !== position.code)
+                                      : [...prev, position.code],
+                                  )
+                                }
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold border ${
+                                  checked
+                                    ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/40'
+                                    : 'bg-slate-950 text-slate-400 border-slate-800'
+                                }`}
+                              >
+                                {formatPositionLabel(position)}
+                              </button>
+                            );
+                          })}
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-500">
+                        Extra roles this player can fill. Position Coaches Rank
+                        includes them on every assigned list.
+                      </p>
                     </div>
 
                     <div>

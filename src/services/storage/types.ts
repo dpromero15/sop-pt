@@ -9,6 +9,7 @@ import type {
   CalculatedFieldDefinition,
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
   ComplianceRequirement,
@@ -16,6 +17,7 @@ import type {
   EquipmentGroup,
   EquipmentItem,
   RankingBoundariesConfig,
+  PositionDefinition,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -44,6 +46,7 @@ export interface TeamSnapshot {
   calculatedFields: CalculatedFieldDefinition[];
   coaches: Coach[];
   coachBallots: CoachBallot[];
+  coachPositionBallots?: CoachPositionBallot[];
   /** Derived playerId → net bump (convenience / older backups). */
   adjustedBumps: Record<string, number>;
   /** Source of truth for Adjusted ±1 bumps with coach attribution. */
@@ -54,6 +57,7 @@ export interface TeamSnapshot {
   equipmentGroups?: EquipmentGroup[];
   equipmentItems?: EquipmentItem[];
   rankingBoundaries?: RankingBoundariesConfig;
+  positions?: PositionDefinition[];
 }
 
 export interface StorageRepository {
@@ -114,6 +118,10 @@ export interface StorageRepository {
   saveCoachBallots(ballots: CoachBallot[]): void;
   saveCoachBallot(ballot: CoachBallot): void;
 
+  getCoachPositionBallots(): CoachPositionBallot[];
+  saveCoachPositionBallots(ballots: CoachPositionBallot[]): void;
+  saveCoachPositionBallot(ballot: CoachPositionBallot): void;
+
   getBumpTransactions(): AdjustedBumpTransaction[];
   saveBumpTransactions(transactions: AdjustedBumpTransaction[]): void;
   getAdjustedBumps(): Record<string, number>;
@@ -157,6 +165,9 @@ export interface StorageRepository {
 
   getRankingBoundaries(): RankingBoundariesConfig;
   saveRankingBoundaries(config: RankingBoundariesConfig): void;
+
+  getPositions(): PositionDefinition[];
+  savePositions(positions: PositionDefinition[]): void;
 
   clearNonSystemLabels(): void;
   clearNonSystemMetrics(): void;

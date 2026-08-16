@@ -10,6 +10,7 @@ import { AuthConfigMissing, LandingPage } from './components/LandingPage';
 import { TeamPickerPage } from './components/TeamPickerPage';
 import { AccountSettingsModal } from './components/AccountSettingsModal';
 import { PlayerProfileModal } from './components/PlayerProfileModal';
+import { openPlayerPlacementPrint } from './utils/playerPlacementPrint';
 import { ScoringConfigModal } from './components/ScoringConfigModal';
 import { StorageService, subscribeToStorage } from './services/storage';
 import { calculatePlayerRankings } from './utils/scoring';
@@ -90,6 +91,12 @@ export default function App() {
   const [rankingBoundaries, setRankingBoundaries] = useState(() =>
     StorageService.getRankingBoundaries(),
   );
+  const [positions, setPositions] = useState(() =>
+    StorageService.getPositions(),
+  );
+  const [coachPositionBallots, setCoachPositionBallots] = useState(() =>
+    StorageService.getCoachPositionBallots(),
+  );
   const [bumpCoachId, setBumpCoachId] = useState(() => {
     try {
       return localStorage.getItem(BUMP_COACH_STORAGE_KEY) ?? '';
@@ -123,6 +130,8 @@ export default function App() {
     setEquipmentGroups(StorageService.getEquipmentGroups());
     setEquipmentItems(StorageService.getEquipmentItems());
     setRankingBoundaries(StorageService.getRankingBoundaries());
+    setPositions(StorageService.getPositions());
+    setCoachPositionBallots(StorageService.getCoachPositionBallots());
   };
 
   useEffect(() => {
@@ -396,6 +405,7 @@ export default function App() {
             entries={entries}
             coaches={coaches}
             coachBallots={coachBallots}
+            coachPositionBallots={coachPositionBallots}
             bumpCoachId={bumpCoachId}
             onBumpCoachChange={setBumpCoachId}
             bumpBudget={bumpBudget}
@@ -412,6 +422,7 @@ export default function App() {
               if (can('dataEntry')) handleSelectTab('quick-insert');
             }}
             rankingBoundaries={rankingBoundaries}
+            positions={positions}
             team={team}
             allowBumps={can('adjustedBumps')}
           />
@@ -435,9 +446,24 @@ export default function App() {
             metrics={metrics}
             coaches={coaches}
             coachBallots={coachBallots}
+            coachPositionBallots={coachPositionBallots}
             complianceRequirements={complianceRequirements}
             playerCompliance={playerCompliance}
+            positions={positions}
+            rankings={rankings}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
+            onPrintPlacement={(sheetPlayers) =>
+              openPlayerPlacementPrint(sheetPlayers, {
+                team,
+                rankings,
+                labels,
+                metrics,
+                entries,
+                positions,
+                coachBallots,
+                coachPositionBallots,
+              })
+            }
             onRefreshData={refreshData}
             isAddModalOpen={isAddPlayerOpen && can('rosterWrite')}
             onCloseAddModal={() => setIsAddPlayerOpen(false)}
@@ -483,6 +509,7 @@ export default function App() {
             equipmentGroups={equipmentGroups}
             equipmentItems={equipmentItems}
             rankingBoundaries={rankingBoundaries}
+            positions={positions}
             players={players}
             onRefreshData={refreshData}
           />
@@ -496,13 +523,27 @@ export default function App() {
       {selectedPlayer && (
         <PlayerProfileModal
           player={selectedPlayer}
+          ranking={rankings.find((row) => row.player.id === selectedPlayer.id)}
           onClose={() => setSelectedPlayer(null)}
           onEditPlayer={() => {
             setSelectedPlayer(null);
             setCurrentTab('players');
           }}
+          onPrintPlacement={(player) =>
+            openPlayerPlacementPrint([player], {
+              team,
+              rankings,
+              labels,
+              metrics,
+              entries,
+              positions,
+              coachBallots,
+              coachPositionBallots,
+            })
+          }
           labels={labels}
           metrics={metrics}
+          entries={entries}
         />
       )}
 

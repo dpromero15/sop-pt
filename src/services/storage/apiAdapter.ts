@@ -17,7 +17,9 @@ export type ConfigName =
   | 'playerCompliance'
   | 'equipmentGroups'
   | 'equipmentItems'
-  | 'rankingBoundaries';
+  | 'rankingBoundaries'
+  | 'positions'
+  | 'coachPositionBallots';
 
 export class ApiAdapter {
   constructor(private baseUrl: string) {}

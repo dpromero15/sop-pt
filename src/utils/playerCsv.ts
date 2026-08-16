@@ -4,7 +4,10 @@ import {
   parseBirthYear,
   parsePlayerGrade,
 } from './playerDemographics';
-import { isPlayerPosition } from './playerPositions';
+import {
+  isPlayerPosition,
+  playerPositionCodes,
+} from './playerPositions';
 import { normalizePublicId } from './playerPublicId';
 import {
   PLAYER_RANKING_POOLS,
@@ -23,6 +26,7 @@ export const PLAYER_CSV_HEADERS = [
   'notes',
   'publicId',
   'rankingPool',
+  'positions',
 ] as const;
 
 const VALID_FEET = new Set(['Left', 'Right', 'Both']);
@@ -78,6 +82,7 @@ export function buildPlayerCsvTemplate(): string {
     'Sample player row — replace with your roster',
     '',
     'central-midfield',
+    'CAM;ST',
   ];
   return (
     PLAYER_CSV_HEADERS.join(',') +
@@ -123,6 +128,7 @@ export function parseAndValidatePlayerCsv(
   const avatarIdx = colIndex('avatarUrl');
   const notesIdx = colIndex('notes');
   const publicIdIdx = colIndex('publicId');
+  const extrasIdx = colIndex('positions');
 
   if (nameIdx < 0 || jerseyIdx < 0 || positionIdx < 0) {
     errors.push(
@@ -176,6 +182,25 @@ export function parseAndValidatePlayerCsv(
       skipped += 1;
       continue;
     }
+
+    let extraCodes: string[] = [];
+    if (extrasIdx >= 0) {
+      extraCodes = (cells[extrasIdx] || '')
+        .split(/[;|,]/)
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .filter((code) => {
+          if (isPlayerPosition(code)) return true;
+          errors.push(
+            `Row ${rowNum}: skipped unknown extra position "${code}".`,
+          );
+          return false;
+        });
+    }
+    const positions = playerPositionCodes({
+      position: positionRaw,
+      positions: extraCodes,
+    });
 
     let rankingPool: PlayerRankingPool =
       defaultRankingPoolForPosition(positionRaw);
@@ -280,6 +305,7 @@ export function parseAndValidatePlayerCsv(
       name,
       jerseyNumber,
       position: positionRaw as PlayerPosition,
+      positions,
       rankingPool,
       preferredFoot,
       birthYear,

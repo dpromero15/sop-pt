@@ -24,6 +24,7 @@ import {
   EquipmentItem,
   RankingBoundariesConfig,
   Player,
+  PositionDefinition,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
@@ -32,6 +33,7 @@ import { TeamManagementView } from './TeamManagementView';
 import { ComplianceConfigPanel } from './ComplianceConfigPanel';
 import { EquipmentConfigPanel } from './EquipmentConfigPanel';
 import { RankingBoundariesPanel } from './RankingBoundariesPanel';
+import { PositionsConfigPanel } from './PositionsConfigPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
 import { metricLabelPayload } from '../utils/metricLabels';
 import {
@@ -58,6 +60,7 @@ interface ConfigViewProps {
   equipmentGroups: EquipmentGroup[];
   equipmentItems: EquipmentItem[];
   rankingBoundaries: RankingBoundariesConfig;
+  positions: PositionDefinition[];
   players: Player[];
   onRefreshData: () => void;
 }
@@ -78,6 +81,7 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
   equipmentGroups,
   equipmentItems,
   rankingBoundaries,
+  positions,
   players,
   onRefreshData
 }) => {
@@ -639,6 +643,11 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
       <EquipmentConfigPanel
         groups={equipmentGroups}
         items={equipmentItems}
+        players={players}
+        onRefreshData={onRefreshData}
+      />
+      <PositionsConfigPanel
+        positions={positions}
         players={players}
         onRefreshData={onRefreshData}
       />

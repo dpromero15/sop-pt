@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Trophy,
   Sliders,
@@ -21,15 +21,25 @@ import {
   AdjustedBumpTransaction,
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   PlayerPosition,
   PlayerRankingPool,
   RankingBoundariesConfig,
   Team,
+  PositionDefinition,
 } from '../types';
 import {
-  PLAYER_POSITION_CODES,
   formatPlayerPosition,
+  formatPlayerPositions,
+  positionCodes,
 } from '../utils/playerPositions';
+import {
+  catalogPositionsWithPlayers,
+  isPositionOverview,
+  POSITION_OVERVIEW_SCOPE,
+  specialtyAdjustedRankings,
+  specialtyStatisticalRankings,
+} from '../utils/positionRankings';
 import {
   bumpBudgetRemaining,
   bumpUsage,
@@ -44,9 +54,12 @@ import {
   coachBallotOrdinals,
   coachPoolBallotOrdinals,
   coachesRankingsForPool,
+  coachesRankingsForPosition,
+  coachPositionBallotOrdinals,
   isCompleteBallot,
+  isCompletePositionBallot,
+  playersForPosition,
 } from '../utils/coachesRating';
-import { specialtyAdjustedRankings } from '../utils/eligibility';
 import {
   resolveActiveCutLines,
   resolvePrintCutLines,
@@ -55,6 +68,7 @@ import {
   buildPlayerIdLegendDocument,
   buildRankingsPrintDocument,
   openPlayerIdLegendPrint,
+  openPositionRankingsPrint,
   openRankingsPrint,
   type RankingsPrintNameMode,
 } from '../utils/rankingsPrint';
@@ -94,8 +108,6 @@ import {
 import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 
-const SPECIALTY_POSITIONS: PlayerPosition[] = [...PLAYER_POSITION_CODES];
-
 interface RankingsViewProps {
   rankings: PlayerRanking[];
   labels: LabelDefinition[];
@@ -119,6 +131,8 @@ interface RankingsViewProps {
   onSelectPlayer: (player: Player) => void;
   onOpenQuickInsert: () => void;
   rankingBoundaries: RankingBoundariesConfig;
+  positions: PositionDefinition[];
+  coachPositionBallots: CoachPositionBallot[];
   team?: Team;
   /** When false, hide Adjusted ± bump controls (Viewer). */
   allowBumps?: boolean;
@@ -310,6 +324,8 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   onSelectPlayer,
   onOpenQuickInsert,
   rankingBoundaries,
+  positions,
+  coachPositionBallots,
   team,
   allowBumps = true,
 }) => {
@@ -350,37 +366,91 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       ],
   );
 
-  const effectiveTotalMode: RankingsTotalMode = specialtyPosition
-    ? 'adjusted'
-    : totalMode;
-
-  const rankingSource = useMemo(() => {
-    if (specialtyPosition) {
-      return specialtyAdjustedRankings(rankings, specialtyPosition);
-    }
-    if (totalMode === 'coaches' && coachesPoolMode) {
-      return coachesRankingsForPool(rankings, selectedRankingPool);
-    }
-    return rankings;
-  }, [
-    rankings,
-    specialtyPosition,
-    totalMode,
-    coachesPoolMode,
-    selectedRankingPool,
-  ]);
+  const positionOverview = isPositionOverview(specialtyPosition);
+  const singleSpecialty =
+    specialtyPosition && !positionOverview ? specialtyPosition : null;
+  const effectiveTotalMode: RankingsTotalMode = totalMode;
+  const positionCoachMode = Boolean(
+    effectiveTotalMode === 'coaches' && (singleSpecialty || positionOverview),
+  );
 
   const rosterPlayers = useMemo(
     () => rankings.map((r) => r.player),
     [rankings],
   );
 
+  const rankingSource = useMemo(() => {
+    if (singleSpecialty) {
+      if (totalMode === 'coaches') {
+        return coachesRankingsForPosition(
+          rankings,
+          rosterPlayers,
+          coachPositionBallots,
+          singleSpecialty,
+        );
+      }
+      if (totalMode === 'adjusted') {
+        return specialtyAdjustedRankings(rankings, singleSpecialty);
+      }
+      return specialtyStatisticalRankings(rankings, singleSpecialty);
+    }
+    if (totalMode === 'coaches' && coachesPoolMode && !positionOverview) {
+      return coachesRankingsForPool(rankings, selectedRankingPool);
+    }
+    return rankings;
+  }, [
+    rankings,
+    rosterPlayers,
+    coachPositionBallots,
+    singleSpecialty,
+    positionOverview,
+    totalMode,
+    coachesPoolMode,
+    selectedRankingPool,
+  ]);
+
+  const filledPositions = useMemo(
+    () => catalogPositionsWithPlayers(positions, rosterPlayers),
+    [positions, rosterPlayers],
+  );
+
+  const rankListForPosition = (code: string): PlayerRanking[] => {
+    if (totalMode === 'coaches') {
+      const base = coachesRankingsForPosition(
+        rankings,
+        rosterPlayers,
+        coachPositionBallots,
+        code,
+      );
+      if (coachesScope === 'average') return base;
+      const ballot = coachPositionBallots.find(
+        (b) => b.coachId === coachesScope && b.position === code,
+      );
+      const ordinals = coachPositionBallotOrdinals(
+        rosterPlayers,
+        ballot,
+        code,
+      );
+      return base.map((ranking) => ({
+        ...ranking,
+        coachesRank: ordinals.get(ranking.player.id) ?? null,
+        coachesTotalSum: ordinals.has(ranking.player.id)
+          ? ordinals.get(ranking.player.id)!
+          : null,
+      }));
+    }
+    if (totalMode === 'adjusted') {
+      return specialtyAdjustedRankings(rankings, code);
+    }
+    return specialtyStatisticalRankings(rankings, code);
+  };
+
   const activeCutLines = useMemo(
     () => [
       ...new Set(
         resolveActiveCutLines({
         boundaries: rankingBoundaries,
-        specialtyPosition,
+        specialtyPosition: singleSpecialty,
         selectedLabelId: standingLabelId,
         selectedMetricId,
         selectedRankingPool:
@@ -393,7 +463,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     ],
     [
       rankingBoundaries,
-      specialtyPosition,
+      singleSpecialty,
       standingLabelId,
       selectedMetricId,
       coachesPoolMode,
@@ -410,7 +480,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
 
   const cutLinesUseListPlace = Boolean(
     (effectiveTotalMode === 'coaches' && coachesPoolMode) ||
-      (!specialtyPosition &&
+      (!singleSpecialty &&
       ((selectedMetricId &&
         rankingBoundaries.metricCuts?.[selectedMetricId]) ||
         (standingLabelId &&
@@ -423,23 +493,68 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     [rosterPlayers],
   );
 
-  const completeBallotCount = useMemo(
-    () =>
-      coachBallots.filter((b) => isCompleteBallot(b, activePlayerIds)).length,
-    [coachBallots, activePlayerIds],
+  const completePositionBallotCount = useCallback(
+    (code: string) => {
+      const ids = playersForPosition(rosterPlayers, code).map((p) => p.id);
+      return coachPositionBallots.filter(
+        (b) => b.position === code && isCompletePositionBallot(b, ids),
+      ).length;
+    },
+    [rosterPlayers, coachPositionBallots],
   );
 
-  const coachesWithCompleteBallots = useMemo(
-    () =>
-      coaches.filter((c) => {
-        const ballot = coachBallots.find((b) => b.coachId === c.id);
-        return ballot ? isCompleteBallot(ballot, activePlayerIds) : false;
-      }),
-    [coaches, coachBallots, activePlayerIds],
-  );
+  const completeBallotCount = useMemo(() => {
+    if (singleSpecialty) {
+      return completePositionBallotCount(singleSpecialty);
+    }
+    return coachBallots.filter((b) => isCompleteBallot(b, activePlayerIds))
+      .length;
+  }, [
+    singleSpecialty,
+    completePositionBallotCount,
+    coachBallots,
+    activePlayerIds,
+  ]);
+
+  const coachesWithCompleteBallots = useMemo(() => {
+    if (singleSpecialty) {
+      const ids = playersForPosition(rosterPlayers, singleSpecialty).map(
+        (p) => p.id,
+      );
+      return coaches.filter((c) =>
+        isCompletePositionBallot(
+          coachPositionBallots.find(
+            (b) => b.coachId === c.id && b.position === singleSpecialty,
+          ),
+          ids,
+        ),
+      );
+    }
+    return coaches.filter((c) => {
+      const ballot = coachBallots.find((b) => b.coachId === c.id);
+      return ballot ? isCompleteBallot(ballot, activePlayerIds) : false;
+    });
+  }, [
+    singleSpecialty,
+    rosterPlayers,
+    coaches,
+    coachPositionBallots,
+    coachBallots,
+    activePlayerIds,
+  ]);
 
   const individualCoachOrdinals = useMemo(() => {
     if (totalMode !== 'coaches' || coachesScope === 'average') return null;
+    if (singleSpecialty) {
+      const ballot = coachPositionBallots.find(
+        (b) => b.coachId === coachesScope && b.position === singleSpecialty,
+      );
+      return coachPositionBallotOrdinals(
+        rosterPlayers,
+        ballot,
+        singleSpecialty,
+      );
+    }
     const ballot = coachBallots.find((b) => b.coachId === coachesScope);
     return coachesPoolMode
       ? coachPoolBallotOrdinals(
@@ -452,9 +567,11 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     totalMode,
     coachesScope,
     coachBallots,
+    coachPositionBallots,
     rosterPlayers,
     coachesPoolMode,
     selectedRankingPool,
+    singleSpecialty,
   ]);
 
   const scopedMetrics = useMemo(
@@ -535,7 +652,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     return (
       r.player.name.toLowerCase().includes(q) ||
       r.player.position.toLowerCase().includes(q) ||
-      formatPlayerPosition(r.player.position).toLowerCase().includes(q) ||
+      formatPlayerPositions(r.player, positions).toLowerCase().includes(q) ||
       r.player.jerseyNumber.toString() === searchQuery ||
       displayPublicId(r.player).toLowerCase().includes(q)
     );
@@ -639,7 +756,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           : 'Unscored';
       const bump = r.adjustedBump ?? 0;
       const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},${formatPlayerPosition(r.player.position)},${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
+      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},"${formatPlayerPositions(r.player, positions)}",${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -649,7 +766,72 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     a.click();
   };
 
+  const handlePrintAllPositions = (nameMode: RankingsPrintNameMode) => {
+    const modeTitle =
+      effectiveTotalMode === 'coaches'
+        ? 'Position Coaches Rank'
+        : effectiveTotalMode === 'adjusted'
+          ? 'Position Adjusted Rank'
+          : 'Position Statistical Rank';
+    const sections = filledPositions.map((def) => {
+      const ranked = [...rankListForPosition(def.code)].sort((a, b) =>
+        compareRankings(
+          a,
+          b,
+          'total',
+          'all',
+          'none',
+          metrics,
+          effectiveTotalMode,
+        ),
+      );
+      const doc = buildRankingsPrintDocument({
+        teamName: team?.name ?? 'Team',
+        season: team?.season,
+        rankings: ranked,
+        sortBy: 'total',
+        selectedLabelId: 'all',
+        selectedMetricId: 'none',
+        metrics,
+        labels,
+        totalMode: effectiveTotalMode,
+        coachesScopeLabel,
+        completeBallotCount:
+          effectiveTotalMode === 'coaches'
+            ? completePositionBallotCount(def.code)
+            : completeBallotCount,
+        cutLines: resolvePrintCutLines({
+          boundaries: rankingBoundaries,
+          specialtyPosition: def.code,
+          totalMode: effectiveTotalMode,
+        }),
+        nameMode,
+      });
+      return {
+        heading: formatPlayerPosition(def.code, positions),
+        rows: doc.rows,
+      };
+    });
+    openPositionRankingsPrint({
+      teamName: team?.name ?? 'Team',
+      season: team?.season ?? '',
+      title: modeTitle,
+      scopeLine: `${coachesScopeLabel} · players assigned to each role`,
+      printedAt: new Date().toLocaleString(),
+      nameMode,
+      valueHeader:
+        effectiveTotalMode === 'coaches' ? 'Coach' : 'Standing',
+      nameHeader: nameMode === 'publicId' ? 'ID' : 'Player',
+      sections,
+    });
+    setPrintMenuOpen(false);
+  };
+
   const handlePrint = (nameMode: RankingsPrintNameMode) => {
+    if (positionOverview) {
+      handlePrintAllPositions(nameMode);
+      return;
+    }
     const sorted = [...rankingSource].sort((a, b) => {
       if (individualCoachOrdinals) {
         return compareOptionalRankValue(
@@ -688,7 +870,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         individualOrdinals: individualCoachOrdinals,
         cutLines: resolvePrintCutLines({
           boundaries: rankingBoundaries,
-          specialtyPosition,
+          specialtyPosition: singleSpecialty,
           selectedLabelId: standingLabelId,
           selectedMetricId,
           selectedRankingPool:
@@ -821,6 +1003,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   <button
                     type="button"
                     role="menuitem"
+                    onClick={() => handlePrintAllPositions('name')}
+                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                  >
+                    Print all position rankings
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
                     onClick={handlePrintLegend}
                     className="w-full text-left px-3 py-2 rounded-lg text-xs font-semibold text-slate-200 hover:bg-slate-800"
                   >
@@ -888,11 +1078,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                setSpecialtyPosition(null);
                 setTotalMode('overall');
               }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                effectiveTotalMode === 'overall' && !specialtyPosition
+                effectiveTotalMode === 'overall'
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -903,11 +1092,10 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                setSpecialtyPosition(null);
                 setTotalMode('adjusted');
               }}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                effectiveTotalMode === 'adjusted' && !specialtyPosition
+                effectiveTotalMode === 'adjusted'
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -918,7 +1106,6 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             <button
               type="button"
               onClick={() => {
-                setSpecialtyPosition(null);
                 setTotalMode('coaches');
                 setSelectedLabelId('all');
                 setSelectedMetricId('none');
@@ -936,7 +1123,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mr-0.5">
-              Specialty
+              Scope
             </span>
             <button
               type="button"
@@ -947,15 +1134,25 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                   : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
               }`}
             >
-              All
+              Squad
             </button>
-            {SPECIALTY_POSITIONS.map((pos) => (
+            <button
+              type="button"
+              onClick={() => setSpecialtyPosition(POSITION_OVERVIEW_SCOPE)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                positionOverview
+                  ? 'bg-violet-500/20 text-violet-200 border-violet-500/40'
+                  : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
+              }`}
+            >
+              All positions
+            </button>
+            {positionCodes(positions).map((pos) => (
               <button
                 key={pos}
                 type="button"
                 onClick={() => {
                   setSpecialtyPosition(pos);
-                  setTotalMode('adjusted');
                   setSelectedLabelId('all');
                   setSelectedMetricId('none');
                   setSortBy('total');
@@ -966,13 +1163,27 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                     : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-white'
                 }`}
               >
-                {formatPlayerPosition(pos)}
+                {formatPlayerPosition(pos, positions)}
               </button>
             ))}
           </div>
           <p className="text-[11px] text-slate-500 mt-1.5">
-            {specialtyPosition
-              ? `Specialty ${formatPlayerPosition(specialtyPosition)}: re-ranked among that position (manual Ineligible at bottom).`
+            {positionOverview
+              ? `Every position with assigned players — ${
+                  effectiveTotalMode === 'coaches'
+                    ? 'independent Coaches Rank per role (Players → Coaches Rating → By position)'
+                    : effectiveTotalMode === 'adjusted'
+                      ? 'Adjusted standing among players who can play that role'
+                      : 'Statistical standing among players who can play that role'
+                }.`
+              : singleSpecialty
+                ? `${formatPlayerPosition(singleSpecialty, positions)}: ${
+                    effectiveTotalMode === 'coaches'
+                      ? 'separate position ballot — not the squad 1–N rank'
+                      : effectiveTotalMode === 'adjusted'
+                        ? 'Adjusted re-rank among players assigned this role'
+                        : 'Statistical re-rank among players assigned this role'
+                  }.`
               : effectiveTotalMode === 'overall'
                 ? 'Pool place from scored metrics only (gaps omitted).'
                 : effectiveTotalMode === 'adjusted'
@@ -984,7 +1195,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               !specialtyPosition &&
               'Applies to every category and formula standing.'}
           </p>
-          {totalMode === 'coaches' && (
+          {totalMode === 'coaches' && !positionCoachMode && (
             <div className="mt-2 space-y-2">
               <div
                 className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
@@ -1358,7 +1569,83 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         </div>
       ) : null}
 
+      {positionOverview ? (
+        <div className="space-y-4">
+          {filledPositions.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center">
+              <h3 className="text-lg font-bold text-slate-200">
+                No position assignments yet
+              </h3>
+              <p className="text-slate-500 text-sm mt-2">
+                Assign players to roles on the roster to build position
+                rankings.
+              </p>
+            </div>
+          ) : (
+            filledPositions.map((def) => {
+              const rows = [...rankListForPosition(def.code)].sort((a, b) =>
+                compareRankings(
+                  a,
+                  b,
+                  'total',
+                  'all',
+                  'none',
+                  metrics,
+                  effectiveTotalMode,
+                ),
+              );
+              return (
+                <section
+                  key={def.code}
+                  className="rounded-2xl border border-slate-800 bg-slate-900/60 overflow-hidden"
+                >
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-800">
+                    <h3 className="text-sm font-bold text-white">
+                      {formatPlayerPosition(def.code, positions)}
+                    </h3>
+                    <span className="text-[11px] text-slate-500">
+                      {rows.length} player{rows.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <ol className="divide-y divide-slate-800">
+                    {rows.map((item) => {
+                      const place =
+                        effectiveTotalMode === 'coaches'
+                          ? item.coachesRank
+                          : effectiveTotalMode === 'adjusted'
+                            ? item.adjustedRank
+                            : item.overallRank;
+                      return (
+                        <li
+                          key={item.player.id}
+                          className="flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-slate-800/40"
+                          onClick={() => onSelectPlayer(item.player)}
+                        >
+                          <span className="w-8 text-xs font-black tabular-nums text-slate-400">
+                            {place != null ? `#${place}` : '—'}
+                          </span>
+                          <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">
+                            {item.player.name}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            #{item.player.jerseyNumber}
+                          </span>
+                          <span className="text-[10px] text-slate-500 truncate max-w-[40%]">
+                            {formatPlayerPositions(item.player, positions)}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+
       {/* Leaderboard Cards Grid */}
+      {!positionOverview && (
       <div className="space-y-3">
         {!scopeHasData ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 sm:p-12 text-center overflow-hidden">
@@ -1723,7 +2010,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
                         {item.player.name}
                       </h3>
                       <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[11px] font-bold">
-                        {formatPlayerPosition(item.player.position)}
+                        {formatPlayerPositions(item.player, positions)}
                       </span>
                     </div>
 
@@ -1929,6 +2216,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
           })
         )}
       </div>
+      )}
     </div>
   );
 };

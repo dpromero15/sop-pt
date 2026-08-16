@@ -10,6 +10,7 @@ import type {
   CalculatedFieldDefinition,
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
   ComplianceRequirement,
@@ -17,6 +18,7 @@ import type {
   EquipmentGroup,
   EquipmentItem,
   RankingBoundariesConfig,
+  PositionDefinition,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -29,6 +31,7 @@ import {
   DEFAULT_CALCULATED_FIELDS,
   DEFAULT_COACHES,
   DEFAULT_COACH_BALLOTS,
+  DEFAULT_COACH_POSITION_BALLOTS,
   DEFAULT_BUMP_BUDGET,
   DEFAULT_ADJUSTED_BUMPS,
   DEFAULT_COMPLIANCE_REQUIREMENTS,
@@ -59,6 +62,12 @@ import {
   pruneFormulaWeightsToLabels,
 } from '../../utils/formulaWeights';
 import { normalizeRankingBoundaries } from '../../utils/rankingBoundaries';
+import {
+  cloneDefaultPlayerPositions,
+  normalizePlayerPositions,
+  playerPositionCodes,
+  setActivePositionCatalog,
+} from '../../utils/playerPositions';
 import { normalizeMetricLabels } from '../../utils/metricLabels';
 import {
   allocateLabelId,
@@ -246,6 +255,9 @@ export class LocalJsonAdapter implements StorageRepository {
       if (Array.isArray(snapshot.coachBallots)) {
         this.saveCoachBallots(snapshot.coachBallots);
       }
+      if (Array.isArray(snapshot.coachPositionBallots)) {
+        this.saveCoachPositionBallots(snapshot.coachPositionBallots);
+      }
       if (Array.isArray(snapshot.bumpTransactions)) {
         this.saveBumpTransactions(snapshot.bumpTransactions);
       } else if (snapshot.adjustedBumps) {
@@ -266,6 +278,9 @@ export class LocalJsonAdapter implements StorageRepository {
       }
       if (snapshot.rankingBoundaries != null) {
         this.saveRankingBoundaries(snapshot.rankingBoundaries);
+      }
+      if (Array.isArray(snapshot.positions)) {
+        this.savePositions(snapshot.positions);
       }
       if (opts?.migrate !== false) {
         writeStoredSchemaVersion(this.store, 0);
@@ -310,7 +325,12 @@ export class LocalJsonAdapter implements StorageRepository {
   }
 
   savePlayers(players: Player[]) {
-    this.writeJson(STORAGE_KEYS.PLAYERS, players);
+    const normalized = players.map((player) => {
+      const codes = playerPositionCodes(player);
+      const primary = codes[0] ?? player.position;
+      return { ...player, position: primary, positions: codes };
+    });
+    this.writeJson(STORAGE_KEYS.PLAYERS, normalized);
     this.notify();
   }
 
@@ -937,6 +957,9 @@ export class LocalJsonAdapter implements StorageRepository {
   deleteCoach(id: string) {
     this.saveCoaches(this.getCoaches().filter((c) => c.id !== id));
     this.saveCoachBallots(this.getCoachBallots().filter((b) => b.coachId !== id));
+    this.saveCoachPositionBallots(
+      this.getCoachPositionBallots().filter((b) => b.coachId !== id),
+    );
     const txs = this.getBumpTransactions();
     const next = txs.filter((tx) => tx.coachId !== id);
     if (next.length !== txs.length) {
@@ -962,6 +985,38 @@ export class LocalJsonAdapter implements StorageRepository {
       ballots.push(ballot);
     }
     this.saveCoachBallots(ballots);
+  }
+
+  getCoachPositionBallots(): CoachPositionBallot[] {
+    const raw = this.readJson(
+      STORAGE_KEYS.COACH_POSITION_BALLOTS,
+      DEFAULT_COACH_POSITION_BALLOTS,
+    );
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (row): row is CoachPositionBallot =>
+        Boolean(row) &&
+        typeof row === 'object' &&
+        typeof (row as CoachPositionBallot).coachId === 'string' &&
+        typeof (row as CoachPositionBallot).position === 'string' &&
+        (row as CoachPositionBallot).ranks != null &&
+        typeof (row as CoachPositionBallot).ranks === 'object',
+    );
+  }
+
+  saveCoachPositionBallots(ballots: CoachPositionBallot[]) {
+    this.writeJson(STORAGE_KEYS.COACH_POSITION_BALLOTS, ballots);
+    this.notify();
+  }
+
+  saveCoachPositionBallot(ballot: CoachPositionBallot) {
+    const ballots = this.getCoachPositionBallots();
+    const idx = ballots.findIndex(
+      (row) => row.coachId === ballot.coachId && row.position === ballot.position,
+    );
+    if (idx >= 0) ballots[idx] = ballot;
+    else ballots.push(ballot);
+    this.saveCoachPositionBallots(ballots);
   }
 
   getBumpTransactions(): AdjustedBumpTransaction[] {
@@ -1282,6 +1337,21 @@ export class LocalJsonAdapter implements StorageRepository {
     this.notify();
   }
 
+  getPositions(): PositionDefinition[] {
+    const catalog = normalizePlayerPositions(
+      this.readJson(STORAGE_KEYS.POSITIONS, cloneDefaultPlayerPositions()),
+    );
+    setActivePositionCatalog(catalog);
+    return catalog;
+  }
+
+  savePositions(positions: PositionDefinition[]) {
+    const catalog = normalizePlayerPositions(positions);
+    setActivePositionCatalog(catalog);
+    this.writeJson(STORAGE_KEYS.POSITIONS, catalog);
+    this.notify();
+  }
+
   resetToSampleData() {
     this.saveTeam(DEFAULT_TEAM);
     this.savePlayers(INITIAL_PLAYERS);
@@ -1293,6 +1363,7 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveCalculatedFields(DEFAULT_CALCULATED_FIELDS);
     this.saveCoaches(DEFAULT_COACHES);
     this.saveCoachBallots(DEFAULT_COACH_BALLOTS);
+    this.saveCoachPositionBallots(DEFAULT_COACH_POSITION_BALLOTS);
     this.saveBumpTransactions(DEFAULT_ADJUSTED_BUMPS);
     this.saveBumpBudget(DEFAULT_BUMP_BUDGET);
     this.saveComplianceRequirements(DEFAULT_COMPLIANCE_REQUIREMENTS);
@@ -1300,6 +1371,7 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveEquipmentGroups(DEFAULT_EQUIPMENT_GROUPS);
     this.saveEquipmentItems(DEFAULT_EQUIPMENT_ITEMS);
     this.saveRankingBoundaries(DEFAULT_RANKING_BOUNDARIES);
+    this.savePositions(cloneDefaultPlayerPositions());
   }
 
   getSnapshot(): TeamSnapshot {
@@ -1314,6 +1386,7 @@ export class LocalJsonAdapter implements StorageRepository {
       calculatedFields: this.getCalculatedFields(),
       coaches: this.getCoaches(),
       coachBallots: this.getCoachBallots(),
+      coachPositionBallots: this.getCoachPositionBallots(),
       adjustedBumps: this.getAdjustedBumps(),
       bumpTransactions: this.getBumpTransactions(),
       bumpBudget: this.getBumpBudget(),
@@ -1322,6 +1395,7 @@ export class LocalJsonAdapter implements StorageRepository {
       equipmentGroups: this.getEquipmentGroups(),
       equipmentItems: this.getEquipmentItems(),
       rankingBoundaries: this.getRankingBoundaries(),
+      positions: this.getPositions(),
     };
   }
 
@@ -1356,6 +1430,9 @@ export class LocalJsonAdapter implements StorageRepository {
         if (Array.isArray(data.coachBallots)) {
           this.saveCoachBallots(data.coachBallots);
         }
+        if (Array.isArray(data.coachPositionBallots)) {
+          this.saveCoachPositionBallots(data.coachPositionBallots);
+        }
         if (Array.isArray(data.bumpTransactions)) {
           this.saveBumpTransactions(
             parseStoredBumpTransactions(data.bumpTransactions),
@@ -1378,6 +1455,9 @@ export class LocalJsonAdapter implements StorageRepository {
         }
         if (data.rankingBoundaries != null) {
           this.saveRankingBoundaries(data.rankingBoundaries);
+        }
+        if (Array.isArray(data.positions)) {
+          this.savePositions(data.positions);
         }
         writeStoredSchemaVersion(this.store, 0);
         runLocalMigrations(this.store);

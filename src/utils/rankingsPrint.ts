@@ -7,7 +7,7 @@ import type {
 } from '../types';
 import { displayPublicId } from './playerPublicId';
 import { rosterPlayers } from './playerStatus';
-import { formatPlayerPosition } from './playerPositions';
+import { formatPlayerPositions } from './playerPositions';
 import { metricPrimaryLabelId } from './metricLabels';
 import { metricValueTriple } from './metricAggregation';
 import {
@@ -122,19 +122,25 @@ export function computePrintScale(
 }
 
 export function fitPrintSheetToPage(frameDoc: Document): number {
-  const sheet = frameDoc.querySelector('.sheet') as HTMLElement | null;
-  const page = frameDoc.querySelector('.page') as HTMLElement | null;
-  if (!sheet) return 1;
-  const pageW = page?.clientWidth || PRINT_SHEET_WIDTH_PX;
-  const pageH = page?.clientHeight || PRINT_SHEET_HEIGHT_PX;
-  const scale = computePrintScale(
-    sheet.scrollWidth,
-    sheet.scrollHeight,
-    pageW,
-    pageH,
-  );
-  sheet.style.transform = scale < 1 ? `scale(${scale})` : '';
-  return scale;
+  const sheets = Array.from(
+    frameDoc.querySelectorAll('.sheet'),
+  ) as HTMLElement[];
+  if (sheets.length === 0) return 1;
+  let min = 1;
+  for (const sheet of sheets) {
+    const page = sheet.closest('.page') as HTMLElement | null;
+    const pageW = page?.clientWidth || PRINT_SHEET_WIDTH_PX;
+    const pageH = page?.clientHeight || PRINT_SHEET_HEIGHT_PX;
+    const scale = computePrintScale(
+      sheet.scrollWidth,
+      sheet.scrollHeight,
+      pageW,
+      pageH,
+    );
+    sheet.style.transform = scale < 1 ? `scale(${scale})` : '';
+    min = Math.min(min, scale);
+  }
+  return min;
 }
 
 function formatCoachesAverage(sum: number, ballotCount: number): string {
@@ -377,7 +383,7 @@ export function buildRankingsPrintDocument(opts: {
           ? displayPublicId(ranking.player)
           : ranking.player.name,
       jersey: ranking.player.jerseyNumber,
-      position: formatPlayerPosition(ranking.player.position),
+      position: formatPlayerPositions(ranking.player),
       value: printValue(
         ranking,
         sortBy,
@@ -424,7 +430,7 @@ export function buildPlayerIdLegendDocument(opts: {
       publicId: displayPublicId(player),
       name: player.name,
       jersey: player.jerseyNumber,
-      position: formatPlayerPosition(player.position),
+      position: formatPlayerPositions(player),
     }));
 
   return {
@@ -810,4 +816,97 @@ export function openRankingsPrint(doc: RankingsPrintDocument): void {
 
 export function openPlayerIdLegendPrint(doc: PlayerIdLegendDocument): void {
   openPrintHtml(playerIdLegendHtml(doc));
+}
+
+export interface PositionRankingsPrintSection {
+  heading: string;
+  rows: RankingsPrintRow[];
+}
+
+export interface PositionRankingsPrintDocument {
+  teamName: string;
+  season: string;
+  title: string;
+  scopeLine: string;
+  printedAt: string;
+  nameMode: RankingsPrintNameMode;
+  valueHeader: string;
+  nameHeader: string;
+  sections: PositionRankingsPrintSection[];
+}
+
+export function positionRankingsPrintHtml(
+  doc: PositionRankingsPrintDocument,
+): string {
+  const seasonBit = doc.season ? ` · ${escapeHtml(doc.season)}` : '';
+  const sections = doc.sections
+    .map((section) => {
+      const table = printTableHtml(
+        section.rows,
+        doc.valueHeader,
+        doc.nameHeader,
+        doc.nameMode,
+        false,
+      );
+      return `<section class="pos-section"><h2>${escapeHtml(section.heading)}</h2>${table}</section>`;
+    })
+    .join('');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>${escapeHtml(doc.teamName)} · ${escapeHtml(doc.title)}</title>
+  <style>
+    @page { size: letter portrait; margin: 0.45in; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #111;
+      font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+      font-size: 9.5pt;
+    }
+    h1 { margin: 0; font-size: 16pt; font-weight: 700; }
+    .kicker {
+      margin: 0 0 2px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 7.5pt;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #444;
+    }
+    .meta {
+      margin: 4px 0 10px;
+      font-family: ui-sans-serif, system-ui, sans-serif;
+      font-size: 8pt;
+      color: #444;
+    }
+    .pos-section { break-inside: avoid; margin: 0 0 14px; }
+    .pos-section h2 {
+      margin: 0 0 4px;
+      font-size: 11pt;
+      border-bottom: 1px solid #111;
+      padding-bottom: 2px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 2px 4px; }
+    th { font-family: ui-sans-serif, system-ui, sans-serif; font-size: 7.5pt; text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid #111; }
+    td.rank, th.rank, td.jersey, th.jersey, td.value, th.value { text-align: right; font-variant-numeric: tabular-nums; }
+    td.pos, th.pos { width: 18%; }
+    tr.breakout td { border-bottom: 2px solid #111; }
+  </style>
+</head>
+<body>
+  <p class="kicker">${escapeHtml(doc.teamName)}${seasonBit}</p>
+  <h1>${escapeHtml(doc.title)}</h1>
+  <p class="meta">${escapeHtml(doc.scopeLine)} · ${escapeHtml(doc.printedAt)}</p>
+  ${sections}
+</body>
+</html>`;
+}
+
+export function openPositionRankingsPrint(
+  doc: PositionRankingsPrintDocument,
+): void {
+  openPrintHtml(positionRankingsPrintHtml(doc));
 }

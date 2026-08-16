@@ -68,6 +68,31 @@ describe('playerCsv', () => {
     expect(result.errors.some((e) => e.includes('invalid position'))).toBe(true);
   });
 
+  it('accepts split center-back codes LCB and RCB', () => {
+    const csv = [
+      PLAYER_CSV_HEADERS.join(','),
+      'Left Center,5,LCB',
+      'Right Center,4,RCB',
+    ].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set());
+    expect(result.ok).toHaveLength(2);
+    expect(result.ok.map((p) => p.position)).toEqual(['LCB', 'RCB']);
+  });
+
+  it('imports extra roles from the positions column', () => {
+    const csv = [
+      'name,jerseyNumber,position,positions',
+      'Lucas Silva,7,RW,ST;LCB',
+    ].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set());
+    expect(result.errors).toEqual([]);
+    expect(result.ok[0]).toMatchObject({
+      name: 'Lucas Silva',
+      position: 'RW',
+      positions: ['RW', 'ST', 'LCB'],
+    });
+  });
+
   it('requires name, jerseyNumber, and position headers', () => {
     const result = parseAndValidatePlayerCsv('foo,bar\n1,2', new Set());
     expect(result.ok).toHaveLength(0);

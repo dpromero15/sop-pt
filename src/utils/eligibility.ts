@@ -155,23 +155,4 @@ export function applyEligibilityToAdjustedRanks(
   }));
 }
 
-/**
- * Specialty view: filter by position, re-rank Adjusted places among eligible
- * in that pool. Returns a new array (subset) with adjustedRank rewritten.
- */
-export function specialtyAdjustedRankings(
-  rankings: PlayerRanking[],
-  position: string,
-): PlayerRanking[] {
-  const pool = rankings.filter((r) => r.player.position === position);
-  const effectiveScores = pool.map((r) => {
-    if (!r.eligibleToPlay) return null;
-    if (r.adjustedTotalScore === null) return null;
-    return r.adjustedTotalScore + (r.adjustedBump ?? 0);
-  });
-  const ranks = assignCompetitionRanks(effectiveScores, true);
-  return pool.map((r, i) => ({
-    ...r,
-    adjustedRank: ranks[i],
-  }));
-}
+export { specialtyAdjustedRankings } from './positionRankings';

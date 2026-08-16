@@ -9,6 +9,8 @@ describe('player ranking pools', () => {
     expect(defaultRankingPoolForPosition('LB')).toBe('wingbacks');
     expect(defaultRankingPoolForPosition('RB')).toBe('wingbacks');
     expect(defaultRankingPoolForPosition('CB')).toBe('center-defense');
+    expect(defaultRankingPoolForPosition('LCB')).toBe('center-defense');
+    expect(defaultRankingPoolForPosition('RCB')).toBe('center-defense');
     expect(defaultRankingPoolForPosition('CDM')).toBe('center-defense');
     expect(defaultRankingPoolForPosition('CAM')).toBe('central-midfield');
     expect(defaultRankingPoolForPosition('CM')).toBe('central-midfield');

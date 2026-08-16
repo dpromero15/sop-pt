@@ -16,6 +16,8 @@ import { migration014LabelParent } from './migrations/014_label_parent';
 import { migration015PlayerPublicId } from './migrations/015_player_public_id';
 import { migration016LabelMultiParent } from './migrations/016_label_multi_parent';
 import { migration017PlayerRankingPool } from './migrations/017_player_ranking_pool';
+import { migration018PlayerPositions } from './migrations/018_player_positions';
+import { migration019PlayerMultiPositions } from './migrations/019_player_multi_positions';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -140,5 +142,19 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Assign each player an editable Coaches Rank pool based on position.',
     up: migration017PlayerRankingPool,
+  },
+  {
+    id: 18,
+    name: 'player_positions',
+    description:
+      'Seed configurable position catalog with LCB (5) / RCB (4) instead of CB 4/5.',
+    up: migration018PlayerPositions,
+  },
+  {
+    id: 19,
+    name: 'player_multi_positions',
+    description:
+      'Players may list multiple positions; backfill positions from the primary code.',
+    up: migration019PlayerMultiPositions,
   },
 ];

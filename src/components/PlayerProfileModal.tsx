@@ -2,16 +2,9 @@ import React from 'react';
 import { 
   X, 
   Trophy, 
-  CalendarCheck, 
-  Footprints, 
   Activity, 
-  Zap, 
-  Shield, 
-  Target, 
-  TrendingUp, 
-  Sparkles, 
-  FileText, 
-  Clock 
+  Clock,
+  Printer,
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -19,45 +12,44 @@ import {
   PolarGrid, 
   PolarAngleAxis, 
   PolarRadiusAxis, 
-  Radar, 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  Tooltip 
+  Radar,
 } from 'recharts';
-import { Player, LabelDefinition, MetricEntry, MetricDefinition } from '../types';
-import { calculatePlayerRankings } from '../utils/scoring';
-import { formatPlayerPosition } from '../utils/playerPositions';
+import type {
+  Player,
+  LabelDefinition,
+  MetricDefinition,
+  MetricEntry,
+  PlayerRanking,
+} from '../types';
+import { formatPlayerPositions } from '../utils/playerPositions';
 import { visibleRankingLabels } from '../utils/formulaWeights';
 import { defaultAvatarFor } from '../constants/avatars';
-import { StorageService } from '../services/storage';
 import { displayPublicId } from '../utils/playerPublicId';
 
 interface PlayerProfileModalProps {
   player: Player | null;
+  ranking?: PlayerRanking;
   onClose: () => void;
   onEditPlayer: (player: Player) => void;
+  onPrintPlacement?: (player: Player) => void;
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
+  entries: MetricEntry[];
 }
 
 export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   player,
+  ranking,
   onClose,
   onEditPlayer,
+  onPrintPlacement,
   labels,
-  metrics
+  metrics,
+  entries,
 }) => {
   if (!player) return null;
 
-  const allPlayers = StorageService.getPlayers();
-  const allEntries = StorageService.getEntries();
-  const formula = StorageService.getFormula();
-
-  // Compute this player's exact label breakdown
-  const rankings = calculatePlayerRankings(allPlayers, allEntries, metrics, labels, formula);
-  const playerRanking = rankings.find(r => r.player.id === player.id);
+  const playerRanking = ranking;
 
   const rankingLabels = visibleRankingLabels(labels);
 
@@ -72,15 +64,12 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   });
 
   // Recent Metric Entries for history list
-  const playerEntries = allEntries
-    .filter(e => e.playerId === player.id)
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-  // Trend line chart data
-  const trendData = playerEntries.slice(0, 10).reverse().map((entry, idx) => ({
-    session: `S${idx + 1}`,
-    value: entry.value
-  }));
+  const playerEntries = entries
+    .filter((e) => e.playerId === player.id)
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+    );
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in overflow-y-auto">
@@ -98,6 +87,16 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onPrintPlacement && (
+              <button
+                type="button"
+                onClick={() => onPrintPlacement(player)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-200 text-xs font-semibold border border-emerald-500/30 transition-all active:scale-95"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print sheet
+              </button>
+            )}
             <button
               onClick={() => onEditPlayer(player)}
               className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-all active:scale-95"
@@ -150,7 +149,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     ID {displayPublicId(player)}
                   </button>
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
-                    Position: {formatPlayerPosition(player.position)}
+                    Position: {formatPlayerPositions(player)}
                   </span>
                   <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-slate-200 font-bold">
                     Foot: {player.preferredFoot}
@@ -197,6 +196,14 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
                     ({playerRanking.adjustedTotalScore})
                   </span>
                 )}
+              </div>
+              <div className="text-xs text-slate-400 font-semibold mt-1">
+                Coaches:{' '}
+                <span className="text-slate-200">
+                  {playerRanking?.coachesRank != null
+                    ? `#${playerRanking.coachesRank}`
+                    : '—'}
+                </span>
               </div>
               <div className="text-xs text-slate-400 font-semibold mt-1">
                 Attendance:{' '}

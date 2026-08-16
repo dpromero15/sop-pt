@@ -1,5 +1,3 @@
-import type { PlayerPositionCode } from './utils/playerPositions';
-
 export interface Team {
   id: string;
   name: string;
@@ -108,9 +106,6 @@ export interface CalculatedFieldDefinition {
   unit: string;
 }
 
-/** Short position code; display with tactical number via `formatPlayerPosition`. */
-export type PlayerPosition = PlayerPositionCode;
-
 /** US high-school grade. */
 export type PlayerGrade = 9 | 10 | 11 | 12;
 
@@ -121,6 +116,28 @@ export type PlayerRankingPool =
   | 'central-midfield'
   | 'forwards'
   | 'goalkeepers';
+
+/** Pitch line for roster filters. */
+export type PositionLine = 'gk' | 'def' | 'mid' | 'fwd';
+
+/**
+ * Team-configurable soccer position. `code` is stored on the player;
+ * UI shows name plus classic tactical number (`LCB (5)`).
+ */
+export interface PositionDefinition {
+  code: string;
+  name: string;
+  /** Classic shirt number for this role (play a 4, play a 6). */
+  tacticalNumber: number;
+  /** Optional second number for generic roles (e.g. WB 2/3). */
+  tacticalNumberSecondary?: number;
+  line: PositionLine;
+  rankingPool: PlayerRankingPool;
+  sortOrder: number;
+}
+
+/** Short position code; display with tactical number via `formatPlayerPosition`. */
+export type PlayerPosition = string;
 
 export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
 
@@ -133,7 +150,13 @@ export interface Player {
    */
   publicId?: string;
   jerseyNumber: number;
+  /** Primary role (also `positions[0]` after schema v19). */
   position: PlayerPosition;
+  /**
+   * All roles this player can play, primary first.
+   * Missing on legacy records — treat as `[position]`.
+   */
+  positions?: PlayerPosition[];
   /** Defaults from position, but may be overridden for roster planning. */
   rankingPool?: PlayerRankingPool;
   preferredFoot: 'Left' | 'Right' | 'Both';
@@ -373,6 +396,17 @@ export interface EffectiveAccess {
  */
 export interface CoachBallot {
   coachId: string;
+  ranks: Record<string, number>;
+}
+
+/**
+ * One coach's ordinal ranking of players assigned to a single position.
+ * Independent of the squad-wide {@link CoachBallot} (overall 1…N).
+ * Complete when every active player who can play `position` has a unique 1…N.
+ */
+export interface CoachPositionBallot {
+  coachId: string;
+  position: PlayerPosition;
   ranks: Record<string, number>;
 }
 

@@ -802,4 +802,103 @@ describe('runLocalMigrations', () => {
       ).map((p: { rankingPool: string }) => p.rankingPool),
     ).toEqual(['wingbacks', 'center-defense', 'central-midfield']);
   });
+
+  it('seeds LCB/RCB position catalog via v18 and keeps leftover CB', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(17));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', position: 'CB' },
+        { id: 'p2', position: 'LB' },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const catalog = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.POSITIONS))!,
+    ) as Array<{ code: string; tacticalNumber: number }>;
+    const codes = catalog.map((p) => p.code);
+    expect(codes).toContain('LCB');
+    expect(codes).toContain('RCB');
+    expect(codes).toContain('CB');
+    expect(catalog.find((p) => p.code === 'LCB')?.tacticalNumber).toBe(5);
+    expect(catalog.find((p) => p.code === 'RCB')?.tacticalNumber).toBe(4);
+
+    const repaired = repairLocalMigrations(store);
+    expect(repaired.error).toBeUndefined();
+    expect(
+      JSON.parse(
+        store.getItem(scopedStorageKey('t1', STORAGE_KEYS.POSITIONS))!,
+      ).map((p: { code: string }) => p.code),
+    ).toEqual(codes);
+  });
+
+  it('backfills player positions[] via v19 and covers extra codes', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(18));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([
+        { id: 'p1', position: 'ST' },
+        { id: 'p2', position: 'RW', positions: ['RW', 'ST'] },
+        { id: 'p3', position: 'ST', positions: ['ST', 'XYZ'] },
+      ]),
+    );
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.POSITIONS),
+      JSON.stringify([
+        {
+          code: 'ST',
+          name: 'ST',
+          tacticalNumber: 9,
+          line: 'fwd',
+          rankingPool: 'forwards',
+          sortOrder: 1,
+        },
+        {
+          code: 'RW',
+          name: 'RW',
+          tacticalNumber: 7,
+          line: 'fwd',
+          rankingPool: 'forwards',
+          sortOrder: 2,
+        },
+      ]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const players = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!,
+    );
+    expect(players[0]).toMatchObject({ position: 'ST', positions: ['ST'] });
+    expect(players[1]).toMatchObject({
+      position: 'RW',
+      positions: ['RW', 'ST'],
+    });
+    expect(players[2]).toMatchObject({
+      position: 'ST',
+      positions: ['ST', 'XYZ'],
+    });
+
+    const catalog = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.POSITIONS))!,
+    ) as Array<{ code: string }>;
+    expect(catalog.map((p) => p.code)).toContain('XYZ');
+
+    const repaired = repairLocalMigrations(store);
+    expect(repaired.error).toBeUndefined();
+    expect(
+      JSON.parse(store.getItem(scopedStorageKey('t1', STORAGE_KEYS.PLAYERS))!)[0]
+        .positions,
+    ).toEqual(['ST']);
+  });
 });
