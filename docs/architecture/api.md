@@ -44,7 +44,7 @@ Cloud Run is **not** public: invoker IAM **on**, no `allUsers`, no `--no-invoker
 | `GET` | `/v1/teams/:teamId/snapshot` | viewer+ | Full team snapshot (hydrate) |
 | `POST` | `/v1/teams/:teamId/bootstrap` | teamAdmin+ | Upload full local snapshot |
 
-Config `:name` includes `metrics`, `labels`, `formula`, `calculatedFields`, `coaches`, `coachBallots`, `bumpTransactions`, `bumpBudget`, `complianceRequirements`, `playerCompliance`, `equipmentGroups`, `equipmentItems`, `rankingBoundaries`.
+Config `:name` includes `metrics`, `labels`, `formula`, `calculatedFields`, `coaches`, `coachBallots`, `coachPositionBallots`, `bumpTransactions`, `bumpBudget`, `complianceRequirements`, `playerCompliance`, `equipmentGroups`, `equipmentItems`, `rankingBoundaries`, `positions`.
 
 ### Auth
 

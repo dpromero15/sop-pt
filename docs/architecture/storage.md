@@ -32,6 +32,7 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - Sync chip + Admin **System sync log** keep a local ring buffer (`stm_sync_log_v1`, last 80 events) of hydrate/flush/error/queued-dirty.
 - `applySnapshot` persists empty arrays (so releasing `holdSeeds` does not reseed sample Thunder FC).
 - Ranking cut lines: overall `primaryCut`/`secondaryCut` plus optional `categoryCuts` / `metricCuts` / `poolCuts` maps (resolved pool → specialty → metric → category → global). Pool lines default to Wingbacks 2/3, Center Defense 2/3, Central Midfield 2/3, Forwards 2/6, Goalkeepers 1/1.
+- Position catalog: `stm_positions_v1` / `config/positions`. Each role has a code plus classic tactical number (RCB 4, LCB 5). Coaches can add/edit/reorder in Config.
 - If cloud is empty and this device has a roster (e.g. JSON import), the first enter **pushes** that squad.
 - Simulated auth / missing `VITE_API_BASE_URL` stays local-only.
 - SPA never talks to Firestore; Cloud Run Admin SDK remains the write path.
@@ -42,7 +43,11 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 
 ### Player fields
 
-`id`, `name`, `publicId?`, `jerseyNumber`, `position`, `rankingPool?`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
+`id`, `name`, `publicId?`, `jerseyNumber`, `position`, `positions?`, `rankingPool?`, `preferredFoot`, `avatarUrl?`, `birthYear?`, `grade?`, `joinedDate`, `status`, `notes?`, `rankingIneligible?`, `deletedAt?`
+
+- **`position`:** Short code from the team position catalog (`LCB`, `RCB`, `ST`, …). Display includes the classic tactical number (`LCB (5)`). Schema **v18** seeds the catalog (RCB 4 / LCB 5 instead of combined CB 4/5) and keeps leftover `CB` rows still on the roster.
+- **`positions`:** All roles the player can play, primary first. Schema **v19** backfills `[position]` when missing. Rankings Stat/Adj/Coach-by-position include anyone assigned the role, not only the primary.
+- **Position coach ballots:** `stm_coach_position_ballots_v1` / `config/coachPositionBallots`. Independent 1…N ranks per catalog role (not a slice of the squad coaches ballot). Complete when every active player assigned that role has a unique ordinal.
 
 - **`birthYear`:** Calendar year of birth. Replaces legacy `age` (schema **v13** converts `age` → `asOfYear - age` and drops `age`).
 - **`grade`:** Current school grade `9` | `10` | `11` | `12` (Freshman–Senior). Optional; not inferred from birth year.
@@ -75,6 +80,8 @@ Legacy unscoped `stm_*_v1` keys are copied onto the active team cache by migrati
 - **Player public ID (v15):** Short stable `publicId` (6 Crockford-like chars, unique per team) for printouts and the team ID legend. Distinct from internal `id`. Assigned on create; migration backfills existing squads. Rankings print can show IDs instead of names.
 - **Shared subcategories (v16):** `parentLabelIds[]` + `primaryParentLabelId` (legacy `parentLabelId` mirrored as the primary). A folder like Endurance can sit under several roots; only the primary parent receives formula standing so overall rank does not triple-count.
 - **Player ranking pool (v17):** Assigns the editable Coaches Rank pool from each player's position. Repair is idempotent and preserves existing valid assignments.
+- **Player positions (v18):** Seeds a team-configurable position catalog (`stm_positions_v1` / `config/positions`) with **RCB (4)** and **LCB (5)** instead of combined CB 4/5. Codes still on the roster (including leftover `CB`) are kept so existing players keep displaying.
+- **Multi-position (v19):** Backfills `positions[]` from primary `position`. Extra assigned codes missing from the catalog are added so Config still lists them.
 
 ### Metric definition fields
 

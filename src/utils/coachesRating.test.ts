@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { CoachBallot, Player } from '../types';
+import type { CoachBallot, CoachPositionBallot, Player } from '../types';
 import {
   activePlayers,
   attachCoachesTotals,
   coachBallotOrdinals,
   coachPoolBallotOrdinals,
   coachesRankingsForPool,
+  coachesRankingsForPosition,
   computeCoachesTotals,
+  computePositionCoachesTotals,
   isCompleteBallot,
+  isCompletePositionBallot,
+  playersForPosition,
 } from './coachesRating';
 import type { PlayerRanking } from '../types';
 
@@ -187,6 +191,86 @@ describe('position-pool coach rankings', () => {
     );
     const pooled = coachesRankingsForPool(rankings, 'wingbacks');
     expect(pooled.map((r) => [r.player.id, r.coachesRank])).toEqual([
+      ['a', 2],
+      ['b', 1],
+    ]);
+  });
+});
+
+describe('per-position coach rankings', () => {
+  const players: Player[] = [
+    { ...player('a'), position: 'LCB', positions: ['LCB', 'RCB'] },
+    { ...player('b'), position: 'RCB', positions: ['RCB'] },
+    { ...player('c'), position: 'ST', positions: ['ST'] },
+  ];
+
+  it('includes anyone assigned the role, not only primary', () => {
+    expect(playersForPosition(players, 'RCB').map((p) => p.id)).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(playersForPosition(players, 'ST').map((p) => p.id)).toEqual(['c']);
+  });
+
+  it('treats a complete position ballot as unique 1…N of that role', () => {
+    const ids = ['a', 'b'];
+    expect(
+      isCompletePositionBallot(
+        { coachId: 'c1', position: 'RCB', ranks: { a: 1, b: 2 } },
+        ids,
+      ),
+    ).toBe(true);
+    expect(
+      isCompletePositionBallot(
+        { coachId: 'c1', position: 'RCB', ranks: { a: 1 } },
+        ids,
+      ),
+    ).toBe(false);
+  });
+
+  it('does not reuse the squad 1–N ballot for a position list', () => {
+    const squad: CoachBallot = {
+      coachId: 'c1',
+      ranks: { a: 3, b: 2, c: 1 },
+    };
+    const positionBallots: CoachPositionBallot[] = [
+      { coachId: 'c1', position: 'RCB', ranks: { a: 1, b: 2 } },
+    ];
+    const totals = computePositionCoachesTotals(
+      players,
+      positionBallots,
+      'RCB',
+    );
+    expect(totals.get('a')?.rank).toBe(1);
+    expect(totals.get('b')?.rank).toBe(2);
+    expect(totals.has('c')).toBe(false);
+    expect(squad.ranks.c).toBe(1);
+  });
+
+  it('attaches independent position ranks onto the filtered list', () => {
+    const rankings = players.map((p, i) => ({
+      player: p,
+      totalScore: 50,
+      adjustedTotalScore: 50,
+      overallRank: i + 1,
+      adjustedRank: i + 1,
+      coachesTotalSum: null,
+      coachesRank: null,
+      adjustedBump: 0,
+      eligibleToPlay: true,
+      labelScores: {},
+      rank: i + 1,
+      attendanceRate: null,
+      recentTrend: 'stable' as const,
+      calculatedValues: {},
+    }));
+    const next = coachesRankingsForPosition(
+      rankings,
+      players,
+      [{ coachId: 'c1', position: 'RCB', ranks: { b: 1, a: 2 } }],
+      'RCB',
+    );
+    expect(next.map((r) => [r.player.id, r.coachesRank])).toEqual([
       ['a', 2],
       ['b', 1],
     ]);

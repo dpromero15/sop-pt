@@ -298,4 +298,14 @@ describe('specialtyAdjustedRankings', () => {
     expect(gk.find((r) => r.player.id === 'g2')?.adjustedRank).toBe(1);
     expect(gk.find((r) => r.player.id === 'g1')?.adjustedRank).toBe(2);
   });
+
+  it('includes a player whose extra role matches the specialty', () => {
+    const hybrid = stubRanking('w1', 40, 'RW');
+    hybrid.player.positions = ['RW', 'ST'];
+    const rankings = [hybrid, stubRanking('s1', 99, 'ST')];
+    const st = specialtyAdjustedRankings(rankings, 'ST');
+    expect(st.map((r) => r.player.id).sort()).toEqual(['s1', 'w1']);
+    expect(st.find((r) => r.player.id === 's1')?.adjustedRank).toBe(1);
+    expect(st.find((r) => r.player.id === 'w1')?.adjustedRank).toBe(2);
+  });
 });

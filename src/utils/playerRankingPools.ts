@@ -1,4 +1,5 @@
 import type { PlayerPosition, PlayerRankingPool } from '../types';
+import { defaultRankingPoolForPositionCode } from './playerPositions';
 
 export const PLAYER_RANKING_POOLS: Array<{
   id: PlayerRankingPool;
@@ -37,7 +38,7 @@ const POOL_LABELS = Object.fromEntries(
   PLAYER_RANKING_POOLS.map((pool) => [pool.id, pool.label]),
 ) as Record<PlayerRankingPool, string>;
 
-const DEFAULT_POOL_BY_POSITION: Record<PlayerPosition, PlayerRankingPool> = {
+const DEFAULT_POOL_BY_POSITION: Record<string, PlayerRankingPool> = {
   GK: 'goalkeepers',
   RB: 'wingbacks',
   RWB: 'wingbacks',
@@ -45,6 +46,8 @@ const DEFAULT_POOL_BY_POSITION: Record<PlayerPosition, PlayerRankingPool> = {
   LWB: 'wingbacks',
   WB: 'wingbacks',
   CB: 'center-defense',
+  RCB: 'center-defense',
+  LCB: 'center-defense',
   CDM: 'center-defense',
   CM: 'central-midfield',
   CAM: 'central-midfield',
@@ -65,7 +68,7 @@ export function isPlayerRankingPool(value: unknown): value is PlayerRankingPool 
 export function defaultRankingPoolForPosition(
   position: PlayerPosition,
 ): PlayerRankingPool {
-  return DEFAULT_POOL_BY_POSITION[position];
+  return defaultRankingPoolForPositionCode(position);
 }
 
 export function rankingPoolForPlayer(player: {
@@ -88,14 +91,15 @@ export function assignDefaultPlayerRankingPools(
   const next = rows.map((row) => {
     if (isPlayerRankingPool(row.rankingPool)) return row;
     const position = row.position;
-    if (typeof position !== 'string' || !(position in DEFAULT_POOL_BY_POSITION)) {
-      return row;
-    }
+    if (typeof position !== 'string') return row;
+    const pool =
+      DEFAULT_POOL_BY_POSITION[position] ??
+      defaultRankingPoolForPositionCode(position);
+    if (!pool) return row;
     changed = true;
     return {
       ...row,
-      rankingPool:
-        DEFAULT_POOL_BY_POSITION[position as keyof typeof DEFAULT_POOL_BY_POSITION],
+      rankingPool: pool,
     };
   });
   return { rows: next, changed };

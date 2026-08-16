@@ -9,6 +9,7 @@ import {
   CalculatedFieldDefinition,
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   AdjustedBumpConfig,
   AdjustedBumpTransaction,
   ComplianceRequirement,
@@ -270,6 +271,7 @@ export const INITIAL_PLAYERS: Player[] = [
     name: 'Lucas Silva',
     jerseyNumber: 7,
     position: 'RW',
+    positions: ['RW', 'ST'],
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(1),
     birthYear: 2010,
@@ -295,7 +297,8 @@ export const INITIAL_PLAYERS: Player[] = [
     id: 'p4',
     name: 'Diego Hernandez',
     jerseyNumber: 4,
-    position: 'CB',
+    position: 'RCB',
+    positions: ['RCB', 'LCB'],
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(3),
     birthYear: 2010,
@@ -386,7 +389,7 @@ export const INITIAL_PLAYERS: Player[] = [
     id: 'p11',
     name: 'Noah Patel',
     jerseyNumber: 5,
-    position: 'CB',
+    position: 'LCB',
     preferredFoot: 'Right',
     avatarUrl: defaultAvatarFor(10),
     birthYear: 2011,
@@ -581,6 +584,7 @@ export const DEFAULT_COACHES: Coach[] = [
 ];
 
 export const DEFAULT_COACH_BALLOTS: CoachBallot[] = [];
+export const DEFAULT_COACH_POSITION_BALLOTS: CoachPositionBallot[] = [];
 
 export const DEFAULT_BUMP_BUDGET: AdjustedBumpConfig = {
   plusBudget: 3,

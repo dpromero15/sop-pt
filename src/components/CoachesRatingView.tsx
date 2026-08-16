@@ -4,23 +4,37 @@ import { Reorder, useDragControls } from 'motion/react';
 import type {
   Coach,
   CoachBallot,
+  CoachPositionBallot,
   LabelDefinition,
   Player,
   PlayerRanking,
+  PositionDefinition,
 } from '../types';
 import { StorageService } from '../services/storage';
 import { flushNow } from '../services/storage/cloudSync';
-import { activePlayers, isCompleteBallot } from '../utils/coachesRating';
-import { formatPlayerPosition } from '../utils/playerPositions';
+import {
+  activePlayers,
+  isCompleteBallot,
+  isCompletePositionBallot,
+  playersForPosition,
+} from '../utils/coachesRating';
+import {
+  formatPlayerPosition,
+  formatPlayerPositions,
+  formatPositionLabel,
+} from '../utils/playerPositions';
+import { catalogPositionsWithPlayers } from '../utils/positionRankings';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { defaultAvatarFor } from '../constants/avatars';
 
 interface CoachesRatingViewProps {
   coaches: Coach[];
   ballots: CoachBallot[];
+  positionBallots: CoachPositionBallot[];
   players: Player[];
   rankings: PlayerRanking[];
   labels: LabelDefinition[];
+  positions: PositionDefinition[];
   onRefreshData: () => void;
 }
 
@@ -135,7 +149,7 @@ const RankRow: React.FC<RankRowProps> = ({
                 #{player.jerseyNumber}
               </span>
               <span className="px-1.5 py-0.5 rounded-md bg-slate-800/80 text-slate-400 text-[10px] font-bold shrink-0">
-                {formatPlayerPosition(player.position)}
+                {formatPlayerPositions(player)}
               </span>
               {player.status === 'injured' && (
                 <span className="px-1.5 py-0.5 rounded-md bg-rose-500/20 text-rose-400 text-[10px] font-semibold">
@@ -244,9 +258,11 @@ const RankRow: React.FC<RankRowProps> = ({
 export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   coaches,
   ballots,
+  positionBallots,
   players,
   rankings,
   labels,
+  positions,
   onRefreshData,
 }) => {
   const active = useMemo(() => activePlayers(players), [players]);
@@ -254,6 +270,31 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
     () => new Map(rankings.map((r) => [r.player.id, r])),
     [rankings],
   );
+  const [ballotMode, setBallotMode] = useState<'squad' | 'position'>('squad');
+  const filledPositions = useMemo(
+    () => catalogPositionsWithPlayers(positions, players),
+    [positions, players],
+  );
+  const [selectedPosition, setSelectedPosition] = useState(
+    () => filledPositions[0]?.code ?? '',
+  );
+  const eligible = useMemo(() => {
+    if (ballotMode === 'position' && selectedPosition) {
+      return playersForPosition(players, selectedPosition);
+    }
+    return active;
+  }, [ballotMode, selectedPosition, players, active]);
+
+  useEffect(() => {
+    if (ballotMode !== 'position') return;
+    if (filledPositions.length === 0) {
+      if (selectedPosition) setSelectedPosition('');
+      return;
+    }
+    if (!filledPositions.some((position) => position.code === selectedPosition)) {
+      setSelectedPosition(filledPositions[0].code);
+    }
+  }, [ballotMode, filledPositions, selectedPosition]);
   const [selectedCoachId, setSelectedCoachId] = useState<string>(
     () => coaches[0]?.id ?? '',
   );
@@ -267,15 +308,30 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   const selectedCoach =
     coaches.find((c) => c.id === selectedCoachId) ?? coaches[0] ?? null;
 
-  // Load ballot order when coach or roster changes
+  // Load ballot order when coach, mode, position, or roster changes
   useEffect(() => {
     if (!selectedCoach) {
-      setOrderedPlayers(orderFromBallot(active, undefined));
+      setOrderedPlayers(orderFromBallot(eligible, undefined));
+      return;
+    }
+    if (ballotMode === 'position' && selectedPosition) {
+      const existing = positionBallots.find(
+        (b) =>
+          b.coachId === selectedCoach.id && b.position === selectedPosition,
+      );
+      setOrderedPlayers(orderFromBallot(eligible, existing?.ranks));
       return;
     }
     const existing = ballots.find((b) => b.coachId === selectedCoach.id);
-    setOrderedPlayers(orderFromBallot(active, existing?.ranks));
-  }, [selectedCoach?.id, ballots, active]);
+    setOrderedPlayers(orderFromBallot(eligible, existing?.ranks));
+  }, [
+    selectedCoach?.id,
+    ballots,
+    positionBallots,
+    eligible,
+    ballotMode,
+    selectedPosition,
+  ]);
 
   // Keep selection valid when coaches list changes
   React.useEffect(() => {
@@ -310,15 +366,26 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
   };
 
   const draftRanks = ranksFromOrder(orderedPlayers);
-  const draftBallot: CoachBallot | null = selectedCoach
-    ? { coachId: selectedCoach.id, ranks: draftRanks }
-    : null;
+  const draftBallot: CoachBallot | null =
+    selectedCoach && ballotMode === 'squad'
+      ? { coachId: selectedCoach.id, ranks: draftRanks }
+      : null;
+  const draftPositionBallot: CoachPositionBallot | null =
+    selectedCoach && ballotMode === 'position' && selectedPosition
+      ? {
+          coachId: selectedCoach.id,
+          position: selectedPosition,
+          ranks: draftRanks,
+        }
+      : null;
 
-  const activeIds = active.map((p) => p.id);
+  const activeIds = eligible.map((p) => p.id);
   const complete =
-    draftBallot !== null && isCompleteBallot(draftBallot, activeIds);
+    ballotMode === 'position'
+      ? isCompletePositionBallot(draftPositionBallot ?? undefined, activeIds)
+      : draftBallot !== null && isCompleteBallot(draftBallot, activeIds);
 
-  const persistBallot = (draft: CoachBallot, announce: boolean) => {
+  const persistSquadBallot = (draft: CoachBallot, announce: boolean) => {
     StorageService.saveCoachBallot(draft);
     void flushNow();
     onRefreshData();
@@ -329,14 +396,33 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
     );
     showToast(
       counts
-        ? 'Ballot saved — counts toward Coaches Rank'
+        ? 'Ballot saved — counts toward squad Coaches Rank'
         : 'Ballot saved (incomplete — rank every active player)',
     );
   };
 
+  const persistPositionBallot = (
+    draft: CoachPositionBallot,
+    announce: boolean,
+  ) => {
+    StorageService.saveCoachPositionBallot(draft);
+    void flushNow();
+    onRefreshData();
+    if (!announce) return;
+    showToast(
+      isCompletePositionBallot(draft, activeIds)
+        ? `Saved — counts toward ${formatPlayerPosition(draft.position)} Coaches Rank`
+        : 'Saved (incomplete — rank every player assigned this role)',
+    );
+  };
+
   const handleSaveBallot = () => {
+    if (draftPositionBallot) {
+      persistPositionBallot(draftPositionBallot, true);
+      return;
+    }
     if (!draftBallot) return;
-    persistBallot(draftBallot, true);
+    persistSquadBallot(draftBallot, true);
   };
 
   const handleReorder = (next: Player[]) => {
@@ -344,10 +430,15 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
     if (!selectedCoach) return;
     if (reorderSaveTimer.current) clearTimeout(reorderSaveTimer.current);
     reorderSaveTimer.current = setTimeout(() => {
-      persistBallot(
-        { coachId: selectedCoach.id, ranks: ranksFromOrder(next) },
-        false,
-      );
+      const ranks = ranksFromOrder(next);
+      if (ballotMode === 'position' && selectedPosition) {
+        persistPositionBallot(
+          { coachId: selectedCoach.id, position: selectedPosition, ranks },
+          false,
+        );
+        return;
+      }
+      persistSquadBallot({ coachId: selectedCoach.id, ranks }, false);
     }, 400);
   };
 
@@ -383,17 +474,19 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
             <span>Coaches Rating</span>
           </h3>
           <p className="text-xs text-slate-400 mt-1 max-w-xl">
-            Drag players by the grip handle — top of the list is #1 (best).
-            Use <span className="text-slate-300">Save</span> to push now (do
-            not wait for JIT). Rankings → Coaches Rank only appears after a
-            <strong className="text-slate-300"> complete</strong> ballot
-            (every active player, unique 1…{active.length || 'N'}).
+            Squad ballots rank the whole roster 1…N. By position is a separate
+            depth chart: only players assigned that role, unique 1…N for that
+            role. Drag the grip — top is #1.
           </p>
         </div>
         {selectedCoach && (
           <SaveAndSyncButton
             beforeFlush={() => {
-              if (draftBallot) StorageService.saveCoachBallot(draftBallot);
+              if (draftPositionBallot) {
+                StorageService.saveCoachPositionBallot(draftPositionBallot);
+              } else if (draftBallot) {
+                StorageService.saveCoachBallot(draftBallot);
+              }
             }}
             onSaved={() => {
               onRefreshData();
@@ -428,15 +521,93 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
         </button>
       </div>
 
+      <div
+        className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+        role="tablist"
+        aria-label="Coaches ballot type"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={ballotMode === 'squad'}
+          onClick={() => setBallotMode('squad')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            ballotMode === 'squad'
+              ? 'bg-amber-500 text-slate-950'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          Squad
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={ballotMode === 'position'}
+          onClick={() => {
+            setBallotMode('position');
+            if (!selectedPosition && filledPositions[0]) {
+              setSelectedPosition(filledPositions[0].code);
+            }
+          }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+            ballotMode === 'position'
+              ? 'bg-amber-500 text-slate-950'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          By position
+        </button>
+      </div>
+      {ballotMode === 'position' && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {filledPositions.length === 0 ? (
+            <p className="text-xs text-slate-500">
+              Assign players to positions on the roster first.
+            </p>
+          ) : (
+            filledPositions.map((def) => (
+              <button
+                key={def.code}
+                type="button"
+                onClick={() => setSelectedPosition(def.code)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${
+                  selectedPosition === def.code
+                    ? 'bg-violet-500/20 text-violet-200 border-violet-500/40'
+                    : 'bg-slate-950 text-slate-400 border-slate-800'
+                }`}
+              >
+                {formatPositionLabel(def)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
       {coaches.length === 0 ? (
         <p className="text-sm text-slate-500">No coaches yet — add one above.</p>
       ) : (
         <>
           <div className="flex flex-wrap gap-2">
             {coaches.map((c) => {
-              const ballot = ballots.find((b) => b.coachId === c.id);
               const isComplete =
-                ballot !== undefined && isCompleteBallot(ballot, activeIds);
+                ballotMode === 'position' && selectedPosition
+                  ? isCompletePositionBallot(
+                      positionBallots.find(
+                        (b) =>
+                          b.coachId === c.id && b.position === selectedPosition,
+                      ),
+                      activeIds,
+                    )
+                  : (() => {
+                      const ballot = ballots.find((b) => b.coachId === c.id);
+                      return (
+                        ballot !== undefined &&
+                        isCompleteBallot(
+                          ballot,
+                          activePlayers(players).map((p) => p.id),
+                        )
+                      );
+                    })();
               const selected = selectedCoach?.id === c.id;
               return (
                 <div key={c.id} className="inline-flex items-center gap-1">
@@ -472,7 +643,11 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
                   Ranking as{' '}
                   <strong className="text-white">{selectedCoach.name}</strong>
                   {' · '}
-                  {n} active player{n === 1 ? '' : 's'}
+                  {n} {ballotMode === 'position' ? 'assigned' : 'active'} player
+                  {n === 1 ? '' : 's'}
+                  {ballotMode === 'position' && selectedPosition
+                    ? ` at ${formatPlayerPosition(selectedPosition)}`
+                    : ''}
                   {' · '}
                   {complete ? (
                     <span className="text-emerald-400">
@@ -480,8 +655,7 @@ export const CoachesRatingView: React.FC<CoachesRatingViewProps> = ({
                     </span>
                   ) : (
                     <span className="text-amber-300">
-                      Incomplete — Coaches Rank stays empty until every active
-                      player is ranked
+                      Incomplete — finish unique 1…{n || 'N'} for this list
                     </span>
                   )}
                 </p>

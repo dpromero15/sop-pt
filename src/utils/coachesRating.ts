@@ -1,5 +1,6 @@
 import type {
   CoachBallot,
+  CoachPositionBallot,
   Player,
   PlayerRanking,
   PlayerRankingPool,
@@ -7,6 +8,7 @@ import type {
 import { assignCompetitionRanks } from './scoring';
 import { activePlayers } from './playerStatus';
 import { rankingPoolForPlayer } from './playerRankingPools';
+import { playerHasPosition } from './playerPositions';
 
 export { activePlayers } from './playerStatus';
 
@@ -148,6 +150,100 @@ export function attachCoachesTotals(
       ...r,
       coachesTotalSum: t?.sum ?? null,
       coachesRank: t?.rank ?? null,
+    };
+  });
+}
+
+export function playersForPosition(
+  players: Player[],
+  position: string,
+): Player[] {
+  return activePlayers(players).filter((player) =>
+    playerHasPosition(player, position),
+  );
+}
+
+export function isCompletePositionBallot(
+  ballot: CoachPositionBallot | undefined,
+  playerIds: string[],
+): boolean {
+  if (!ballot) return false;
+  return isCompleteBallot(
+    { coachId: ballot.coachId, ranks: ballot.ranks },
+    playerIds,
+  );
+}
+
+export function computePositionCoachesTotals(
+  players: Player[],
+  ballots: CoachPositionBallot[],
+  position: string,
+): Map<string, CoachesTotalResult> {
+  const eligible = playersForPosition(players, position);
+  const eligibleIds = eligible.map((player) => player.id);
+  const complete = ballots.filter(
+    (ballot) =>
+      ballot.position === position &&
+      isCompletePositionBallot(ballot, eligibleIds),
+  );
+  const result = new Map<string, CoachesTotalResult>();
+  if (complete.length === 0 || eligibleIds.length === 0) return result;
+
+  const ballotCount = complete.length;
+  const averages = eligibleIds.map((playerId) => {
+    let sum = 0;
+    for (const ballot of complete) {
+      sum += ballot.ranks[playerId];
+    }
+    return sum / ballotCount;
+  });
+  const ranks = assignCompetitionRanks(averages, false);
+  eligibleIds.forEach((playerId, i) => {
+    const rank = ranks[i];
+    if (rank !== null) {
+      const average = averages[i];
+      result.set(playerId, {
+        sum: average * ballotCount,
+        average,
+        rank,
+        ballotCount,
+      });
+    }
+  });
+  return result;
+}
+
+export function coachPositionBallotOrdinals(
+  players: Player[],
+  ballot: CoachPositionBallot | undefined,
+  position: string,
+): Map<string, number> {
+  const eligibleIds = playersForPosition(players, position).map((p) => p.id);
+  const result = new Map<string, number>();
+  if (!isCompletePositionBallot(ballot, eligibleIds) || !ballot) return result;
+  for (const id of eligibleIds) {
+    result.set(id, ballot.ranks[id]);
+  }
+  return result;
+}
+
+/** Filter to a position and apply that position's independent coach ranks. */
+export function coachesRankingsForPosition(
+  rankings: PlayerRanking[],
+  players: Player[],
+  ballots: CoachPositionBallot[],
+  position: string,
+): PlayerRanking[] {
+  const pooled = rankings.filter((ranking) =>
+    playerHasPosition(ranking.player, position),
+  );
+  const totals = computePositionCoachesTotals(players, ballots, position);
+  return pooled.map((ranking) => {
+    const total = totals.get(ranking.player.id);
+    return {
+      ...ranking,
+      coachesTotalSum: total?.sum ?? null,
+      coachesRank: total?.rank ?? null,
     };
   });
 }
