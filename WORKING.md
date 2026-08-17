@@ -12,14 +12,26 @@ _(none)_
 
 ## Ready to ship
 
-### #166 — Sub-teams (Varsity / JV / C-team) with combined and separated rankings
+### #169 — Player meeting page from profile (placement snapshot)
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Config adds/renames/reorders/deletes groups (quick-add Varsity / JV / C-Team). Players can belong to 0..N groups. Rankings Groups chips filter the pool; Combined is one list (dual-rostered once); Separated gives each group its own rank 1 (dual-rostered in both). Schema v20 empty catalog; existing programs unchanged until groups are added.
-- **Touchpoints:** `src/utils/subTeams.ts`, `src/components/SubTeamsConfigPanel.tsx`, `src/components/RankingsView.tsx`, `src/components/PlayersView.tsx`, `src/services/migrations/migrations/020_sub_teams.ts`, storage + API `config/subTeams`
+- **Notes:** Profile **Player meeting** opens a locked overlay with the placement snapshot on one scrollable page: squad standing (#X of Y), assigned-position ranks + pool leaders, category numbers (no radar), attendance rate + late/absent. Print still available from the meeting sheet.
+- **Touchpoints:** `src/components/PlayerMeetingModal.tsx`, `src/components/PlayerProfileModal.tsx`, `src/App.tsx`, `src/utils/playerPlacementPrint.ts`
+
+### #168 — Player printout: compact late/absent attendance with session titles
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Placement sheet keeps the season rate. Page 1 shows late/absent counts under the rate when any exist. Page 2 has a compact wrapped list of late/absent session titles + short dates (present/excused counted, not listed). Soft-deleted sessions omitted. Print from Players and player profile both pass sessions.
+- **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/playerPlacementPrint.test.ts`, `src/App.tsx`
+
+### #171 — Player placement print overflows to a third page
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Two authored `.page` blocks stay at most two letter pages: denser type, `page-break-inside: avoid`, sheet `min-height` (so scale can measure overflow), and `fitPrintSheetToPage` collapses leftover layout after `transform: scale`.
+- **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/rankingsPrint.ts`
 
 **Suggested PR Closes:**
 ```
-Closes #166
+Closes #169
+Closes #168
+Closes #171
 ```
 
 ## Still open (this release)
@@ -35,7 +47,7 @@ _(none)_
 ## Agent notes
 
 - `2.13.1` shipped via [#164](https://github.com/dpromero15/sop-pt/pull/164) + [#165](https://github.com/dpromero15/sop-pt/pull/165) (2026-08-17). #162 + #163 closed by those PRs.
-- #166 Sub-teams: schema **v20** (`020_sub_teams`). Catalog blob `stm_sub_teams_v1` / `config/subTeams`. Player field `squadIds`.
+- #166 Sub-teams shipped via [#167](https://github.com/dpromero15/sop-pt/pull/167) (2026-08-17). Schema **v20** (`020_sub_teams`). Catalog blob `stm_sub_teams_v1` / `config/subTeams`. Player field `squadIds`.
 - Position ranking is a **Rankings → Scope** chip (Squad / All positions / LCB…), not Coaches Rank → By position pool. **WB (2/3)** remains in the default catalog as a generic wingback; LCB/RCB replaced combined CB 4/5 only.
 - #99 System Admin hub parked from 2.12.0 to **v3.0.0** (2026-08-16). Do not implement on this branch.
 - Player ranking pools: schema **v17** (`017_player_ranking_pool`).
@@ -51,4 +63,5 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (338 tests) + `services/api` lint 2026-08-17 — #166.
+- **QA:** `npm run lint` + `npm test` (343 tests) 2026-08-17 — #168 + #169 + #171.
+

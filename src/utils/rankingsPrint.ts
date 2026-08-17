@@ -121,6 +121,41 @@ export function computePrintScale(
   return Math.max(0.25, raw * 0.98);
 }
 
+function pageInnerSize(
+  page: HTMLElement | null,
+  frameDoc: Document,
+): { width: number; height: number } {
+  if (!page) {
+    return { width: PRINT_SHEET_WIDTH_PX, height: PRINT_SHEET_HEIGHT_PX };
+  }
+  const style = frameDoc.defaultView?.getComputedStyle(page);
+  const padX = style
+    ? parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
+    : 0;
+  const padY = style
+    ? parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+    : 0;
+  return {
+    width: Math.max(1, (page.clientWidth || PRINT_SHEET_WIDTH_PX) - padX),
+    height: Math.max(1, (page.clientHeight || PRINT_SHEET_HEIGHT_PX) - padY),
+  };
+}
+
+/**
+ * `transform: scale()` does not shrink layout, so leftover height would still
+ * paginate. Collapse that space with a negative margin.
+ */
+export function applyPrintSheetFit(sheet: HTMLElement, scale: number): void {
+  const layoutH = sheet.scrollHeight;
+  if (scale >= 1) {
+    sheet.style.transform = '';
+    sheet.style.marginBottom = '';
+    return;
+  }
+  sheet.style.transform = `scale(${scale})`;
+  sheet.style.marginBottom = `${layoutH * (scale - 1)}px`;
+}
+
 export function fitPrintSheetToPage(frameDoc: Document): number {
   const sheets = Array.from(
     frameDoc.querySelectorAll('.sheet'),
@@ -128,16 +163,17 @@ export function fitPrintSheetToPage(frameDoc: Document): number {
   if (sheets.length === 0) return 1;
   let min = 1;
   for (const sheet of sheets) {
+    sheet.style.transform = '';
+    sheet.style.marginBottom = '';
     const page = sheet.closest('.page') as HTMLElement | null;
-    const pageW = page?.clientWidth || PRINT_SHEET_WIDTH_PX;
-    const pageH = page?.clientHeight || PRINT_SHEET_HEIGHT_PX;
+    const inner = pageInnerSize(page, frameDoc);
     const scale = computePrintScale(
       sheet.scrollWidth,
       sheet.scrollHeight,
-      pageW,
-      pageH,
+      inner.width,
+      inner.height,
     );
-    sheet.style.transform = scale < 1 ? `scale(${scale})` : '';
+    applyPrintSheetFit(sheet, scale);
     min = Math.min(min, scale);
   }
   return min;
@@ -801,7 +837,12 @@ export function openPrintHtml(html: string): void {
   const run = () => {
     if (printed) return;
     printed = true;
-    if (iframe.contentDocument) fitPrintSheetToPage(iframe.contentDocument);
+    const doc = iframe.contentDocument;
+    if (doc) {
+      const pages = Math.max(1, doc.querySelectorAll('.page').length);
+      iframe.style.height = `${pages * 11}in`;
+      fitPrintSheetToPage(doc);
+    }
     iframe.contentWindow?.focus();
     iframe.contentWindow?.print();
     window.setTimeout(() => iframe.remove(), 1500);

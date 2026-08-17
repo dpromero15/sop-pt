@@ -1,4 +1,5 @@
 import type {
+  AttendanceStatus,
   CoachBallot,
   CoachPositionBallot,
   LabelDefinition,
@@ -7,6 +8,7 @@ import type {
   Player,
   PlayerRanking,
   PositionDefinition,
+  Session,
   Team,
 } from '../types';
 import {
@@ -34,6 +36,12 @@ import {
 import { formatTeamMetricValue } from './rankingsFilter';
 import { openPrintHtml } from './rankingsPrint';
 import { assignCompetitionRanks } from './scoring';
+import {
+  ATTENDANCE_METRIC_ID,
+  attendanceValueToStatus,
+  formatSessionListDate,
+} from './sessionMetrics';
+import { isSoftDeleted } from './softDelete';
 
 export interface RankPlace {
   rank: number | null;
@@ -69,6 +77,26 @@ export interface MetricPlacementRow {
   best: string;
 }
 
+export type AttendanceExceptionStatus = Extract<
+  AttendanceStatus,
+  'late' | 'absent'
+>;
+
+export interface AttendanceExceptionRow {
+  sessionId: string;
+  dateLabel: string;
+  title: string;
+  status: AttendanceExceptionStatus;
+}
+
+export interface AttendancePrintSummary {
+  present: number;
+  late: number;
+  absent: number;
+  excused: number;
+  exceptions: AttendanceExceptionRow[];
+}
+
 export interface PlayerPlacementDocument {
   teamName: string;
   clubName: string;
@@ -86,6 +114,7 @@ export interface PlayerPlacementDocument {
   statusNote: string;
   notes: string;
   attendanceRate: string;
+  attendance: AttendancePrintSummary;
   overall: {
     statistical: RankPlace;
     adjusted: RankPlace;
@@ -102,6 +131,7 @@ export interface PlayerPlacementPrintContext {
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
   entries: MetricEntry[];
+  sessions: Session[];
   positions: PositionDefinition[];
   coachBallots: CoachBallot[];
   coachPositionBallots: CoachPositionBallot[];
@@ -139,7 +169,7 @@ function placeOf(rank: number | null, of: number, detail: string): RankPlace {
   return { rank, of: Math.max(0, of), detail };
 }
 
-function formatPlace(place: RankPlace): string {
+export function formatPlace(place: RankPlace): string {
   if (place.rank == null) return '—';
   if (place.of > 0) return `#${place.rank} of ${place.of}`;
   return `#${place.rank}`;
@@ -254,6 +284,90 @@ function statusNoteFor(player: Player): string {
   if (player.status === 'inactive') bits.push('Inactive');
   if (player.rankingIneligible) bits.push('Marked ineligible for Adjusted');
   return bits.join(' · ');
+}
+
+function attendanceMetricIds(metrics: MetricDefinition[]): Set<string> {
+  const ids = metrics
+    .filter(
+      (metric) =>
+        metric.type === 'attendance' || metric.id === ATTENDANCE_METRIC_ID,
+    )
+    .map((metric) => metric.id);
+  return new Set(ids.length > 0 ? ids : [ATTENDANCE_METRIC_ID]);
+}
+
+export function emptyAttendancePrintSummary(): AttendancePrintSummary {
+  return {
+    present: 0,
+    late: 0,
+    absent: 0,
+    excused: 0,
+    exceptions: [],
+  };
+}
+
+function formatExceptionItem(row: AttendanceExceptionRow): string {
+  const title = row.title.trim() || 'Session';
+  return `${row.dateLabel} ${title}`;
+}
+
+/**
+ * Season attendance for the placement sheet: counts plus late/absent
+ * session titles only. Present and excused are counted, not listed.
+ */
+export function buildAttendancePrintSummary(
+  playerId: string,
+  entries: MetricEntry[],
+  sessions: Session[],
+  metrics: MetricDefinition[],
+): AttendancePrintSummary {
+  const metricIds = attendanceMetricIds(metrics);
+  const liveById = new Map(
+    sessions
+      .filter((session) => !isSoftDeleted(session))
+      .map((session) => [session.id, session]),
+  );
+
+  const latestBySession = new Map<string, MetricEntry>();
+  for (const entry of entries) {
+    if (entry.playerId !== playerId || !metricIds.has(entry.metricId)) continue;
+    const existing = latestBySession.get(entry.sessionId);
+    if (!existing || entry.timestamp > existing.timestamp) {
+      latestBySession.set(entry.sessionId, entry);
+    }
+  }
+
+  const summary = emptyAttendancePrintSummary();
+  const exceptionCandidates: Array<{
+    session: Session;
+    status: AttendanceExceptionStatus;
+  }> = [];
+
+  for (const [sessionId, entry] of latestBySession) {
+    const session = liveById.get(sessionId);
+    if (!session) continue;
+    const status = attendanceValueToStatus(entry.value);
+    summary[status] += 1;
+    if (status === 'late' || status === 'absent') {
+      exceptionCandidates.push({ session, status });
+    }
+  }
+
+  exceptionCandidates.sort((a, b) => {
+    const byDate = b.session.date.localeCompare(a.session.date);
+    if (byDate !== 0) return byDate;
+    const byTime = (b.session.time ?? '').localeCompare(a.session.time ?? '');
+    if (byTime !== 0) return byTime;
+    return b.session.id.localeCompare(a.session.id);
+  });
+
+  summary.exceptions = exceptionCandidates.map((row) => ({
+    sessionId: row.session.id,
+    dateLabel: formatSessionListDate(row.session.date),
+    title: row.session.title.trim() || 'Session',
+    status: row.status,
+  }));
+  return summary;
 }
 
 export function buildPlayerPlacementDocument(
@@ -465,6 +579,12 @@ export function buildPlayerPlacementDocument(
     notes: player.notes?.trim() ?? '',
     attendanceRate:
       ranking.attendanceRate != null ? `${ranking.attendanceRate}%` : '—',
+    attendance: buildAttendancePrintSummary(
+      player.id,
+      ctx.entries,
+      ctx.sessions,
+      ctx.metrics,
+    ),
     overall,
     positions,
     categories,
@@ -475,7 +595,7 @@ export function buildPlayerPlacementDocument(
 function radarSvg(categories: CategoryPlacementRow[], accent: string): string {
   const scored = categories.filter((row) => row.score != null);
   if (scored.length < 3) return '';
-  const size = 220;
+  const size = 168;
   const cx = size / 2;
   const cy = size / 2;
   const radius = 78;
@@ -512,7 +632,7 @@ function radarSvg(categories: CategoryPlacementRow[], accent: string): string {
       return `<text x="${p.x.toFixed(1)}" y="${p.y.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="8" fill="#444" font-family="ui-sans-serif, system-ui, sans-serif">${escapeHtml(row.name)}</text>`;
     })
     .join('');
-  return `<svg class="radar" viewBox="0 0 ${size} ${size}" width="220" height="220" aria-hidden="true">${rings}${spokes}<polygon points="${valuePts}" fill="${escapeHtml(accent)}" fill-opacity="0.18" stroke="${escapeHtml(accent)}" stroke-width="1.6"/>${labels}</svg>`;
+  return `<svg class="radar" viewBox="0 0 ${size} ${size}" width="168" height="168" aria-hidden="true">${rings}${spokes}<polygon points="${valuePts}" fill="${escapeHtml(accent)}" fill-opacity="0.18" stroke="${escapeHtml(accent)}" stroke-width="1.6"/>${labels}</svg>`;
 }
 
 function categoryBars(categories: CategoryPlacementRow[]): string {
@@ -632,6 +752,49 @@ function identityMeta(doc: PlayerPlacementDocument): string {
   return bits.map((bit) => escapeHtml(bit)).join(' · ');
 }
 
+function attendanceExceptionHint(summary: AttendancePrintSummary): string {
+  const bits: string[] = [];
+  if (summary.late > 0) bits.push(`${summary.late} late`);
+  if (summary.absent > 0) bits.push(`${summary.absent} absent`);
+  return bits.join(' · ');
+}
+
+function attendanceCountsLine(doc: PlayerPlacementDocument): string {
+  const { present, late, absent, excused } = doc.attendance;
+  const bits = [
+    `Present ${present}`,
+    `Late ${late}`,
+    `Absent ${absent}`,
+  ];
+  if (excused > 0) bits.push(`Excused ${excused}`);
+  return `${doc.attendanceRate} · ${bits.join(' · ')}`;
+}
+
+function attendanceExceptionLine(
+  label: string,
+  rows: AttendanceExceptionRow[],
+): string {
+  if (rows.length === 0) return '';
+  const items = rows.map((row) => escapeHtml(formatExceptionItem(row))).join(' · ');
+  return `<p class="att-line"><span class="att-tag">${escapeHtml(label)}</span> ${items}</p>`;
+}
+
+function attendanceSummaryHtml(doc: PlayerPlacementDocument): string {
+  const late = doc.attendance.exceptions.filter((row) => row.status === 'late');
+  const absent = doc.attendance.exceptions.filter(
+    (row) => row.status === 'absent',
+  );
+  const body =
+    late.length === 0 && absent.length === 0
+      ? `<p class="empty">No late or absent sessions.</p>`
+      : `${attendanceExceptionLine('Late', late)}${attendanceExceptionLine('Absent', absent)}`;
+  return `<section class="block att-summary">
+      <h2>Attendance</h2>
+      <p class="att-counts">${escapeHtml(attendanceCountsLine(doc))}</p>
+      ${body}
+    </section>`;
+}
+
 function pageFooter(doc: PlayerPlacementDocument, page: 1 | 2): string {
   const club = [doc.clubName, doc.ageGroup].filter(Boolean).join(' · ');
   return `<footer>
@@ -666,6 +829,11 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
       <div class="att">
         <p class="stat-kicker">Attendance</p>
         <p class="stat-place">${escapeHtml(doc.attendanceRate)}</p>
+        ${
+          attendanceExceptionHint(doc.attendance)
+            ? `<p class="stat-detail">${escapeHtml(attendanceExceptionHint(doc.attendance))}</p>`
+            : ''
+        }
       </div>
     </div>
     <section class="block">
@@ -674,7 +842,7 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
     </section>
     <section class="block">
       <h2>Assigned position ranks</h2>
-      <p class="hint">Statistical lists the top two in that role, then this player if they sit outside the top two. Coaches Rank is a separate 1…N for each role — not a slice of overall rank. Pool is everyone assigned that position.</p>
+      <p class="hint">Top two in that role, then this player if they sit outside the pair. Coaches Rank is its own 1…N per role. Pool is everyone assigned that position.</p>
       ${positionsTable(doc.positions)}
     </section>
     <section class="block">
@@ -692,8 +860,9 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
     <header>
       <p class="kicker">${escapeHtml(doc.playerName)} · #${doc.jersey}</p>
       <h1>Performance detail</h1>
-      <p class="lede">Percentile is squad standing (100 = best). Rank is place among players with that metric logged. Average / latest / best use logged sessions.</p>
+      <p class="lede">Percentile is squad standing (100 = best). Rank is among players with that metric logged.</p>
     </header>
+    ${attendanceSummaryHtml(doc)}
     <section class="block">
       ${metricsTable(doc.metrics)}
     </section>
@@ -716,8 +885,11 @@ const PLACEMENT_STYLES = `
   .page {
     width: 8.5in;
     height: 11in;
-    padding: 0.42in 0.48in 0.38in;
+    max-height: 11in;
+    padding: 0.36in 0.42in 0.3in;
     overflow: hidden;
+    break-inside: avoid;
+    page-break-inside: avoid;
     page-break-after: always;
     break-after: page;
   }
@@ -726,17 +898,17 @@ const PLACEMENT_STYLES = `
     break-after: auto;
   }
   .sheet {
-    width: 7.54in;
-    height: 10.2in;
+    width: 7.66in;
+    min-height: 10.34in;
     display: flex;
     flex-direction: column;
     transform-origin: top left;
   }
-  header { margin: 0 0 10px; }
+  header { margin: 0 0 6px; }
   .kicker {
-    margin: 0 0 2px;
+    margin: 0 0 1px;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7.5pt;
+    font-size: 7pt;
     font-weight: 700;
     letter-spacing: 0.16em;
     text-transform: uppercase;
@@ -744,119 +916,119 @@ const PLACEMENT_STYLES = `
   }
   h1 {
     margin: 0;
-    font-size: 18pt;
+    font-size: 16pt;
     font-weight: 700;
     letter-spacing: -0.03em;
-    line-height: 1.1;
+    line-height: 1.08;
   }
   .lede {
-    margin: 4px 0 0;
+    margin: 3px 0 0;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
+    font-size: 7.5pt;
     color: #444;
   }
   .identity {
     display: grid;
-    grid-template-columns: 48px 1fr auto;
-    gap: 12px;
+    grid-template-columns: 42px 1fr auto;
+    gap: 10px;
     align-items: center;
-    padding: 10px 0 12px;
+    padding: 7px 0 8px;
     border-top: 2px solid #111;
     border-bottom: 1px solid #d4d4d4;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
   }
   .mono {
-    width: 48px;
-    height: 48px;
+    width: 42px;
+    height: 42px;
     border: 1.5px solid #111;
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: ui-sans-serif, system-ui, sans-serif;
     font-weight: 800;
-    font-size: 13pt;
+    font-size: 12pt;
     letter-spacing: 0.04em;
   }
   .name {
     margin: 0;
-    font-size: 16pt;
+    font-size: 15pt;
     font-weight: 700;
     letter-spacing: -0.02em;
   }
   .jersey { font-variant-numeric: tabular-nums; color: #333; }
   .meta, .status {
-    margin: 3px 0 0;
+    margin: 2px 0 0;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
+    font-size: 7.5pt;
     color: #444;
   }
   .status { font-weight: 700; color: #7c2d12; }
   .att { text-align: right; }
-  .block { margin: 0 0 12px; }
+  .block { margin: 0 0 8px; }
   h2 {
-    margin: 0 0 6px;
+    margin: 0 0 4px;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
+    font-size: 7.5pt;
     font-weight: 800;
     letter-spacing: 0.12em;
     text-transform: uppercase;
   }
   .hint {
-    margin: -2px 0 6px;
+    margin: -1px 0 4px;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7.5pt;
+    font-size: 7pt;
     color: #555;
   }
   .stat-row {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    gap: 6px;
   }
   .stat-card, .att {
     border: 1px solid #d4d4d4;
-    padding: 8px 10px;
+    padding: 6px 8px;
   }
   .att { border: 0; padding: 0; }
   .stat-kicker {
     margin: 0;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7pt;
+    font-size: 6.5pt;
     font-weight: 700;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #555;
   }
   .stat-place {
-    margin: 2px 0 0;
-    font-size: 16pt;
+    margin: 1px 0 0;
+    font-size: 14pt;
     font-weight: 700;
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
   }
   .stat-detail {
-    margin: 2px 0 0;
+    margin: 1px 0 0;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7.5pt;
+    font-size: 7pt;
     color: #444;
   }
   table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 9pt;
+    font-size: 8pt;
   }
   th {
     text-align: left;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7pt;
+    font-size: 6.5pt;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     border-bottom: 1.5px solid #111;
-    padding: 3px 6px;
+    padding: 2px 5px;
   }
   td {
-    padding: 3.5px 6px;
+    padding: 2px 5px;
     border-bottom: 0.4px solid #d4d4d4;
     font-variant-numeric: tabular-nums;
   }
@@ -864,37 +1036,37 @@ const PLACEMENT_STYLES = `
   td.leaders {
     text-align: left;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
-    line-height: 1.3;
+    font-size: 7.5pt;
+    line-height: 1.25;
   }
   tr.cat td {
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7pt;
+    font-size: 6.5pt;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #444;
-    padding-top: 8px;
+    padding-top: 5px;
     border-bottom: 0.8px solid #111;
   }
   .profile-grid {
     display: grid;
     grid-template-columns: 1fr auto;
-    gap: 16px;
+    gap: 12px;
     align-items: center;
   }
   .bar-row {
     display: grid;
-    grid-template-columns: 1.3in 1fr 0.45in;
-    gap: 8px;
+    grid-template-columns: 1.2in 1fr 0.4in;
+    gap: 6px;
     align-items: center;
-    margin: 0 0 5px;
+    margin: 0 0 3px;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
+    font-size: 7.5pt;
   }
   .bar-label { color: #222; }
   .bar-track {
-    height: 7px;
+    height: 6px;
     background: #ececec;
     border: 0.5px solid #d4d4d4;
   }
@@ -907,23 +1079,46 @@ const PLACEMENT_STYLES = `
   .empty {
     margin: 0;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 8pt;
+    font-size: 7.5pt;
     color: #666;
   }
   .notes {
     margin: 0;
-    font-size: 9pt;
-    line-height: 1.35;
+    font-size: 8pt;
+    line-height: 1.3;
     white-space: pre-wrap;
+  }
+  .att-summary { margin-bottom: 6px; }
+  .att-counts {
+    margin: 0 0 2px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 7pt;
+    color: #444;
+    font-variant-numeric: tabular-nums;
+  }
+  .att-line {
+    margin: 0 0 1px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 7pt;
+    line-height: 1.22;
+    color: #222;
+  }
+  .att-tag {
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 6pt;
+    color: #555;
+    margin-right: 5px;
   }
   footer {
     margin-top: auto;
-    padding-top: 8px;
+    padding-top: 6px;
     border-top: 1px solid #d4d4d4;
     display: flex;
     justify-content: space-between;
     font-family: ui-sans-serif, system-ui, sans-serif;
-    font-size: 7pt;
+    font-size: 6.5pt;
     color: #555;
   }
 `;
