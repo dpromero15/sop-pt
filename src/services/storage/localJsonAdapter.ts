@@ -51,6 +51,7 @@ import {
   ensureAttendanceFirst,
   migrateSessionsMetricIds,
   normalizeSessionStatus,
+  sortSessionsNewestFirst,
   type LegacySession,
 } from '../../utils/sessionMetrics';
 import { migrateMetricsAggregation } from '../../utils/metricAggregation';
@@ -431,9 +432,10 @@ export class LocalJsonAdapter implements StorageRepository {
     if (needsWrite) {
       this.writeJson(STORAGE_KEYS.SESSIONS, migrated);
     }
-    return opts?.includeDeleted
+    const live = opts?.includeDeleted
       ? migrated
       : migrated.filter((s) => !isSoftDeleted(s));
+    return sortSessionsNewestFirst(live);
   }
 
   getDeletedSessions(): Session[] {

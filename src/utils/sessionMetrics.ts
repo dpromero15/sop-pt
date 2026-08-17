@@ -170,6 +170,17 @@ export function unmarkedPlayerIds(
   return activePlayerIds.filter((id) => !markedPlayerIds.has(id));
 }
 
+/** Shared status when every listed player is marked the same; otherwise undefined. */
+export function unanimousAttendanceStatus(
+  playerIds: readonly string[],
+  attendanceMap: Readonly<Record<string, AttendanceStatus>>,
+): AttendanceStatus | undefined {
+  if (playerIds.length === 0) return undefined;
+  const first = attendanceMap[playerIds[0]];
+  if (first === undefined) return undefined;
+  return playerIds.every((id) => attendanceMap[id] === first) ? first : undefined;
+}
+
 export function countAttendanceByStatus(
   statuses: Iterable<AttendanceStatus>,
 ): Record<AttendanceStatus, number> {
@@ -243,4 +254,20 @@ export function formatSessionListDate(isoDate: string): string {
   const [year, month, day] = isoDate.split('-').map(Number);
   if (!year || !month || !day || month < 1 || month > 12) return isoDate;
   return `${SHORT_MONTHS[month - 1]} ${day}`;
+}
+
+/** Newest calendar date first; same day uses time then id so the order is stable. */
+export function compareSessionsNewestFirst(
+  a: Pick<Session, 'date' | 'time' | 'id'>,
+  b: Pick<Session, 'date' | 'time' | 'id'>,
+): number {
+  const byDate = b.date.localeCompare(a.date);
+  if (byDate !== 0) return byDate;
+  const byTime = (b.time ?? '').localeCompare(a.time ?? '');
+  if (byTime !== 0) return byTime;
+  return b.id.localeCompare(a.id);
+}
+
+export function sortSessionsNewestFirst(sessions: readonly Session[]): Session[] {
+  return [...sessions].sort(compareSessionsNewestFirst);
 }

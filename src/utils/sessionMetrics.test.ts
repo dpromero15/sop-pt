@@ -10,10 +10,12 @@ import {
   playerIdsWithAttendance,
   isAttendanceComplete,
   unmarkedPlayerIds,
+  unanimousAttendanceStatus,
   countAttendanceByStatus,
   indexEntriesBySessionId,
   sessionPreviewStats,
   formatSessionListDate,
+  sortSessionsNewestFirst,
   normalizeSessionStatus,
   normalizeSessionType,
   filterOpenSessions,
@@ -162,6 +164,17 @@ describe('sessionMetrics', () => {
     expect(isAttendanceComplete([], marked)).toBe(false);
   });
 
+  it('returns a unanimous attendance status only when every player matches', () => {
+    expect(unanimousAttendanceStatus([], {})).toBeUndefined();
+    expect(unanimousAttendanceStatus(['p1'], {})).toBeUndefined();
+    expect(
+      unanimousAttendanceStatus(['p1', 'p2'], { p1: 'absent', p2: 'absent' }),
+    ).toBe('absent');
+    expect(
+      unanimousAttendanceStatus(['p1', 'p2'], { p1: 'absent', p2: 'present' }),
+    ).toBeUndefined();
+  });
+
   it('counts attendance statuses', () => {
     expect(countAttendanceByStatus(['present', 'present', 'late', 'absent', 'excused'])).toEqual({
       present: 2,
@@ -259,5 +272,51 @@ describe('sessionMetrics', () => {
     expect(formatSessionListDate('2026-08-05')).toBe('Aug 5');
     expect(formatSessionListDate('2026-01-01')).toBe('Jan 1');
     expect(formatSessionListDate('not-a-date')).toBe('not-a-date');
+  });
+
+  it('sorts sessions newest date first, then later time', () => {
+    const sessions: Session[] = [
+      {
+        id: 'old',
+        date: '2026-08-01',
+        time: '18:00',
+        title: 'Old',
+        type: 'session',
+        status: 'closed',
+        metricIds: [ATTENDANCE_METRIC_ID],
+      },
+      {
+        id: 'mid-am',
+        date: '2026-08-05',
+        time: '10:00',
+        title: 'Morning',
+        type: 'session',
+        status: 'closed',
+        metricIds: [ATTENDANCE_METRIC_ID],
+      },
+      {
+        id: 'mid-pm',
+        date: '2026-08-05',
+        time: '18:00',
+        title: 'Evening',
+        type: 'match',
+        status: 'open',
+        metricIds: [ATTENDANCE_METRIC_ID],
+      },
+      {
+        id: 'new',
+        date: '2026-08-16',
+        title: 'Today',
+        type: 'session',
+        status: 'open',
+        metricIds: [ATTENDANCE_METRIC_ID],
+      },
+    ];
+    expect(sortSessionsNewestFirst(sessions).map((s) => s.id)).toEqual([
+      'new',
+      'mid-pm',
+      'mid-am',
+      'old',
+    ]);
   });
 });
