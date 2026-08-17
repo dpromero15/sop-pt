@@ -310,6 +310,15 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     setStep('score');
   };
 
+  const persistAttendanceAll = (status: AttendanceStatus) => {
+    const ids = activePlayers.map((p) => p.id);
+    if (ids.length === 0) return;
+    markRemaining(ids, status);
+    const word =
+      status === 'present' ? 'here' : status === 'absent' ? 'out' : attendanceStatusLabel(status).toLowerCase();
+    setToastMessage(`All ${ids.length} set to ${word}`);
+  };
+
   const continueToScoring = () => {
     if (remainingUnmarked.length > 0) {
       markRemaining(remainingUnmarked, 'absent');
@@ -453,10 +462,7 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
     );
   }
 
-  const stepScrolls =
-    step !== 'attendance' ||
-    attendanceView === 'review' ||
-    attendanceComplete;
+  const stepScrolls = step !== 'attendance';
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 overflow-hidden touch-manipulation">
@@ -565,12 +571,40 @@ export const QuickInsertView: React.FC<QuickInsertViewProps> = ({
 
       {selectedSession && step === 'attendance' && (
         <div className="flex min-h-0 flex-1 flex-col gap-2">
-          {attendanceView === 'review' || attendanceComplete ? (
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div
+            role="tablist"
+            aria-label="Attendance view"
+            className="flex shrink-0 self-start rounded-lg border border-slate-800 bg-slate-950/60 p-0.5"
+          >
+            {(
+              [
+                { id: 'swipe', label: 'Swipe' },
+                { id: 'review', label: 'List' },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={attendanceView === id}
+                onClick={() => setAttendanceView(id)}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                  attendanceView === id
+                    ? 'bg-slate-800 text-emerald-300'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {attendanceView === 'review' ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
               <AttendanceMaintenanceList
                 players={activePlayers}
                 attendanceMap={attendanceMap}
                 onSetStatus={persistAttendance}
+                onSetAll={persistAttendanceAll}
               />
             </div>
           ) : (
