@@ -18,6 +18,7 @@ import { migration016LabelMultiParent } from './migrations/016_label_multi_paren
 import { migration017PlayerRankingPool } from './migrations/017_player_ranking_pool';
 import { migration018PlayerPositions } from './migrations/018_player_positions';
 import { migration019PlayerMultiPositions } from './migrations/019_player_multi_positions';
+import { migration020SubTeams } from './migrations/020_sub_teams';
 
 /**
  * Ordered list of migrations. Append only — never reorder or reuse ids.
@@ -156,5 +157,12 @@ export const MIGRATIONS: DataMigration[] = [
     description:
       'Players may list multiple positions; backfill positions from the primary code.',
     up: migration019PlayerMultiPositions,
+  },
+  {
+    id: 20,
+    name: 'sub_teams',
+    description:
+      'Seed an empty sub-team catalog (Varsity / JV / C-team) for rankings groups.',
+    up: migration020SubTeams,
   },
 ];

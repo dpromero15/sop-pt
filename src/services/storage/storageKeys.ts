@@ -24,6 +24,7 @@ export const STORAGE_KEYS = {
   EQUIPMENT_ITEMS: 'stm_equipment_items_v1',
   RANKING_BOUNDARIES: 'stm_ranking_boundaries_v1',
   POSITIONS: 'stm_positions_v1',
+  SUB_TEAMS: 'stm_sub_teams_v1',
   COACH_POSITION_BALLOTS: 'stm_coach_position_ballots_v1',
 } as const;
 

@@ -197,6 +197,7 @@ const EXTRA_CONFIG = [
   'equipmentItems',
   'rankingBoundaries',
   'positions',
+  'subTeams',
   'coachPositionBallots',
 ] as const;
 
@@ -288,6 +289,7 @@ teamsRouter.get(
       equipmentItems: config.equipmentItems ?? [],
       rankingBoundaries: config.rankingBoundaries ?? null,
       positions: config.positions ?? [],
+      subTeams: config.subTeams ?? [],
       coachPositionBallots: config.coachPositionBallots ?? [],
     });
   },
@@ -334,6 +336,7 @@ teamsRouter.post(
       ['equipmentItems', body.equipmentItems ?? []],
       ['rankingBoundaries', body.rankingBoundaries ?? null],
       ['positions', body.positions ?? []],
+      ['subTeams', body.subTeams ?? []],
       ['coachPositionBallots', body.coachPositionBallots ?? []],
     ];
     for (const [name, data] of configWrites) {

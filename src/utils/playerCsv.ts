@@ -1,4 +1,4 @@
-import type { Player, PlayerPosition, PlayerRankingPool } from '../types';
+import type { Player, PlayerPosition, PlayerRankingPool, SubTeam } from '../types';
 import {
   birthYearFromAge,
   parseBirthYear,
@@ -14,6 +14,7 @@ import {
   defaultRankingPoolForPosition,
   isPlayerRankingPool,
 } from './playerRankingPools';
+import { parseSquadNames } from './subTeams';
 
 export const PLAYER_CSV_HEADERS = [
   'name',
@@ -27,6 +28,7 @@ export const PLAYER_CSV_HEADERS = [
   'publicId',
   'rankingPool',
   'positions',
+  'subTeams',
 ] as const;
 
 const VALID_FEET = new Set(['Left', 'Right', 'Both']);
@@ -83,6 +85,7 @@ export function buildPlayerCsvTemplate(): string {
     '',
     'central-midfield',
     'CAM;ST',
+    'Varsity',
   ];
   return (
     PLAYER_CSV_HEADERS.join(',') +
@@ -98,6 +101,7 @@ export function parseAndValidatePlayerCsv(
   csvText: string,
   existingJerseyNumbers: Set<number>,
   existingPublicIds: Set<string> = new Set(),
+  subTeams: SubTeam[] = [],
 ): { ok: PlayerCsvImportRow[]; errors: string[]; skipped: number } {
   const ok: PlayerCsvImportRow[] = [];
   const errors: string[] = [];
@@ -129,6 +133,7 @@ export function parseAndValidatePlayerCsv(
   const notesIdx = colIndex('notes');
   const publicIdIdx = colIndex('publicId');
   const extrasIdx = colIndex('positions');
+  const subTeamsIdx = colIndex('subTeams');
 
   if (nameIdx < 0 || jerseyIdx < 0 || positionIdx < 0) {
     errors.push(
@@ -300,6 +305,17 @@ export function parseAndValidatePlayerCsv(
       }
     }
 
+    let squadIds: string[] | undefined;
+    if (subTeamsIdx >= 0 && subTeams.length > 0) {
+      const parsed = parseSquadNames(cells[subTeamsIdx] || '', subTeams);
+      for (const token of parsed.unknown) {
+        errors.push(
+          `Row ${rowNum}: unknown sub-team "${token}" — skipped that group.`,
+        );
+      }
+      if (parsed.ids.length) squadIds = parsed.ids;
+    }
+
     seenJerseys.add(jerseyNumber);
     ok.push({
       name,
@@ -314,6 +330,7 @@ export function parseAndValidatePlayerCsv(
       notes,
       publicId,
       status: 'active',
+      squadIds,
     });
   }
 

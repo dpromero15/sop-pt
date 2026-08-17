@@ -19,6 +19,7 @@ import type {
   EquipmentItem,
   RankingBoundariesConfig,
   PositionDefinition,
+  SubTeam,
 } from '../../types';
 import {
   INITIAL_PLAYERS,
@@ -70,6 +71,7 @@ import {
   setActivePositionCatalog,
 } from '../../utils/playerPositions';
 import { normalizeMetricLabels } from '../../utils/metricLabels';
+import { normalizeSubTeams } from '../../utils/subTeams';
 import {
   allocateLabelId,
   canParentHaveChildren,
@@ -282,6 +284,9 @@ export class LocalJsonAdapter implements StorageRepository {
       }
       if (Array.isArray(snapshot.positions)) {
         this.savePositions(snapshot.positions);
+      }
+      if (Array.isArray(snapshot.subTeams)) {
+        this.saveSubTeams(snapshot.subTeams);
       }
       if (opts?.migrate !== false) {
         writeStoredSchemaVersion(this.store, 0);
@@ -1354,6 +1359,15 @@ export class LocalJsonAdapter implements StorageRepository {
     this.notify();
   }
 
+  getSubTeams(): SubTeam[] {
+    return normalizeSubTeams(this.readJson(STORAGE_KEYS.SUB_TEAMS, []));
+  }
+
+  saveSubTeams(subTeams: SubTeam[]) {
+    this.writeJson(STORAGE_KEYS.SUB_TEAMS, normalizeSubTeams(subTeams));
+    this.notify();
+  }
+
   resetToSampleData() {
     this.saveTeam(DEFAULT_TEAM);
     this.savePlayers(INITIAL_PLAYERS);
@@ -1374,6 +1388,7 @@ export class LocalJsonAdapter implements StorageRepository {
     this.saveEquipmentItems(DEFAULT_EQUIPMENT_ITEMS);
     this.saveRankingBoundaries(DEFAULT_RANKING_BOUNDARIES);
     this.savePositions(cloneDefaultPlayerPositions());
+    this.saveSubTeams([]);
   }
 
   getSnapshot(): TeamSnapshot {
@@ -1398,6 +1413,7 @@ export class LocalJsonAdapter implements StorageRepository {
       equipmentItems: this.getEquipmentItems(),
       rankingBoundaries: this.getRankingBoundaries(),
       positions: this.getPositions(),
+      subTeams: this.getSubTeams(),
     };
   }
 
@@ -1460,6 +1476,9 @@ export class LocalJsonAdapter implements StorageRepository {
         }
         if (Array.isArray(data.positions)) {
           this.savePositions(data.positions);
+        }
+        if (Array.isArray(data.subTeams)) {
+          this.saveSubTeams(data.subTeams);
         }
         writeStoredSchemaVersion(this.store, 0);
         runLocalMigrations(this.store);

@@ -4,7 +4,7 @@ Soccer team management app for registering players, sideline session logging (sw
 
 **Product:** SOP-PT (Player Tracker) — a **Systems of Play** product (SOP = System of Play).
 
-**Version:** 2.13.1
+**Version:** 2.14.0
 
 ## Run locally
 

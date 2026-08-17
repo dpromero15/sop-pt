@@ -901,4 +901,29 @@ describe('runLocalMigrations', () => {
         .positions,
     ).toEqual(['ST']);
   });
+
+  it('seeds an empty sub-team catalog via v20', () => {
+    const store = memoryStorage();
+    store.setItem(SCHEMA_VERSION_KEY, JSON.stringify(19));
+    store.setItem(ACTIVE_TEAM_KEY, 't1');
+    store.setItem(
+      scopedStorageKey('t1', STORAGE_KEYS.PLAYERS),
+      JSON.stringify([{ id: 'p1', position: 'ST' }]),
+    );
+
+    const report = runLocalMigrations(store);
+    expect(report.error).toBeUndefined();
+    expect(report.toVersion).toBe(CURRENT_SCHEMA_VERSION);
+
+    const catalog = JSON.parse(
+      store.getItem(scopedStorageKey('t1', STORAGE_KEYS.SUB_TEAMS))!,
+    );
+    expect(catalog).toEqual([]);
+
+    const repaired = repairLocalMigrations(store);
+    expect(repaired.error).toBeUndefined();
+    expect(
+      JSON.parse(store.getItem(scopedStorageKey('t1', STORAGE_KEYS.SUB_TEAMS))!),
+    ).toEqual([]);
+  });
 });
