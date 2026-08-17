@@ -5,6 +5,7 @@ import {
   Activity, 
   Clock,
   Printer,
+  MessagesSquare,
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -32,6 +33,7 @@ interface PlayerProfileModalProps {
   onClose: () => void;
   onEditPlayer: (player: Player) => void;
   onPrintPlacement?: (player: Player) => void;
+  onOpenMeeting?: (player: Player) => void;
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
   entries: MetricEntry[];
@@ -43,6 +45,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
   onClose,
   onEditPlayer,
   onPrintPlacement,
+  onOpenMeeting,
   labels,
   metrics,
   entries,
@@ -76,7 +79,7 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
       <div className="bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl relative text-white">
         
         {/* Top Sticky Bar */}
-        <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 px-6 py-4 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
               Player Performance Sheet
@@ -87,6 +90,16 @@ export const PlayerProfileModal: React.FC<PlayerProfileModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {onOpenMeeting && (
+              <button
+                type="button"
+                onClick={() => onOpenMeeting(player)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold transition-all active:scale-95"
+              >
+                <MessagesSquare className="w-3.5 h-3.5" />
+                Player meeting
+              </button>
+            )}
             {onPrintPlacement && (
               <button
                 type="button"

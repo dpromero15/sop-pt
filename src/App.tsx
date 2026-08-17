@@ -10,7 +10,11 @@ import { AuthConfigMissing, LandingPage } from './components/LandingPage';
 import { TeamPickerPage } from './components/TeamPickerPage';
 import { AccountSettingsModal } from './components/AccountSettingsModal';
 import { PlayerProfileModal } from './components/PlayerProfileModal';
-import { openPlayerPlacementPrint } from './utils/playerPlacementPrint';
+import { PlayerMeetingModal } from './components/PlayerMeetingModal';
+import {
+  openPlayerPlacementPrint,
+  type PlayerPlacementPrintContext,
+} from './utils/playerPlacementPrint';
 import { ScoringConfigModal } from './components/ScoringConfigModal';
 import { StorageService, subscribeToStorage } from './services/storage';
 import { calculatePlayerRankings } from './utils/scoring';
@@ -107,6 +111,7 @@ export default function App() {
   });
 
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [meetingPlayer, setMeetingPlayer] = useState<Player | null>(null);
   const [isFormulaModalOpen, setIsFormulaModalOpen] = useState(false);
   const [isAddPlayerOpen, setIsAddPlayerOpen] = useState(false);
   const [isAddSessionOpen, setIsAddSessionOpen] = useState(false);
@@ -261,6 +266,31 @@ export default function App() {
     coachBallots,
     adjustedBumps,
   ]);
+
+  const placementPrintContext: PlayerPlacementPrintContext = useMemo(
+    () => ({
+      team,
+      rankings,
+      labels,
+      metrics,
+      entries,
+      sessions,
+      positions,
+      coachBallots,
+      coachPositionBallots,
+    }),
+    [
+      team,
+      rankings,
+      labels,
+      metrics,
+      entries,
+      sessions,
+      positions,
+      coachBallots,
+      coachPositionBallots,
+    ],
+  );
 
   const handleApplyBump = (playerId: string, delta: 1 | -1) => {
     if (!can('adjustedBumps')) return;
@@ -457,17 +487,7 @@ export default function App() {
             rankings={rankings}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onPrintPlacement={(sheetPlayers) =>
-              openPlayerPlacementPrint(sheetPlayers, {
-                team,
-                rankings,
-                labels,
-                metrics,
-                entries,
-                sessions,
-                positions,
-                coachBallots,
-                coachPositionBallots,
-              })
+              openPlayerPlacementPrint(sheetPlayers, placementPrintContext)
             }
             onRefreshData={refreshData}
             isAddModalOpen={isAddPlayerOpen && can('rosterWrite')}
@@ -536,21 +556,20 @@ export default function App() {
             setCurrentTab('players');
           }}
           onPrintPlacement={(player) =>
-            openPlayerPlacementPrint([player], {
-              team,
-              rankings,
-              labels,
-              metrics,
-              entries,
-              sessions,
-              positions,
-              coachBallots,
-              coachPositionBallots,
-            })
+            openPlayerPlacementPrint([player], placementPrintContext)
           }
+          onOpenMeeting={(player) => setMeetingPlayer(player)}
           labels={labels}
           metrics={metrics}
           entries={entries}
+        />
+      )}
+
+      {meetingPlayer && (
+        <PlayerMeetingModal
+          player={meetingPlayer}
+          context={placementPrintContext}
+          onClose={() => setMeetingPlayer(null)}
         />
       )}
 

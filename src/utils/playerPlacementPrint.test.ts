@@ -11,6 +11,7 @@ import type {
 import {
   buildAttendancePrintSummary,
   buildPlayerPlacementDocument,
+  formatPlace,
   formatPositionPoolLeaders,
   playerPlacementHtml,
 } from './playerPlacementPrint';
@@ -312,6 +313,14 @@ describe('playerPlacementPrint', () => {
     ).toBe('#3 of 3');
   });
 
+  it('formats a place as #rank of pool', () => {
+    expect(formatPlace({ rank: 2, of: 11, detail: 'Standing 81' })).toBe(
+      '#2 of 11',
+    );
+    expect(formatPlace({ rank: 1, of: 0, detail: '' })).toBe('#1');
+    expect(formatPlace({ rank: null, of: 11, detail: 'Unscored' })).toBe('—');
+  });
+
   it('lists top two in each position pool, then this player if outside that pair', () => {
     const lucasDoc = buildPlayerPlacementDocument(lucas, ctx);
     const lucasSt = lucasDoc.positions.find((row) => row.code === 'ST');
@@ -338,6 +347,10 @@ describe('playerPlacementPrint', () => {
     expect(html).toContain('Page 1 of 2');
     expect(html).toContain('Page 2 of 2');
     expect(html.match(/class="page"/g)?.length).toBe(2);
+    expect(html).toMatch(/page-break-inside:\s*avoid/);
+    expect(html).toMatch(/max-height:\s*11in/);
+    expect(html).toMatch(/min-height:\s*10/);
+    expect(html).not.toMatch(/\.sheet \{[^}]*\n\s*height:\s*10\.2in/);
   });
 
   it('lists only late and absent session titles, not present or excused', () => {

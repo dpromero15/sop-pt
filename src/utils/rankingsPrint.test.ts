@@ -10,6 +10,7 @@ import {
   buildPlayerIdLegendDocument,
   buildRankingsPrintDocument,
   computePrintScale,
+  fitPrintSheetToPage,
   playerIdLegendHtml,
   printColumnCount,
   rankingsPrintHtml,
@@ -374,5 +375,35 @@ describe('print layout helpers', () => {
       (980 / 1200) * 0.98,
       5,
     );
+  });
+
+  it('collapses leftover layout after scaling a tall sheet', () => {
+    const style = { transform: '', marginBottom: '' };
+    const page = {
+      clientWidth: 740,
+      clientHeight: 980,
+    };
+    const sheet = {
+      scrollWidth: 700,
+      scrollHeight: 1400,
+      style,
+      closest: () => page,
+    };
+    const frameDoc = {
+      querySelectorAll: () => [sheet],
+      defaultView: {
+        getComputedStyle: () => ({
+          paddingLeft: '0',
+          paddingRight: '0',
+          paddingTop: '0',
+          paddingBottom: '0',
+        }),
+      },
+    } as unknown as Document;
+
+    const scale = fitPrintSheetToPage(frameDoc);
+    expect(scale).toBeCloseTo((980 / 1400) * 0.98, 5);
+    expect(style.transform).toBe(`scale(${scale})`);
+    expect(parseFloat(style.marginBottom)).toBeCloseTo(1400 * (scale - 1), 5);
   });
 });

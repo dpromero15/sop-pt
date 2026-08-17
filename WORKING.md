@@ -12,14 +12,26 @@ _(none)_
 
 ## Ready to ship
 
+### #169 — Player meeting page from profile (placement snapshot)
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Profile **Player meeting** opens a locked overlay with the placement snapshot on one scrollable page: squad standing (#X of Y), assigned-position ranks + pool leaders, category numbers (no radar), attendance rate + late/absent. Print still available from the meeting sheet.
+- **Touchpoints:** `src/components/PlayerMeetingModal.tsx`, `src/components/PlayerProfileModal.tsx`, `src/App.tsx`, `src/utils/playerPlacementPrint.ts`
+
 ### #168 — Player printout: compact late/absent attendance with session titles
 - **Status:** implemented (verify acceptance before PR)
 - **Notes:** Placement sheet keeps the season rate. Page 1 shows late/absent counts under the rate when any exist. Page 2 has a compact wrapped list of late/absent session titles + short dates (present/excused counted, not listed). Soft-deleted sessions omitted. Print from Players and player profile both pass sessions.
 - **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/playerPlacementPrint.test.ts`, `src/App.tsx`
 
+### #171 — Player placement print overflows to a third page
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Two authored `.page` blocks stay at most two letter pages: denser type, `page-break-inside: avoid`, sheet `min-height` (so scale can measure overflow), and `fitPrintSheetToPage` collapses leftover layout after `transform: scale`.
+- **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/rankingsPrint.ts`
+
 **Suggested PR Closes:**
 ```
+Closes #169
 Closes #168
+Closes #171
 ```
 
 ## Still open (this release)
@@ -51,5 +63,5 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (341 tests) 2026-08-17 — #168.
+- **QA:** `npm run lint` + `npm test` (343 tests) 2026-08-17 — #168 + #169 + #171.
 
