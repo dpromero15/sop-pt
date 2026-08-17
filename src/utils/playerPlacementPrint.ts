@@ -16,7 +16,10 @@ import {
   playersForPosition,
 } from './coachesRating';
 import { visibleRankingLabels } from './formulaWeights';
-import { metricValueTriple } from './metricAggregation';
+import {
+  aggregateMetricValue,
+  metricValueTriple,
+} from './metricAggregation';
 import {
   formatPlayerPosition,
   formatPlayerPositions,
@@ -30,6 +33,7 @@ import {
 } from './positionRankings';
 import { formatTeamMetricValue } from './rankingsFilter';
 import { openPrintHtml } from './rankingsPrint';
+import { assignCompetitionRanks } from './scoring';
 
 export interface RankPlace {
   rank: number | null;
@@ -42,6 +46,7 @@ export interface PositionPlacementRow {
   label: string;
   playerCount: number;
   statistical: RankPlace;
+  statisticalLeaders: string;
   adjusted: RankPlace;
   coaches: RankPlace;
 }
@@ -58,6 +63,7 @@ export interface MetricPlacementRow {
   metricName: string;
   category: string;
   standing: string;
+  rank: string;
   average: string;
   latest: string;
   best: string;
@@ -137,6 +143,88 @@ function formatPlace(place: RankPlace): string {
   if (place.rank == null) return '—';
   if (place.of > 0) return `#${place.rank} of ${place.of}`;
   return `#${place.rank}`;
+}
+
+function firstName(name: string): string {
+  return name.trim().split(/\s+/).filter(Boolean)[0] ?? name;
+}
+
+function printNamesFor(
+  rows: Array<{ id: string; name: string }>,
+): Map<string, string> {
+  const tokens = rows.map((row) => {
+    const parts = row.name.trim().split(/\s+/).filter(Boolean);
+    return {
+      id: row.id,
+      first: parts[0] ?? row.name,
+      lastInitial: parts.length > 1 ? parts[parts.length - 1][0] ?? '' : '',
+    };
+  });
+  const counts = new Map<string, number>();
+  for (const row of tokens) {
+    const key = row.first.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const labels = new Map<string, string>();
+  for (const row of tokens) {
+    const clash = (counts.get(row.first.toLowerCase()) ?? 0) > 1;
+    labels.set(
+      row.id,
+      clash && row.lastInitial ? `${row.first} ${row.lastInitial}` : row.first,
+    );
+  }
+  return labels;
+}
+
+/**
+ * Top two in a position pool, then this player if they sit outside that pair.
+ * Example: `1. Ryan  2. Paul  ···  5. Mark`
+ */
+export function formatPositionPoolLeaders(
+  pool: Array<{ id: string; name: string; rank: number | null }>,
+  selfId: string,
+): string {
+  const placed = pool
+    .filter((row) => row.rank != null)
+    .sort((a, b) => {
+      const rankDelta = (a.rank ?? 0) - (b.rank ?? 0);
+      if (rankDelta !== 0) return rankDelta;
+      return a.name.localeCompare(b.name);
+    });
+  if (placed.length === 0) return '—';
+
+  const top = placed.slice(0, 2);
+  const self = placed.find((row) => row.id === selfId);
+  const selfInTop = top.some((row) => row.id === selfId);
+  const shown = self && !selfInTop ? [...top, self] : top;
+  const labels = printNamesFor(shown);
+  const part = (row: (typeof placed)[number]) =>
+    `${row.rank}. ${labels.get(row.id) ?? firstName(row.name)}`;
+  const parts = top.map(part);
+  if (self && !selfInTop) {
+    parts.push(`···  ${part(self)}`);
+  }
+  return parts.join('  ');
+}
+
+function statisticalRanksForMetric(
+  metric: MetricDefinition,
+  entries: MetricEntry[],
+  playerIds: string[],
+): Map<string, RankPlace> {
+  const values = playerIds.map((id) =>
+    aggregateMetricValue(
+      entries.filter((entry) => entry.playerId === id),
+      metric,
+    ),
+  );
+  const ranks = assignCompetitionRanks(values, metric.higherIsBetter);
+  const of = ranks.filter((rank) => rank != null).length;
+  const byPlayer = new Map<string, RankPlace>();
+  playerIds.forEach((id, index) => {
+    byPlayer.set(id, placeOf(ranks[index], of, ''));
+  });
+  return byPlayer;
 }
 
 function initials(name: string): string {
@@ -265,6 +353,14 @@ export function buildPlayerPlacementDocument(
           ? `Standing ${formatScore(mineStat.totalScore)}`
           : 'Unscored',
       ),
+      statisticalLeaders: formatPositionPoolLeaders(
+        statList.map((row) => ({
+          id: row.player.id,
+          name: row.player.name,
+          rank: row.overallRank,
+        })),
+        player.id,
+      ),
       adjusted: placeOf(
         mineAdj?.adjustedRank ?? null,
         rankedCount(adjList, 'adjustedRank'),
@@ -303,11 +399,17 @@ export function buildPlayerPlacementDocument(
       }
     }
   }
+  const rosterIds = ctx.rankings.map((row) => row.player.id);
   const metrics: MetricPlacementRow[] = ctx.metrics
     .filter((metric) => metric.type !== 'attendance')
     .map((metric) => {
       const triple = metricValueTriple(playerEntries, metric);
       const standing = nestedStanding.get(metric.id);
+      const rankPlace = statisticalRanksForMetric(
+        metric,
+        ctx.entries,
+        rosterIds,
+      ).get(player.id);
       if (
         triple.average == null &&
         triple.latest == null &&
@@ -326,6 +428,8 @@ export function buildPlayerPlacementDocument(
           labelNameById.get(metric.labelIds[0] ?? '') ??
           'Other',
         standing: standing == null ? '—' : String(Math.round(standing)),
+        rank:
+          rankPlace?.rank == null ? '—' : formatPlace(rankPlace),
         average: dash(triple.average),
         latest: dash(triple.latest),
         best: dash(triple.best),
@@ -453,18 +557,25 @@ function positionsTable(rows: PositionPlacementRow[]): string {
       (row) => `<tr>
       <td>${escapeHtml(row.label)}</td>
       <td class="num">${row.playerCount}</td>
-      <td class="num">${escapeHtml(formatPlace(row.statistical))}</td>
+      <td class="leaders">${escapeHtml(row.statisticalLeaders)}</td>
       <td class="num">${escapeHtml(formatPlace(row.adjusted))}</td>
       <td class="num">${escapeHtml(formatPlace(row.coaches))}</td>
     </tr>`,
     )
     .join('');
   return `<table>
+    <colgroup>
+      <col style="width:18%" />
+      <col style="width:8%" />
+      <col style="width:42%" />
+      <col style="width:16%" />
+      <col style="width:16%" />
+    </colgroup>
     <thead>
       <tr>
         <th>Position</th>
         <th class="num">Pool</th>
-        <th class="num">Statistical</th>
+        <th>Statistical</th>
         <th class="num">Adjusted</th>
         <th class="num">Coaches</th>
       </tr>
@@ -482,12 +593,13 @@ function metricsTable(rows: MetricPlacementRow[]): string {
     .map((row) => {
       const head =
         row.category !== lastCategory
-          ? `<tr class="cat"><td colspan="5">${escapeHtml(row.category)}</td></tr>`
+          ? `<tr class="cat"><td colspan="6">${escapeHtml(row.category)}</td></tr>`
           : '';
       lastCategory = row.category;
       return `${head}<tr>
         <td>${escapeHtml(row.metricName)}</td>
         <td class="num">${escapeHtml(row.standing)}</td>
+        <td class="num">${escapeHtml(row.rank)}</td>
         <td class="num">${escapeHtml(row.average)}</td>
         <td class="num">${escapeHtml(row.latest)}</td>
         <td class="num">${escapeHtml(row.best)}</td>
@@ -498,7 +610,8 @@ function metricsTable(rows: MetricPlacementRow[]): string {
     <thead>
       <tr>
         <th>Metric</th>
-        <th class="num">Squad standing</th>
+        <th class="num">Percentile</th>
+        <th class="num">Rank</th>
         <th class="num">Average</th>
         <th class="num">Latest</th>
         <th class="num">Best</th>
@@ -561,7 +674,7 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
     </section>
     <section class="block">
       <h2>Assigned position ranks</h2>
-      <p class="hint">Coaches Rank here is a separate 1…N for each role — not a slice of overall rank. Pool is everyone assigned that position.</p>
+      <p class="hint">Statistical lists the top two in that role, then this player if they sit outside the top two. Coaches Rank is a separate 1…N for each role — not a slice of overall rank. Pool is everyone assigned that position.</p>
       ${positionsTable(doc.positions)}
     </section>
     <section class="block">
@@ -579,7 +692,7 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
     <header>
       <p class="kicker">${escapeHtml(doc.playerName)} · #${doc.jersey}</p>
       <h1>Performance detail</h1>
-      <p class="lede">Metric standing is the squad percentile (100 = best). Average / latest / best use logged sessions.</p>
+      <p class="lede">Percentile is squad standing (100 = best). Rank is place among players with that metric logged. Average / latest / best use logged sessions.</p>
     </header>
     <section class="block">
       ${metricsTable(doc.metrics)}
@@ -748,6 +861,12 @@ const PLACEMENT_STYLES = `
     font-variant-numeric: tabular-nums;
   }
   th.num, td.num { text-align: right; }
+  td.leaders {
+    text-align: left;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 8pt;
+    line-height: 1.3;
+  }
   tr.cat td {
     font-family: ui-sans-serif, system-ui, sans-serif;
     font-size: 7pt;

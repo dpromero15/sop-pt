@@ -1,9 +1,9 @@
-# Working ledger — release v2.12.0
+# Working ledger — release v2.13.0
 
 | Field | Value |
 |---|---|
-| **Release** | `2.12.0` |
-| **Branch** | `release/v2.12.0` |
+| **Release** | `2.13.0` |
+| **Branch** | `release/v2.13.0` |
 | **Last updated** | 2026-08-16 |
 
 ## In progress
@@ -12,28 +12,14 @@ _(none)_
 
 ## Ready to ship
 
-### #154 — Configurable positions with LCB/RCB tactical numbers
+### #158 — Player placement print: metric rank column and position-pool leaders
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Positions are a team catalog (Config). Defaults split CB 4/5 into **RCB (4)** and **LCB (5)**. Coaches can add/edit/reorder and change numbers. Leftover `CB` on a roster is kept until reassigned.
-- **Migration:** schema **v18** (`018_player_positions`). Cloud snapshot/bootstrap includes `positions` (API 2.10.0 — deploy separately).
-- **Touchpoints:** `playerPositions.ts`, `PositionsConfigPanel.tsx`, `PlayersView.tsx`, `RankingsView.tsx`, `localJsonAdapter.ts`, `cloudSync.ts`, `services/api/src/routes/teams.ts`
-
-### #155 — Multi-position players and per-position coach rankings
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Players can have extra roles (`Also plays`). Rankings scope is Squad / All positions / one role; Stat, Adjusted, and **position Coaches Rank** stay independent. Position ballots are a separate 1…N per role (Players → Coaches Rating → By position), not a slice of overall 1–40. All-positions view + print packet.
-- **Migration:** schema **v19** (`019_player_multi_positions`). Cloud blob `coachPositionBallots` (API 2.10.0 — deploy separately).
-- **Touchpoints:** `playerPositions.ts`, `positionRankings.ts`, `coachesRating.ts`, `CoachesRatingView.tsx`, `RankingsView.tsx`, `PlayersView.tsx`, `rankingsPrint.ts`, `playerCsv.ts`
-
-### #156 — Player placement printout (overall + position ranks)
-- **Status:** implemented (verify acceptance before PR)
-- **Notes:** Two-page letter sheet per player: squad Stat/Adj/Coach ranks plus each assigned position’s Stat/Adj/Coach ranks, category profile, and metric avg/latest/best. Print from the player profile or bulk from Players (current roster filter).
-- **Touchpoints:** `playerPlacementPrint.ts`, `PlayerProfileModal.tsx`, `PlayersView.tsx`, `App.tsx`
+- **Notes:** Metrics “Squad standing” is a percentile (relabeled Percentile). New Rank column is Statistical place among players with that metric logged. Assigned-position Statistical cell shows top two first names, then this player if outside the top two (`1. Ryan  2. Paul  ···  5. Mark`). Adjusted / Coaches stay `#N of M`.
+- **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/playerPlacementPrint.test.ts`
 
 **Suggested PR Closes:**
 ```
-Closes #154
-Closes #155
-Closes #156
+Closes #158
 ```
 
 ## Still open (this release)
@@ -44,7 +30,7 @@ _(none)_
 
 ### #99 — System Admin team hub + shadow mode (attribution-first)
 - Admin lands on all teams, enters in shadow mode (never as another user); every change tracked to signed-in admin.
-- **Status:** parked to **`v3.0.0`** (major). Kept getting deferred on 2.x minor lines; do not pull into 2.12.0.
+- **Status:** parked to **`v3.0.0`** (major). Kept getting deferred on 2.x minor lines; do not pull into 2.13.0.
 
 ## Agent notes
 
@@ -54,6 +40,8 @@ _(none)_
 - `2.11.0` #140 + #145 + #146 + #147 shipped via [#148](https://github.com/dpromero15/sop-pt/pull/148).
 - `2.11.0` #149 + #151 shipped via [#150](https://github.com/dpromero15/sop-pt/pull/150).
 - `2.12.0` #152 shipped via [#153](https://github.com/dpromero15/sop-pt/pull/153).
+- `2.12.0` #154 + #155 + #156 shipped via [#157](https://github.com/dpromero15/sop-pt/pull/157). Hosting + Cloud Run API both deployed on that merge (2026-08-16).
+- Position ranking is a **Rankings → Scope** chip (Squad / All positions / LCB…), not Coaches Rank → By position pool. **WB (2/3)** remains in the default catalog as a generic wingback; LCB/RCB replaced combined CB 4/5 only.
 - #99 System Admin hub parked from 2.12.0 to **v3.0.0** (2026-08-16). Do not implement on this branch.
 - Player ranking pools: schema **v17** (`017_player_ranking_pool`).
 - Configurable positions: schema **v18** (`018_player_positions`). Default RCB (4) / LCB (5).
@@ -68,4 +56,4 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (319 tests) + `npm run build` 2026-08-15 — #152 + #154 + #155 + #156. API `npm run lint` in `services/api` (2.10.0). Cloud Run API deploy still needed for `config/positions` and `config/coachPositionBallots` snapshot/bootstrap.
+- **QA:** `npm run lint` + `npm test` (323 tests) 2026-08-16 — #158. API `npm run lint` in `services/api` (2.10.0). Hosting + Cloud Run deployed with PR #157.
