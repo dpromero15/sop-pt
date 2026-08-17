@@ -11,6 +11,9 @@ import {
   isAttendanceComplete,
   unmarkedPlayerIds,
   countAttendanceByStatus,
+  indexEntriesBySessionId,
+  sessionPreviewStats,
+  formatSessionListDate,
   normalizeSessionStatus,
   normalizeSessionType,
   filterOpenSessions,
@@ -166,5 +169,95 @@ describe('sessionMetrics', () => {
       absent: 1,
       excused: 1,
     });
+  });
+
+  it('indexes entries by session id', () => {
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 'a',
+        playerId: 'p1',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 100,
+        timestamp: '2026-08-01',
+      },
+      {
+        id: 'e2',
+        sessionId: 'b',
+        playerId: 'p1',
+        metricId: 'm_goals',
+        value: 1,
+        timestamp: '2026-08-02',
+      },
+      {
+        id: 'e3',
+        sessionId: 'a',
+        playerId: 'p2',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 0,
+        timestamp: '2026-08-01',
+      },
+    ];
+    const indexed = indexEntriesBySessionId(entries);
+    expect(indexed.get('a')?.map((e) => e.id)).toEqual(['e1', 'e3']);
+    expect(indexed.get('b')?.map((e) => e.id)).toEqual(['e2']);
+  });
+
+  it('summarizes list-row preview stats from session entries', () => {
+    const entries: MetricEntry[] = [
+      {
+        id: 'e1',
+        sessionId: 'sess_1',
+        playerId: 'p1',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 100,
+        timestamp: '2026-08-01',
+      },
+      {
+        id: 'e2',
+        sessionId: 'sess_1',
+        playerId: 'p2',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 50,
+        timestamp: '2026-08-01',
+      },
+      {
+        id: 'e3',
+        sessionId: 'sess_1',
+        playerId: 'p3',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 0,
+        timestamp: '2026-08-01',
+      },
+      {
+        id: 'e4',
+        sessionId: 'sess_1',
+        playerId: 'p1',
+        metricId: 'm_goals',
+        value: 2,
+        timestamp: '2026-08-01',
+      },
+    ];
+    expect(sessionPreviewStats(entries)).toEqual({
+      attendance: { present: 1, late: 1, absent: 1, excused: 0 },
+      markedCount: 3,
+      hasScoredMetrics: true,
+    });
+    expect(sessionPreviewStats(entries.slice(0, 3))).toEqual({
+      attendance: { present: 1, late: 1, absent: 1, excused: 0 },
+      markedCount: 3,
+      hasScoredMetrics: false,
+    });
+    expect(sessionPreviewStats([])).toEqual({
+      attendance: { present: 0, late: 0, absent: 0, excused: 0 },
+      markedCount: 0,
+      hasScoredMetrics: false,
+    });
+  });
+
+  it('formats session list dates as short month + day', () => {
+    expect(formatSessionListDate('2026-08-05')).toBe('Aug 5');
+    expect(formatSessionListDate('2026-01-01')).toBe('Jan 1');
+    expect(formatSessionListDate('not-a-date')).toBe('not-a-date');
   });
 });

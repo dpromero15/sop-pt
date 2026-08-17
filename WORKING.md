@@ -17,9 +17,15 @@ _(none)_
 - **Notes:** Metrics “Squad standing” is a percentile (relabeled Percentile). New Rank column is Statistical place among players with that metric logged. Assigned-position Statistical cell shows top two first names, then this player if outside the top two (`1. Ryan  2. Paul  ···  5. Mark`). Adjusted / Coaches stay `#N of M`.
 - **Touchpoints:** `src/utils/playerPlacementPrint.ts`, `src/utils/playerPlacementPrint.test.ts`
 
+### #160 — Sessions list: dense preview (attendance, date, scored-metric icon)
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Session/match list rows are one-line: date, H/L/O/E attendance counts, Target icon when any non-attendance metric is logged. Title/time/metric-count live in the inspector.
+- **Touchpoints:** `src/components/SessionsView.tsx`, `src/utils/sessionMetrics.ts`
+
 **Suggested PR Closes:**
 ```
 Closes #158
+Closes #160
 ```
 
 ## Still open (this release)
@@ -56,4 +62,4 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (323 tests) 2026-08-16 — #158. API `npm run lint` in `services/api` (2.10.0). Hosting + Cloud Run deployed with PR #157.
+- **QA:** `npm run lint` + `npm test` (326 tests) 2026-08-16 — #158 + #160. API `npm run lint` in `services/api` (2.10.0). Hosting + Cloud Run deployed with PR #157.
