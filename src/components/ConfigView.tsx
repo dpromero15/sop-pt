@@ -37,7 +37,7 @@ import { RankingBoundariesPanel } from './RankingBoundariesPanel';
 import { PositionsConfigPanel } from './PositionsConfigPanel';
 import { SubTeamsConfigPanel } from './SubTeamsConfigPanel';
 import { defaultAggregationMode } from '../utils/metricAggregation';
-import { metricLabelPayload } from '../utils/metricLabels';
+import { assignMetricPrimary, metricLabelPayload } from '../utils/metricLabels';
 import {
   DEFAULT_ATTENDANCE_WEIGHT_PERCENT,
   visibleRankingLabels,
@@ -400,7 +400,9 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
 
   const toggleMetricLabel = (id: string, checked: boolean) => {
     setMetricLabelIds((prev) => {
-      const resolved = toggleTreeMembership(prev, id, checked, labels);
+      const resolved = toggleTreeMembership(prev, id, checked, labels).filter(
+        (labelId) => labelId !== 'attendance',
+      );
       if (!resolved.includes(metricPrimaryLabelId) && resolved.length > 0) {
         setMetricPrimaryLabelId(resolved[0]);
       }
@@ -1340,23 +1342,39 @@ export const ConfigView: React.FC<ConfigViewProps> = ({
                       value={
                         metricLabelIds.includes(metricPrimaryLabelId)
                           ? metricPrimaryLabelId
-                          : metricLabelIds[0] || ''
+                          : metricLabelIds[0] || metricPrimaryLabelId
                       }
-                      onChange={(e) => setMetricPrimaryLabelId(e.target.value)}
+                      onChange={(e) => {
+                        const next = assignMetricPrimary(
+                          metricLabelIds,
+                          metricPrimaryLabelId,
+                          e.target.value,
+                          labels,
+                        );
+                        setMetricLabelIds(next.labelIds);
+                        setMetricPrimaryLabelId(next.primaryLabelId);
+                      }}
                       required
                       className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-blue-500"
                     >
-                      {metricLabelIds.map((id) => (
-                          <option key={id} value={id}>
-                            {labelPathName(labels, id)}
+                      {labels
+                        .filter(
+                          (label) =>
+                            label.id !== 'attendance' ||
+                            label.id === metricPrimaryLabelId,
+                        )
+                        .map((label) => (
+                          <option key={label.id} value={label.id}>
+                            {labelPathName(labels, label.id)}
                           </option>
                         ))}
                     </select>
                     <p className="text-[10px] text-slate-500 mt-1">
-                      Click a subcategory to move the metric there (replaces the
-                      parent in that tree). Shared subcategories appear under
-                      each parent; overall rank still counts the metric once.
-                      Only the primary feeds formula standing.
+                      Changing primary moves the metric out of the previous
+                      primary. Extra category chips stay as Also. Shared
+                      subcategories appear under each parent; overall rank still
+                      counts the metric once. Only the primary feeds formula
+                      standing.
                     </p>
                   </>
                 )}

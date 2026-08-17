@@ -12,6 +12,11 @@ _(none)_
 
 ## Ready to ship
 
+### #172 — Changing a metric primary category leaves the old primary (Attendance) attached
+- **Status:** implemented (verify acceptance before PR)
+- **Notes:** Changing primary moves the metric out of the previous home category. Non-attendance metrics drop leftover Attendance once another category is present (heals on load). Extra **Also** categories that were not the old primary stay.
+- **Touchpoints:** `src/utils/metricLabels.ts`, `src/utils/metricLabels.test.ts`, `src/components/ConfigView.tsx`
+
 ### #169 — Player meeting page from profile (placement snapshot)
 - **Status:** implemented (verify acceptance before PR)
 - **Notes:** Profile **Player meeting** opens a locked overlay with the placement snapshot on one scrollable page: squad standing (#X of Y), assigned-position ranks + pool leaders, category numbers (no radar), attendance rate + late/absent. Print still available from the meeting sheet.
@@ -29,6 +34,7 @@ _(none)_
 
 **Suggested PR Closes:**
 ```
+Closes #172
 Closes #169
 Closes #168
 Closes #171
@@ -63,5 +69,5 @@ _(none)_
 - GCP/Firebase project is **`sop-pt-2`**; follow gcp-firebase-changes skill for live cloud mutations.
 - Attendance system category: schema **006** (formula weight) + **007** (label).
 - Locked-sheet + tabs is the mobile density standard: `.cursor/skills/locked-sheet-tabs/SKILL.md` (player add/edit is the reference).
-- **QA:** `npm run lint` + `npm test` (343 tests) 2026-08-17 — #168 + #169 + #171.
+- **QA:** `npm run lint` + `npm test` (348 tests) 2026-08-17 — #168 + #169 + #171 + #172.
 

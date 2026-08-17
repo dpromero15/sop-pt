@@ -45,6 +45,10 @@ export function normalizeMetricLabels<T extends MetricLabelInput>(
     labelIds = resolveTreeMembership(labelIds, labels).labelIds;
   }
 
+  if (!isAttendance && labelIds.some((id) => id !== 'attendance')) {
+    labelIds = labelIds.filter((id) => id !== 'attendance');
+  }
+
   // Never invent a missing category id (e.g. 'speed') — fall back to Attendance.
   const fallback = labelIds[0] || 'attendance';
   if (labelIds.length === 0) {
@@ -109,11 +113,37 @@ export function metricLabelPayload(
   const ids = options?.labels
     ? resolveTreeMembership(labelIds, options.labels).labelIds
     : Array.from(new Set(labelIds.map((id) => id.trim()).filter(Boolean)));
+  const withoutAttendance =
+    !options?.attendance && ids.some((id) => id !== 'attendance')
+      ? ids.filter((id) => id !== 'attendance')
+      : ids;
   const primary =
-    primaryLabelId.trim() && ids.includes(primaryLabelId.trim())
+    primaryLabelId.trim() && withoutAttendance.includes(primaryLabelId.trim())
       ? primaryLabelId.trim()
-      : ids[0] || 'attendance';
-  const nextIds = ids.length > 0 ? ids : [primary];
+      : withoutAttendance[0] || 'attendance';
+  const nextIds = withoutAttendance.length > 0 ? withoutAttendance : [primary];
   if (!nextIds.includes(primary)) nextIds.unshift(primary);
   return { labelIds: nextIds, primaryLabelId: primary };
+}
+
+/**
+ * Change the formula-standing category: the metric leaves the previous
+ * primary and joins `nextPrimary`. Other extra categories stay.
+ */
+export function assignMetricPrimary(
+  labelIds: string[],
+  previousPrimary: string,
+  nextPrimary: string,
+  labels?: LabelTreePick[],
+): Pick<MetricDefinition, 'labelIds' | 'primaryLabelId'> {
+  const next = nextPrimary.trim();
+  const prev = previousPrimary.trim();
+  let ids = labelIds.map((id) => id.trim()).filter(Boolean);
+  if (next && next !== prev) {
+    ids = ids.filter((id) => id !== prev);
+  }
+  if (next && !ids.includes(next)) {
+    ids.push(next);
+  }
+  return metricLabelPayload(ids, next || prev, { labels });
 }

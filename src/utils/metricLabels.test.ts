@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assignMetricPrimary,
   metricInCategory,
   metricLabelPayload,
   metricPrimaryLabelId,
@@ -55,6 +56,26 @@ describe('normalizeMetricLabels', () => {
     expect(next.labelIds).toEqual(['attendance']);
     expect(next.primaryLabelId).toBe('attendance');
   });
+
+  it('drops leftover Attendance when a non-attendance metric has another category', () => {
+    const next = normalizeMetricLabels({
+      type: 'count',
+      labelIds: ['attendance', 'character'],
+      primaryLabelId: 'character',
+    });
+    expect(next.labelIds).toEqual(['character']);
+    expect(next.primaryLabelId).toBe('character');
+  });
+
+  it('moves primary off Attendance onto the remaining category', () => {
+    const next = normalizeMetricLabels({
+      type: 'rating_10',
+      labelIds: ['attendance', 'character'],
+      primaryLabelId: 'attendance',
+    });
+    expect(next.labelIds).toEqual(['character']);
+    expect(next.primaryLabelId).toBe('character');
+  });
 });
 
 describe('membership helpers', () => {
@@ -105,5 +126,40 @@ describe('metricLabelPayload', () => {
       labelIds: ['attendance'],
       primaryLabelId: 'attendance',
     });
+  });
+
+  it('strips Attendance from payload when another category is present', () => {
+    expect(
+      metricLabelPayload(['attendance', 'character'], 'character'),
+    ).toEqual({
+      labelIds: ['character'],
+      primaryLabelId: 'character',
+    });
+  });
+});
+
+describe('assignMetricPrimary', () => {
+  it('moves off the old primary and keeps other extras', () => {
+    expect(
+      assignMetricPrimary(['attendance', 'character'], 'attendance', 'character'),
+    ).toEqual({
+      labelIds: ['character'],
+      primaryLabelId: 'character',
+    });
+    expect(
+      assignMetricPrimary(['speed', 'fitness'], 'speed', 'character'),
+    ).toEqual({
+      labelIds: ['fitness', 'character'],
+      primaryLabelId: 'character',
+    });
+  });
+
+  it('adds the new primary when it was not already a member', () => {
+    expect(assignMetricPrimary(['attendance'], 'attendance', 'character')).toEqual(
+      {
+        labelIds: ['character'],
+        primaryLabelId: 'character',
+      },
+    );
   });
 });
