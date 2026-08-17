@@ -4,7 +4,7 @@
 |---|---|
 | **Release** | `2.13.1` |
 | **Branch** | `release/v2.13.1` |
-| **Last updated** | 2026-08-16 |
+| **Last updated** | 2026-08-17 |
 
 ## In progress
 
@@ -14,7 +14,7 @@ _(none)_
 
 ### #162 — Sessions list: newest-first sort and in-place expand
 - **Status:** implemented (verify acceptance before PR)
-- **Notes:** Sessions & Matches is a single column, newest date first (same day later time first). Tap a row to expand details in place; tap again to collapse.
+- **Notes:** Sessions & Matches is a single column, newest date first (same day later time first). Tap a row to expand details in place; tap again to collapse. Collapsed rows show session title (or opponent) before the date.
 - **Touchpoints:** `src/components/SessionsView.tsx`, `src/services/storage/localJsonAdapter.ts`, `src/utils/sessionMetrics.ts`
 
 ### #163 — Grid attendance: set-all H/L/O/E
