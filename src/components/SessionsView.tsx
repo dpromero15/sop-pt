@@ -240,12 +240,18 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
                 >
                   {session.type === 'match' ? 'M' : 'S'}
                 </span>
-                <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-white">
+                <span
+                  className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-100"
+                  title={session.title || session.opponent}
+                >
+                  {session.title || session.opponent}
+                </span>
+                <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-slate-300">
                   {formatSessionListDate(session.date)}
                 </span>
 
                 <div
-                  className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] font-extrabold tabular-nums"
+                  className="flex shrink-0 items-center gap-1.5 text-[10px] font-extrabold tabular-nums"
                   title="Attendance: here / late / out / excused"
                 >
                   {preview.markedCount === 0 ? (
