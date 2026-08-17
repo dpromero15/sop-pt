@@ -136,6 +136,19 @@ export interface PositionDefinition {
   sortOrder: number;
 }
 
+/**
+ * Program group inside a team (Varsity / JV / C-team).
+ * Distinct from Rankings “Squad” (whole roster) and from ranking pools.
+ */
+export interface SubTeam {
+  id: string;
+  name: string;
+  shortName: string;
+  /** Tailwind color token (emerald, blue, amber, …). */
+  color: string;
+  sortOrder: number;
+}
+
 /** Short position code; display with tactical number via `formatPlayerPosition`. */
 export type PlayerPosition = string;
 
@@ -159,6 +172,11 @@ export interface Player {
   positions?: PlayerPosition[];
   /** Defaults from position, but may be overridden for roster planning. */
   rankingPool?: PlayerRankingPool;
+  /**
+   * Sub-team ids (Varsity / JV / C-team). Empty or missing = unassigned.
+   * A player may belong to more than one group.
+   */
+  squadIds?: string[];
   preferredFoot: 'Left' | 'Right' | 'Both';
   avatarUrl?: string;
   /** Calendar year of birth (e.g. 2010). Prefer this over a drifting age. */

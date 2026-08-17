@@ -18,6 +18,7 @@ import type {
   EquipmentItem,
   RankingBoundariesConfig,
   PositionDefinition,
+  SubTeam,
 } from '../../types';
 
 export type StorageMode = 'cloud' | 'local-fallback';
@@ -58,6 +59,7 @@ export interface TeamSnapshot {
   equipmentItems?: EquipmentItem[];
   rankingBoundaries?: RankingBoundariesConfig;
   positions?: PositionDefinition[];
+  subTeams?: SubTeam[];
 }
 
 export interface StorageRepository {
@@ -168,6 +170,9 @@ export interface StorageRepository {
 
   getPositions(): PositionDefinition[];
   savePositions(positions: PositionDefinition[]): void;
+
+  getSubTeams(): SubTeam[];
+  saveSubTeams(subTeams: SubTeam[]): void;
 
   clearNonSystemLabels(): void;
   clearNonSystemMetrics(): void;

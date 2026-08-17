@@ -27,6 +27,7 @@ import {
   RankingBoundariesConfig,
   Team,
   PositionDefinition,
+  SubTeam,
 } from '../types';
 import {
   formatPlayerPosition,
@@ -107,6 +108,13 @@ import {
 } from '../utils/rankingsFilter';
 import { CUCURELLA_CAT_PHOTO_URL, defaultAvatarFor } from '../constants/avatars';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
+import {
+  UNASSIGNED_GROUP_ID,
+  filterRankingsByGroups,
+  hasUnassignedPlayers,
+  separatedRankingSections,
+  subTeamChipClass,
+} from '../utils/subTeams';
 
 interface RankingsViewProps {
   rankings: PlayerRanking[];
@@ -132,6 +140,7 @@ interface RankingsViewProps {
   onOpenQuickInsert: () => void;
   rankingBoundaries: RankingBoundariesConfig;
   positions: PositionDefinition[];
+  subTeams?: SubTeam[];
   coachPositionBallots: CoachPositionBallot[];
   team?: Team;
   /** When false, hide Adjusted ± bump controls (Viewer). */
@@ -325,6 +334,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   onOpenQuickInsert,
   rankingBoundaries,
   positions,
+  subTeams = [],
   coachPositionBallots,
   team,
   allowBumps = true,
@@ -358,6 +368,12 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     useState<PlayerRankingPool>('wingbacks');
   const [specialtyPosition, setSpecialtyPosition] =
     useState<PlayerPosition | null>(null);
+  const [disabledGroupIds, setDisabledGroupIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [groupsLayout, setGroupsLayout] = useState<'combined' | 'separated'>(
+    'combined',
+  );
   const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [emptyLine] = useState(
     () =>
@@ -409,6 +425,20 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
     selectedRankingPool,
   ]);
 
+  const showUnassignedChip = useMemo(
+    () => hasUnassignedPlayers(rosterPlayers, subTeams),
+    [rosterPlayers, subTeams],
+  );
+
+  const groupFilteredSource = useMemo(
+    () => filterRankingsByGroups(rankingSource, subTeams, disabledGroupIds),
+    [rankingSource, subTeams, disabledGroupIds],
+  );
+
+  const groupListPlace =
+    subTeams.length > 0 &&
+    (groupsLayout === 'separated' || disabledGroupIds.size > 0);
+
   const filledPositions = useMemo(
     () => catalogPositionsWithPlayers(positions, rosterPlayers),
     [positions, rosterPlayers],
@@ -422,7 +452,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         coachPositionBallots,
         code,
       );
-      if (coachesScope === 'average') return base;
+      if (coachesScope === 'average') {
+        return filterRankingsByGroups(base, subTeams, disabledGroupIds);
+      }
       const ballot = coachPositionBallots.find(
         (b) => b.coachId === coachesScope && b.position === code,
       );
@@ -431,18 +463,30 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         ballot,
         code,
       );
-      return base.map((ranking) => ({
-        ...ranking,
-        coachesRank: ordinals.get(ranking.player.id) ?? null,
-        coachesTotalSum: ordinals.has(ranking.player.id)
-          ? ordinals.get(ranking.player.id)!
-          : null,
-      }));
+      return filterRankingsByGroups(
+        base.map((ranking) => ({
+          ...ranking,
+          coachesRank: ordinals.get(ranking.player.id) ?? null,
+          coachesTotalSum: ordinals.has(ranking.player.id)
+            ? ordinals.get(ranking.player.id)!
+            : null,
+        })),
+        subTeams,
+        disabledGroupIds,
+      );
     }
     if (totalMode === 'adjusted') {
-      return specialtyAdjustedRankings(rankings, code);
+      return filterRankingsByGroups(
+        specialtyAdjustedRankings(rankings, code),
+        subTeams,
+        disabledGroupIds,
+      );
     }
-    return specialtyStatisticalRankings(rankings, code);
+    return filterRankingsByGroups(
+      specialtyStatisticalRankings(rankings, code),
+      subTeams,
+      disabledGroupIds,
+    );
   };
 
   const activeCutLines = useMemo(
@@ -479,6 +523,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       : null;
 
   const cutLinesUseListPlace = Boolean(
+    groupListPlace ||
     (effectiveTotalMode === 'coaches' && coachesPoolMode) ||
       (!singleSpecialty &&
       ((selectedMetricId &&
@@ -647,7 +692,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
   }, [rankings, adjustedBumps]);
 
   const hasAnyBumps = bumpedPlayers.length > 0;
-  const filteredRankings = rankingSource.filter((r) => {
+  const filteredRankings = groupFilteredSource.filter((r) => {
     const q = searchQuery.toLowerCase();
     return (
       r.player.name.toLowerCase().includes(q) ||
@@ -676,6 +721,35 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       effectiveTotalMode,
     );
   });
+
+  const rankingSections = useMemo(() => {
+    if (
+      subTeams.length > 0 &&
+      groupsLayout === 'separated' &&
+      !positionOverview
+    ) {
+      return separatedRankingSections(
+        sortedRankings,
+        subTeams,
+        disabledGroupIds,
+        showUnassignedChip,
+      );
+    }
+    return [
+      {
+        id: 'combined',
+        title: '',
+        rows: sortedRankings,
+      },
+    ];
+  }, [
+    subTeams,
+    groupsLayout,
+    positionOverview,
+    sortedRankings,
+    disabledGroupIds,
+    showUnassignedChip,
+  ]);
 
   const selectCategory = (labelId: string | 'all') => {
     const next = selectionAfterCategoryChange(
@@ -742,21 +816,27 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             : 'Statistical Rank';
 
   const handleExportCSV = () => {
-    let csv =
-      'Rank,Player Name,Jersey,Position,Statistical Rank,Adjusted Rank,Coaches Rank,Statistical Score,Adjusted Score,Coaches Average,Bump,Attendance Rate\n';
-    sortedRankings.forEach((r, idx) => {
-      const overallRank = r.overallRank ?? 'Unscored';
-      const adjustedRank = r.adjustedRank ?? 'Unscored';
-      const coachesRank = r.coachesRank ?? 'Unscored';
-      const overall = r.totalScore ?? 'Unscored';
-      const adjusted = r.adjustedTotalScore ?? 'Unscored';
-      const coachesAvg =
-        r.coachesTotalSum != null && completeBallotCount > 0
-          ? formatCoachesAverage(r.coachesTotalSum, completeBallotCount)
-          : 'Unscored';
-      const bump = r.adjustedBump ?? 0;
-      const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
-      csv += `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},"${formatPlayerPositions(r.player, positions)}",${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
+    const groupCol =
+      subTeams.length > 0 && groupsLayout === 'separated' && !positionOverview;
+    let csv = groupCol
+      ? 'Group,Rank,Player Name,Jersey,Position,Statistical Rank,Adjusted Rank,Coaches Rank,Statistical Score,Adjusted Score,Coaches Average,Bump,Attendance Rate\n'
+      : 'Rank,Player Name,Jersey,Position,Statistical Rank,Adjusted Rank,Coaches Rank,Statistical Score,Adjusted Score,Coaches Average,Bump,Attendance Rate\n';
+    rankingSections.forEach((section) => {
+      section.rows.forEach((r, idx) => {
+        const overallRank = r.overallRank ?? 'Unscored';
+        const adjustedRank = r.adjustedRank ?? 'Unscored';
+        const coachesRank = r.coachesRank ?? 'Unscored';
+        const overall = r.totalScore ?? 'Unscored';
+        const adjusted = r.adjustedTotalScore ?? 'Unscored';
+        const coachesAvg =
+          r.coachesTotalSum != null && completeBallotCount > 0
+            ? formatCoachesAverage(r.coachesTotalSum, completeBallotCount)
+            : 'Unscored';
+        const bump = r.adjustedBump ?? 0;
+        const att = r.attendanceRate !== null ? `${r.attendanceRate}%` : '';
+        const cells = `${idx + 1},"${r.player.name}",#${r.player.jerseyNumber},"${formatPlayerPositions(r.player, positions)}",${overallRank},${adjustedRank},${coachesRank},${overall},${adjusted},${coachesAvg},${bump},${att}\n`;
+        csv += groupCol ? `"${section.title}",${cells}` : cells;
+      });
     });
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
@@ -832,7 +912,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
       handlePrintAllPositions(nameMode);
       return;
     }
-    const sorted = [...rankingSource].sort((a, b) => {
+    const sorted = [...groupFilteredSource].sort((a, b) => {
       if (individualCoachOrdinals) {
         return compareOptionalRankValue(
           individualCoachOrdinals.get(a.player.id) ?? null,
@@ -850,6 +930,62 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
         effectiveTotalMode,
       );
     });
+    if (subTeams.length > 0 && groupsLayout === 'separated') {
+      const groupSections = separatedRankingSections(
+        sorted,
+        subTeams,
+        disabledGroupIds,
+        showUnassignedChip,
+      );
+      const printSections = groupSections.map((section) => {
+        const doc = buildRankingsPrintDocument({
+          teamName: team?.name ?? 'Team',
+          season: team?.season,
+          rankings: section.rows,
+          sortBy,
+          selectedLabelId: standingLabelId,
+          selectedMetricId,
+          metrics,
+          labels,
+          totalMode: effectiveTotalMode,
+          coachesScopeLabel,
+          rankingPoolLabel:
+            effectiveTotalMode === 'coaches' && coachesPoolMode
+              ? formatPlayerRankingPool(selectedRankingPool)
+              : undefined,
+          completeBallotCount,
+          individualOrdinals: individualCoachOrdinals,
+          cutLines: resolvePrintCutLines({
+            boundaries: rankingBoundaries,
+            specialtyPosition: singleSpecialty,
+            selectedLabelId: standingLabelId,
+            selectedMetricId,
+            selectedRankingPool:
+              effectiveTotalMode === 'coaches' && coachesPoolMode
+                ? selectedRankingPool
+                : null,
+            totalMode: effectiveTotalMode,
+          }),
+          nameMode,
+          entries,
+        });
+        return { heading: section.title, rows: doc.rows };
+      });
+      openPositionRankingsPrint({
+        teamName: team?.name ?? 'Team',
+        season: team?.season ?? '',
+        title: primaryScoreLabel,
+        scopeLine: 'Separated by sub-team — each list has its own rank 1',
+        printedAt: new Date().toLocaleString(),
+        nameMode,
+        valueHeader:
+          effectiveTotalMode === 'coaches' ? 'Coach' : 'Standing',
+        nameHeader: nameMode === 'publicId' ? 'ID' : 'Player',
+        sections: printSections,
+      });
+      setPrintMenuOpen(false);
+      return;
+    }
     openRankingsPrint(
       buildRankingsPrintDocument({
         teamName: team?.name ?? 'Team',
@@ -1167,6 +1303,96 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               </button>
             ))}
           </div>
+          {subTeams.length > 0 && (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mr-0.5">
+                  Groups
+                </span>
+                {subTeams.map((team) => {
+                  const on = !disabledGroupIds.has(team.id);
+                  return (
+                    <button
+                      key={team.id}
+                      type="button"
+                      onClick={() =>
+                        setDisabledGroupIds((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(team.id)) next.delete(team.id);
+                          else next.add(team.id);
+                          return next;
+                        })
+                      }
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                        on
+                          ? subTeamChipClass(team.color)
+                          : 'bg-slate-950 text-slate-500 border-slate-800 line-through'
+                      }`}
+                    >
+                      {team.name}
+                    </button>
+                  );
+                })}
+                {showUnassignedChip && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDisabledGroupIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(UNASSIGNED_GROUP_ID)) {
+                          next.delete(UNASSIGNED_GROUP_ID);
+                        } else {
+                          next.add(UNASSIGNED_GROUP_ID);
+                        }
+                        return next;
+                      })
+                    }
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold border transition-all ${
+                      !disabledGroupIds.has(UNASSIGNED_GROUP_ID)
+                        ? 'bg-slate-700/40 text-slate-200 border-slate-600'
+                        : 'bg-slate-950 text-slate-500 border-slate-800 line-through'
+                    }`}
+                  >
+                    Unassigned
+                  </button>
+                )}
+              </div>
+              {!positionOverview && (
+                <div
+                  className="inline-flex rounded-xl border border-slate-800 bg-slate-950/80 p-1"
+                  role="tablist"
+                  aria-label="Group ranking layout"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={groupsLayout === 'combined'}
+                    onClick={() => setGroupsLayout('combined')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      groupsLayout === 'combined'
+                        ? 'bg-violet-500 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Combined
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={groupsLayout === 'separated'}
+                    onClick={() => setGroupsLayout('separated')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${
+                      groupsLayout === 'separated'
+                        ? 'bg-violet-500 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Separated
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           <p className="text-[11px] text-slate-500 mt-1.5">
             {positionOverview
               ? `Every position with assigned players — ${
@@ -1671,16 +1897,32 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               Open Quick Insert
             </button>
           </div>
-        ) : sortedRankings.length === 0 ? (
+        ) : rankingSections.every((section) => section.rows.length === 0) ? (
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center">
             <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
             <h3 className="text-lg font-bold text-slate-300">No players found</h3>
             <p className="text-slate-500 text-xs mt-1">
-              Try adjusting search query or register new players in the team roster.
+              Try adjusting search, group filters, or register new players in the team roster.
             </p>
           </div>
         ) : (
-          sortedRankings.map((item, idx) => {
+          rankingSections.map((section) => (
+            <div key={section.id} className="space-y-3">
+              {section.title ? (
+                <div className="flex items-center justify-between px-1 pt-1">
+                  <h3 className="text-sm font-bold text-white">{section.title}</h3>
+                  <span className="text-[11px] text-slate-500">
+                    {section.rows.length} player
+                    {section.rows.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+              ) : null}
+              {section.rows.length === 0 ? (
+                <p className="text-xs text-slate-500 px-1">
+                  No players in this group for the current filters.
+                </p>
+              ) : (
+              section.rows.map((item, idx) => {
             const bumpNet =
               item.adjustedBump || adjustedBumps[item.player.id] || 0;
             const myBumpNet = bumpCoachId
@@ -1702,7 +1944,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             const prevIneligible =
               idx > 0 &&
               effectiveTotalMode === 'adjusted' &&
-              sortedRankings[idx - 1].eligibleToPlay === false;
+              section.rows[idx - 1].eligibleToPlay === false;
             const showIneligibleDivider =
               ineligible && !prevIneligible && idx > 0;
 
@@ -1722,9 +1964,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               idx > 0 &&
               !prevIneligible &&
               (individualCoachOrdinals
-                ? !individualCoachOrdinals.has(sortedRankings[idx - 1].player.id)
+                ? !individualCoachOrdinals.has(section.rows[idx - 1].player.id)
                 : isUnscoredForRankMode(
-                    sortedRankings[idx - 1],
+                    section.rows[idx - 1],
                     sortBy,
                     standingLabelId,
                     selectedMetricId,
@@ -1735,14 +1977,14 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               unscored && !prevUnscored && !ineligible && idx > 0;
 
             const prevDisplayRank =
-              idx > 0 ? rankForMode(sortedRankings[idx - 1], effectiveTotalMode) : null;
+              idx > 0 ? rankForMode(section.rows[idx - 1], effectiveTotalMode) : null;
             const curDisplayRank = rankForMode(item, effectiveTotalMode);
             const crossedCuts = activeCutLines.filter((cut) => {
               if (cutLinesUseListPlace) {
                 if (unscored || ineligible) return false;
                 let place = 0;
                 for (let i = 0; i <= idx; i++) {
-                  const row = sortedRankings[i];
+                  const row = section.rows[i];
                   const rowIneligible =
                     effectiveTotalMode === 'adjusted' &&
                     row.eligibleToPlay === false;
@@ -1817,7 +2059,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               specificMetricValue;
 
             // Rank badge among scored players only; unscored share the bottom tier.
-            const scoredAhead = sortedRankings
+            const scoredAhead = section.rows
               .slice(0, idx)
               .filter((r) =>
                 individualCoachOrdinals
@@ -1843,7 +2085,7 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
             const displayRank =
               individualOrdinal != null
                 ? individualOrdinal
-                : sortBy === 'total' && !unscored && !ineligible
+                : sortBy === 'total' && !unscored && !ineligible && !groupListPlace
                   ? rankForMode(item, effectiveTotalMode)
                   : listRank;
 
@@ -2214,6 +2456,9 @@ export const RankingsView: React.FC<RankingsViewProps> = ({
               </React.Fragment>
             );
           })
+              )}
+            </div>
+          ))
         )}
       </div>
       )}

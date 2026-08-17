@@ -19,6 +19,7 @@ export type ConfigName =
   | 'equipmentItems'
   | 'rankingBoundaries'
   | 'positions'
+  | 'subTeams'
   | 'coachPositionBallots';
 
 export class ApiAdapter {

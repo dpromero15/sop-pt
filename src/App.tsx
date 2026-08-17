@@ -94,6 +94,7 @@ export default function App() {
   const [positions, setPositions] = useState(() =>
     StorageService.getPositions(),
   );
+  const [subTeams, setSubTeams] = useState(() => StorageService.getSubTeams());
   const [coachPositionBallots, setCoachPositionBallots] = useState(() =>
     StorageService.getCoachPositionBallots(),
   );
@@ -131,6 +132,7 @@ export default function App() {
     setEquipmentItems(StorageService.getEquipmentItems());
     setRankingBoundaries(StorageService.getRankingBoundaries());
     setPositions(StorageService.getPositions());
+    setSubTeams(StorageService.getSubTeams());
     setCoachPositionBallots(StorageService.getCoachPositionBallots());
   };
 
@@ -423,6 +425,7 @@ export default function App() {
             }}
             rankingBoundaries={rankingBoundaries}
             positions={positions}
+            subTeams={subTeams}
             team={team}
             allowBumps={can('adjustedBumps')}
           />
@@ -450,6 +453,7 @@ export default function App() {
             complianceRequirements={complianceRequirements}
             playerCompliance={playerCompliance}
             positions={positions}
+            subTeams={subTeams}
             rankings={rankings}
             onSelectPlayer={(p) => setSelectedPlayer(p)}
             onPrintPlacement={(sheetPlayers) =>
@@ -510,6 +514,7 @@ export default function App() {
             equipmentItems={equipmentItems}
             rankingBoundaries={rankingBoundaries}
             positions={positions}
+            subTeams={subTeams}
             players={players}
             onRefreshData={refreshData}
           />

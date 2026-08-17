@@ -35,6 +35,7 @@ export type SyncBucket =
   | 'equipmentItems'
   | 'rankingBoundaries'
   | 'positions'
+  | 'subTeams'
   | 'coachPositionBallots';
 
 const OUTBOX_KEY = 'stm_cloud_outbox_v1';
@@ -60,6 +61,7 @@ const KEY_TO_BUCKET: Record<string, SyncBucket> = {
   [STORAGE_KEYS.EQUIPMENT_ITEMS]: 'equipmentItems',
   [STORAGE_KEYS.RANKING_BOUNDARIES]: 'rankingBoundaries',
   [STORAGE_KEYS.POSITIONS]: 'positions',
+  [STORAGE_KEYS.SUB_TEAMS]: 'subTeams',
   [STORAGE_KEYS.COACH_POSITION_BALLOTS]: 'coachPositionBallots',
 };
 
@@ -240,6 +242,8 @@ function payloadFor(bucket: SyncBucket, snap: TeamSnapshot): unknown {
       return snap.rankingBoundaries;
     case 'positions':
       return snap.positions ?? [];
+    case 'subTeams':
+      return snap.subTeams ?? [];
     case 'coachPositionBallots':
       return snap.coachPositionBallots ?? [];
     default:
@@ -314,6 +318,9 @@ function overlayDirtyLocal(
         break;
       case 'positions':
         next.positions = data as TeamSnapshot['positions'];
+        break;
+      case 'subTeams':
+        next.subTeams = data as TeamSnapshot['subTeams'];
         break;
       case 'coachPositionBallots':
         next.coachPositionBallots =
@@ -539,6 +546,7 @@ export async function enterTeamCloudSync(teamId: string): Promise<void> {
       markDirty(teamId, 'formula');
       markDirty(teamId, 'calculatedFields');
       markDirty(teamId, 'positions');
+      markDirty(teamId, 'subTeams');
       markDirty(teamId, 'coachPositionBallots');
       StorageService.setHoldSeeds(false);
       await flushTeam(teamId);

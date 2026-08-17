@@ -29,6 +29,7 @@ import type {
   ComplianceRequirement,
   PlayerComplianceState,
   PositionDefinition,
+  SubTeam,
 } from '../types';
 import {
   formatPlayerPosition,
@@ -76,6 +77,11 @@ import {
   rankingPoolForPlayer,
 } from '../utils/playerRankingPools';
 import {
+  playerSquadIds,
+  subTeamChipClass,
+  subTeamById,
+} from '../utils/subTeams';
+import {
   buildPlayerIdLegendDocument,
   openPlayerIdLegendPrint,
 } from '../utils/rankingsPrint';
@@ -93,6 +99,7 @@ interface PlayersViewProps {
   complianceRequirements: ComplianceRequirement[];
   playerCompliance: PlayerComplianceState;
   positions: PositionDefinition[];
+  subTeams: SubTeam[];
   rankings: PlayerRanking[];
   onSelectPlayer: (player: Player) => void;
   onPrintPlacement?: (players: Player[]) => void;
@@ -115,6 +122,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   complianceRequirements,
   playerCompliance,
   positions,
+  subTeams,
   rankings,
   onSelectPlayer,
   onPrintPlacement,
@@ -137,6 +145,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
   const [formJersey, setFormJersey] = useState<number>(10);
   const [formPosition, setFormPosition] = useState<PlayerPosition>('CM');
   const [formExtraPositions, setFormExtraPositions] = useState<string[]>([]);
+  const [formSquadIds, setFormSquadIds] = useState<string[]>([]);
   const [formRankingPool, setFormRankingPool] =
     useState<PlayerRankingPool>('central-midfield');
   const [formFoot, setFormFoot] = useState<'Left' | 'Right' | 'Both'>('Right');
@@ -198,6 +207,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormExtraPositions(
       playerPositionCodes(player).filter((code) => code !== player.position),
     );
+    setFormSquadIds(playerSquadIds(player, subTeams));
     setFormRankingPool(rankingPoolForPlayer(player));
     setFormFoot(player.preferredFoot);
     setFormBirthYear(player.birthYear ? String(player.birthYear) : '');
@@ -237,6 +247,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         }),
         rankingPool: formRankingPool,
         preferredFoot: formFoot,
+        squadIds: formSquadIds.length ? formSquadIds : undefined,
         birthYear,
         grade,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
@@ -256,6 +267,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         }),
         rankingPool: formRankingPool,
         preferredFoot: formFoot,
+        squadIds: formSquadIds.length ? formSquadIds : undefined,
         birthYear,
         grade,
         avatarUrl: formAvatar || defaultAvatarFor(formJersey || formName || Date.now()),
@@ -273,6 +285,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
     setFormGrade('');
     setFormRankingPool(defaultRankingPoolForPosition('CM'));
     setFormExtraPositions([]);
+    setFormSquadIds([]);
     setFormRankingIneligible(false);
     setFormInactive(false);
     onRefreshData();
@@ -329,6 +342,7 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
         text,
         existing,
         existingPublicIds,
+        subTeams,
       );
 
       ok.forEach((row) => {
@@ -512,6 +526,8 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                   setFormNotes('');
                   setFormBirthYear('');
                   setFormGrade('');
+                  setFormExtraPositions([]);
+                  setFormSquadIds([]);
                   setFormRankingIneligible(false);
                   setFormInactive(false);
                   setFormTab('info');
@@ -694,6 +710,18 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 text-[11px] font-extrabold border border-blue-500/30">
                           #{player.jerseyNumber} • {formatPlayerPositions(player, positions)}
                         </span>
+                        {playerSquadIds(player, subTeams).map((id) => {
+                          const group = subTeamById(subTeams, id);
+                          if (!group) return null;
+                          return (
+                            <span
+                              key={id}
+                              className={`px-2 py-0.5 rounded text-[11px] font-extrabold border ${subTeamChipClass(group.color)}`}
+                            >
+                              {group.shortName}
+                            </span>
+                          );
+                        })}
                         {player.grade != null && (
                           <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] font-bold border border-slate-700">
                             Gr {formatPlayerGrade(player.grade)}
@@ -1130,6 +1158,42 @@ export const PlayersView: React.FC<PlayersViewProps> = ({
                         includes them on every assigned list.
                       </p>
                     </div>
+
+                    {subTeams.length > 0 && (
+                      <div>
+                        <label className="block text-slate-400 font-semibold mb-1">
+                          Sub-teams
+                        </label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {subTeams.map((team) => {
+                            const checked = formSquadIds.includes(team.id);
+                            return (
+                              <button
+                                key={team.id}
+                                type="button"
+                                onClick={() =>
+                                  setFormSquadIds((prev) =>
+                                    checked
+                                      ? prev.filter((id) => id !== team.id)
+                                      : [...prev, team.id],
+                                  )
+                                }
+                                className={`px-2 py-1 rounded-lg text-[11px] font-semibold border ${
+                                  checked
+                                    ? subTeamChipClass(team.color)
+                                    : 'bg-slate-950 text-slate-400 border-slate-800'
+                                }`}
+                              >
+                                {team.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-500">
+                          A player can be on Varsity and JV at the same time.
+                        </p>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-slate-400 font-semibold mb-1">

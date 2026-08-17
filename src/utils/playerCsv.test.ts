@@ -127,4 +127,28 @@ describe('playerCsv', () => {
       { name: 'False Nine', position: 'F9' },
     ]);
   });
+
+  it('parses subTeams names against the catalog', () => {
+    const csv = [
+      PLAYER_CSV_HEADERS.join(','),
+      ['Pat', '8', 'ST', '', '', '', '', '', '', 'central-midfield', '', 'Varsity;JV'].join(','),
+    ].join('\n');
+    const result = parseAndValidatePlayerCsv(csv, new Set(), new Set(), [
+      {
+        id: 'st_varsity',
+        name: 'Varsity',
+        shortName: 'V',
+        color: 'emerald',
+        sortOrder: 0,
+      },
+      {
+        id: 'st_jv',
+        name: 'JV',
+        shortName: 'JV',
+        color: 'blue',
+        sortOrder: 1,
+      },
+    ]);
+    expect(result.ok[0].squadIds).toEqual(['st_varsity', 'st_jv']);
+  });
 });
