@@ -5,14 +5,17 @@ import type {
   Player,
   PlayerRanking,
   PositionDefinition,
+  Session,
   Team,
 } from '../types';
 import {
+  buildAttendancePrintSummary,
   buildPlayerPlacementDocument,
   formatPositionPoolLeaders,
   playerPlacementHtml,
 } from './playerPlacementPrint';
 import { publicIdFromSeed } from './playerPublicId';
+import { ATTENDANCE_METRIC_ID } from './sessionMetrics';
 
 const team: Team = {
   id: 't1',
@@ -69,6 +72,16 @@ const labels: LabelDefinition[] = [
 
 const metrics: MetricDefinition[] = [
   {
+    id: ATTENDANCE_METRIC_ID,
+    name: 'Attendance',
+    labelIds: ['attendance'],
+    primaryLabelId: 'attendance',
+    type: 'attendance',
+    unit: '%',
+    higherIsBetter: true,
+    aggregationMode: 'average',
+  },
+  {
     id: 'm_40m',
     name: '40 Meter Dash',
     labelIds: ['speed'],
@@ -79,6 +92,23 @@ const metrics: MetricDefinition[] = [
     aggregationMode: 'best',
   },
 ];
+
+function session(
+  id: string,
+  date: string,
+  title: string,
+  extras: Partial<Session> = {},
+): Session {
+  return {
+    id,
+    date,
+    title,
+    type: 'session',
+    status: 'closed',
+    metricIds: [ATTENDANCE_METRIC_ID],
+    ...extras,
+  };
+}
 
 function player(
   id: string,
@@ -182,6 +212,12 @@ describe('playerPlacementPrint', () => {
     ],
     labels,
     metrics,
+    sessions: [
+      session('s1', '2026-08-01', 'Fitness'),
+      session('s2', '2026-08-03', 'Match vs United', { type: 'match' }),
+      session('s3', '2026-08-05', 'Recovery'),
+      session('s4', '2026-08-08', 'Scrimmage'),
+    ],
     entries: [
       {
         id: 'e1',
@@ -206,6 +242,38 @@ describe('playerPlacementPrint', () => {
         metricId: 'm_40m',
         value: 5.8,
         timestamp: '2026-08-01T00:00:00Z',
+      },
+      {
+        id: 'a1',
+        sessionId: 's1',
+        playerId: 'lucas',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 100,
+        timestamp: '2026-08-01T00:00:00Z',
+      },
+      {
+        id: 'a2',
+        sessionId: 's2',
+        playerId: 'lucas',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 50,
+        timestamp: '2026-08-03T00:00:00Z',
+      },
+      {
+        id: 'a3',
+        sessionId: 's3',
+        playerId: 'lucas',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: 0,
+        timestamp: '2026-08-05T00:00:00Z',
+      },
+      {
+        id: 'a4',
+        sessionId: 's4',
+        playerId: 'lucas',
+        metricId: ATTENDANCE_METRIC_ID,
+        value: -1,
+        timestamp: '2026-08-08T00:00:00Z',
       },
     ],
     positions,
@@ -270,6 +338,92 @@ describe('playerPlacementPrint', () => {
     expect(html).toContain('Page 1 of 2');
     expect(html).toContain('Page 2 of 2');
     expect(html.match(/class="page"/g)?.length).toBe(2);
+  });
+
+  it('lists only late and absent session titles, not present or excused', () => {
+    const doc = buildPlayerPlacementDocument(lucas, ctx);
+    expect(doc.attendance).toEqual({
+      present: 1,
+      late: 1,
+      absent: 1,
+      excused: 1,
+      exceptions: [
+        {
+          sessionId: 's3',
+          dateLabel: 'Aug 5',
+          title: 'Recovery',
+          status: 'absent',
+        },
+        {
+          sessionId: 's2',
+          dateLabel: 'Aug 3',
+          title: 'Match vs United',
+          status: 'late',
+        },
+      ],
+    });
+    expect(doc.attendance.exceptions.map((row) => row.title)).not.toContain(
+      'Fitness',
+    );
+    expect(doc.attendance.exceptions.map((row) => row.title)).not.toContain(
+      'Scrimmage',
+    );
+
+    const html = playerPlacementHtml([doc]);
+    expect(html).toContain('94% · Present 1 · Late 1 · Absent 1 · Excused 1');
+    expect(html).toContain('Aug 3 Match vs United');
+    expect(html).toContain('Aug 5 Recovery');
+    expect(html).toContain('1 late · 1 absent');
+    expect(html).not.toContain('Aug 1 Fitness');
+    expect(html).not.toContain('Aug 8 Scrimmage');
+  });
+
+  it('omits soft-deleted sessions from the attendance summary', () => {
+    const summary = buildAttendancePrintSummary(
+      'lucas',
+      ctx.entries,
+      [
+        ...ctx.sessions,
+        session('s5', '2026-08-12', 'Deleted practice', {
+          deletedAt: '2026-08-13T00:00:00Z',
+        }),
+      ],
+      metrics,
+    );
+    const withDeletedEntry = buildAttendancePrintSummary(
+      'lucas',
+      [
+        ...ctx.entries,
+        {
+          id: 'a5',
+          sessionId: 's5',
+          playerId: 'lucas',
+          metricId: ATTENDANCE_METRIC_ID,
+          value: 0,
+          timestamp: '2026-08-12T00:00:00Z',
+        },
+      ],
+      [
+        ...ctx.sessions,
+        session('s5', '2026-08-12', 'Deleted practice', {
+          deletedAt: '2026-08-13T00:00:00Z',
+        }),
+      ],
+      metrics,
+    );
+    expect(summary.absent).toBe(1);
+    expect(withDeletedEntry.absent).toBe(1);
+    expect(
+      withDeletedEntry.exceptions.some((row) => row.title === 'Deleted practice'),
+    ).toBe(false);
+  });
+
+  it('says when there are no late or absent sessions', () => {
+    const nineDoc = buildPlayerPlacementDocument(nine, ctx);
+    expect(nineDoc.attendance.exceptions).toEqual([]);
+    expect(playerPlacementHtml([nineDoc])).toContain(
+      'No late or absent sessions.',
+    );
   });
 
   it('stacks two pages per player for a roster packet', () => {

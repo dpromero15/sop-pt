@@ -1,4 +1,5 @@
 import type {
+  AttendanceStatus,
   CoachBallot,
   CoachPositionBallot,
   LabelDefinition,
@@ -7,6 +8,7 @@ import type {
   Player,
   PlayerRanking,
   PositionDefinition,
+  Session,
   Team,
 } from '../types';
 import {
@@ -34,6 +36,12 @@ import {
 import { formatTeamMetricValue } from './rankingsFilter';
 import { openPrintHtml } from './rankingsPrint';
 import { assignCompetitionRanks } from './scoring';
+import {
+  ATTENDANCE_METRIC_ID,
+  attendanceValueToStatus,
+  formatSessionListDate,
+} from './sessionMetrics';
+import { isSoftDeleted } from './softDelete';
 
 export interface RankPlace {
   rank: number | null;
@@ -69,6 +77,26 @@ export interface MetricPlacementRow {
   best: string;
 }
 
+export type AttendanceExceptionStatus = Extract<
+  AttendanceStatus,
+  'late' | 'absent'
+>;
+
+export interface AttendanceExceptionRow {
+  sessionId: string;
+  dateLabel: string;
+  title: string;
+  status: AttendanceExceptionStatus;
+}
+
+export interface AttendancePrintSummary {
+  present: number;
+  late: number;
+  absent: number;
+  excused: number;
+  exceptions: AttendanceExceptionRow[];
+}
+
 export interface PlayerPlacementDocument {
   teamName: string;
   clubName: string;
@@ -86,6 +114,7 @@ export interface PlayerPlacementDocument {
   statusNote: string;
   notes: string;
   attendanceRate: string;
+  attendance: AttendancePrintSummary;
   overall: {
     statistical: RankPlace;
     adjusted: RankPlace;
@@ -102,6 +131,7 @@ export interface PlayerPlacementPrintContext {
   labels: LabelDefinition[];
   metrics: MetricDefinition[];
   entries: MetricEntry[];
+  sessions: Session[];
   positions: PositionDefinition[];
   coachBallots: CoachBallot[];
   coachPositionBallots: CoachPositionBallot[];
@@ -254,6 +284,90 @@ function statusNoteFor(player: Player): string {
   if (player.status === 'inactive') bits.push('Inactive');
   if (player.rankingIneligible) bits.push('Marked ineligible for Adjusted');
   return bits.join(' · ');
+}
+
+function attendanceMetricIds(metrics: MetricDefinition[]): Set<string> {
+  const ids = metrics
+    .filter(
+      (metric) =>
+        metric.type === 'attendance' || metric.id === ATTENDANCE_METRIC_ID,
+    )
+    .map((metric) => metric.id);
+  return new Set(ids.length > 0 ? ids : [ATTENDANCE_METRIC_ID]);
+}
+
+export function emptyAttendancePrintSummary(): AttendancePrintSummary {
+  return {
+    present: 0,
+    late: 0,
+    absent: 0,
+    excused: 0,
+    exceptions: [],
+  };
+}
+
+function formatExceptionItem(row: AttendanceExceptionRow): string {
+  const title = row.title.trim() || 'Session';
+  return `${row.dateLabel} ${title}`;
+}
+
+/**
+ * Season attendance for the placement sheet: counts plus late/absent
+ * session titles only. Present and excused are counted, not listed.
+ */
+export function buildAttendancePrintSummary(
+  playerId: string,
+  entries: MetricEntry[],
+  sessions: Session[],
+  metrics: MetricDefinition[],
+): AttendancePrintSummary {
+  const metricIds = attendanceMetricIds(metrics);
+  const liveById = new Map(
+    sessions
+      .filter((session) => !isSoftDeleted(session))
+      .map((session) => [session.id, session]),
+  );
+
+  const latestBySession = new Map<string, MetricEntry>();
+  for (const entry of entries) {
+    if (entry.playerId !== playerId || !metricIds.has(entry.metricId)) continue;
+    const existing = latestBySession.get(entry.sessionId);
+    if (!existing || entry.timestamp > existing.timestamp) {
+      latestBySession.set(entry.sessionId, entry);
+    }
+  }
+
+  const summary = emptyAttendancePrintSummary();
+  const exceptionCandidates: Array<{
+    session: Session;
+    status: AttendanceExceptionStatus;
+  }> = [];
+
+  for (const [sessionId, entry] of latestBySession) {
+    const session = liveById.get(sessionId);
+    if (!session) continue;
+    const status = attendanceValueToStatus(entry.value);
+    summary[status] += 1;
+    if (status === 'late' || status === 'absent') {
+      exceptionCandidates.push({ session, status });
+    }
+  }
+
+  exceptionCandidates.sort((a, b) => {
+    const byDate = b.session.date.localeCompare(a.session.date);
+    if (byDate !== 0) return byDate;
+    const byTime = (b.session.time ?? '').localeCompare(a.session.time ?? '');
+    if (byTime !== 0) return byTime;
+    return b.session.id.localeCompare(a.session.id);
+  });
+
+  summary.exceptions = exceptionCandidates.map((row) => ({
+    sessionId: row.session.id,
+    dateLabel: formatSessionListDate(row.session.date),
+    title: row.session.title.trim() || 'Session',
+    status: row.status,
+  }));
+  return summary;
 }
 
 export function buildPlayerPlacementDocument(
@@ -465,6 +579,12 @@ export function buildPlayerPlacementDocument(
     notes: player.notes?.trim() ?? '',
     attendanceRate:
       ranking.attendanceRate != null ? `${ranking.attendanceRate}%` : '—',
+    attendance: buildAttendancePrintSummary(
+      player.id,
+      ctx.entries,
+      ctx.sessions,
+      ctx.metrics,
+    ),
     overall,
     positions,
     categories,
@@ -632,6 +752,49 @@ function identityMeta(doc: PlayerPlacementDocument): string {
   return bits.map((bit) => escapeHtml(bit)).join(' · ');
 }
 
+function attendanceExceptionHint(summary: AttendancePrintSummary): string {
+  const bits: string[] = [];
+  if (summary.late > 0) bits.push(`${summary.late} late`);
+  if (summary.absent > 0) bits.push(`${summary.absent} absent`);
+  return bits.join(' · ');
+}
+
+function attendanceCountsLine(doc: PlayerPlacementDocument): string {
+  const { present, late, absent, excused } = doc.attendance;
+  const bits = [
+    `Present ${present}`,
+    `Late ${late}`,
+    `Absent ${absent}`,
+  ];
+  if (excused > 0) bits.push(`Excused ${excused}`);
+  return `${doc.attendanceRate} · ${bits.join(' · ')}`;
+}
+
+function attendanceExceptionLine(
+  label: string,
+  rows: AttendanceExceptionRow[],
+): string {
+  if (rows.length === 0) return '';
+  const items = rows.map((row) => escapeHtml(formatExceptionItem(row))).join(' · ');
+  return `<p class="att-line"><span class="att-tag">${escapeHtml(label)}</span> ${items}</p>`;
+}
+
+function attendanceSummaryHtml(doc: PlayerPlacementDocument): string {
+  const late = doc.attendance.exceptions.filter((row) => row.status === 'late');
+  const absent = doc.attendance.exceptions.filter(
+    (row) => row.status === 'absent',
+  );
+  const body =
+    late.length === 0 && absent.length === 0
+      ? `<p class="empty">No late or absent sessions.</p>`
+      : `${attendanceExceptionLine('Late', late)}${attendanceExceptionLine('Absent', absent)}`;
+  return `<section class="block att-summary">
+      <h2>Attendance</h2>
+      <p class="att-counts">${escapeHtml(attendanceCountsLine(doc))}</p>
+      ${body}
+    </section>`;
+}
+
 function pageFooter(doc: PlayerPlacementDocument, page: 1 | 2): string {
   const club = [doc.clubName, doc.ageGroup].filter(Boolean).join(' · ');
   return `<footer>
@@ -666,6 +829,11 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
       <div class="att">
         <p class="stat-kicker">Attendance</p>
         <p class="stat-place">${escapeHtml(doc.attendanceRate)}</p>
+        ${
+          attendanceExceptionHint(doc.attendance)
+            ? `<p class="stat-detail">${escapeHtml(attendanceExceptionHint(doc.attendance))}</p>`
+            : ''
+        }
       </div>
     </div>
     <section class="block">
@@ -694,6 +862,7 @@ function playerPagesHtml(doc: PlayerPlacementDocument): string {
       <h1>Performance detail</h1>
       <p class="lede">Percentile is squad standing (100 = best). Rank is place among players with that metric logged. Average / latest / best use logged sessions.</p>
     </header>
+    ${attendanceSummaryHtml(doc)}
     <section class="block">
       ${metricsTable(doc.metrics)}
     </section>
@@ -915,6 +1084,29 @@ const PLACEMENT_STYLES = `
     font-size: 9pt;
     line-height: 1.35;
     white-space: pre-wrap;
+  }
+  .att-summary { margin-bottom: 10px; }
+  .att-counts {
+    margin: 0 0 4px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 7.5pt;
+    color: #444;
+    font-variant-numeric: tabular-nums;
+  }
+  .att-line {
+    margin: 0 0 2px;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: 7.5pt;
+    line-height: 1.28;
+    color: #222;
+  }
+  .att-tag {
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 6.5pt;
+    color: #555;
+    margin-right: 6px;
   }
   footer {
     margin-top: auto;
