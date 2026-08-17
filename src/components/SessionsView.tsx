@@ -4,21 +4,34 @@ import {
   Plus, 
   MapPin, 
   Clock, 
-  FileText, 
-  CheckCircle, 
   Trash2, 
   RotateCcw,
   X, 
   Target, 
-  Flame, 
-  ChevronRight 
 } from 'lucide-react';
-import { Session, SessionType, Player, MetricDefinition, MetricEntry } from '../types';
+import { AttendanceStatus, Session, SessionType, Player, MetricDefinition } from '../types';
 import { StorageService } from '../services/storage';
 import { SessionMetricPlanner } from './logger/SessionMetricPlanner';
-import { defaultMetricIdsForSessionType } from '../utils/sessionMetrics';
+import {
+  defaultMetricIdsForSessionType,
+  formatSessionListDate,
+  indexEntriesBySessionId,
+  sessionPreviewStats,
+} from '../utils/sessionMetrics';
 import { SaveAndSyncButton } from './SaveAndSyncButton';
 import { SessionTitleEditor } from './logger/SessionTitleEditor';
+
+const ATTENDANCE_BREAKDOWN: {
+  status: AttendanceStatus;
+  letter: string;
+  label: string;
+  className: string;
+}[] = [
+  { status: 'present', letter: 'H', label: 'Here', className: 'text-emerald-400' },
+  { status: 'late', letter: 'L', label: 'Late', className: 'text-amber-300' },
+  { status: 'absent', letter: 'O', label: 'Out', className: 'text-rose-400' },
+  { status: 'excused', letter: 'E', label: 'Excused', className: 'text-amber-600' },
+];
 
 interface SessionsViewProps {
   sessions: Session[];
@@ -113,26 +126,24 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
   });
 
   const allEntries = StorageService.getEntries();
-  const activeSessionEntries = selectedSession 
-    ? allEntries.filter(e => e.sessionId === selectedSession.id)
+  const entriesBySession = indexEntriesBySessionId(allEntries);
+  const activeSessionEntries = selectedSession
+    ? entriesBySession.get(selectedSession.id) ?? []
     : [];
 
   return (
-    <div className="space-y-6 pb-28">
+    <div className="space-y-4 pb-28">
       {/* Header Banner */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl px-4 py-3 sm:px-5 sm:py-4 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 relative z-10">
           <div>
-            <div className="flex items-center gap-2 text-purple-400 font-semibold text-xs uppercase tracking-wider mb-1">
+            <div className="flex items-center gap-2 text-purple-400 font-semibold text-xs uppercase tracking-wider mb-0.5">
               <Calendar className="w-4 h-4" />
               <span>Season Timeline</span>
             </div>
-            <h2 className="text-2xl font-extrabold text-white tracking-tight">
+            <h2 className="text-xl font-extrabold text-white tracking-tight">
               Sessions & Matches ({sessions.length})
             </h2>
-            <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              Schedule training sessions and competitive matches.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -178,61 +189,86 @@ export const SessionsView: React.FC<SessionsViewProps> = ({
       </div>
 
       {/* Sessions Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column: Session List */}
-        <div className="space-y-3 lg:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Left Column: compact session previews */}
+        <div className="space-y-1 lg:col-span-1">
+          <p className="px-0.5 text-[10px] uppercase tracking-wider text-slate-600">
+            <span className="text-emerald-400/80">H</span> here ·{' '}
+            <span className="text-amber-300/80">L</span> late ·{' '}
+            <span className="text-rose-400/80">O</span> out ·{' '}
+            <span className="text-amber-600/80">E</span> excused
+          </p>
           {filteredSessions.map(session => {
             const isSelected = selectedSession?.id === session.id;
-            const entriesCount = allEntries.filter(e => e.sessionId === session.id).length;
+            const preview = sessionPreviewStats(entriesBySession.get(session.id) ?? []);
 
             return (
               <div
                 key={session.id}
                 onClick={() => setSelectedSession(session)}
-                className={`border rounded-2xl p-4 transition-all duration-200 cursor-pointer shadow-md relative ${
-                  isSelected 
-                    ? 'bg-slate-800 border-purple-500/60 ring-2 ring-purple-500/20' 
+                className={`flex items-center gap-2 border rounded-xl px-2.5 py-1.5 transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? 'bg-slate-800 border-purple-500/60 ring-1 ring-purple-500/20'
                     : 'bg-slate-900/80 hover:bg-slate-800/60 border-slate-800'
                 }`}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                        session.type === 'match'
-                          ? 'bg-rose-500/15 text-rose-300 border-rose-500/30'
-                          : 'bg-purple-500/15 text-purple-300 border-purple-500/30'
-                      }`}>
-                        {session.type === 'match' ? 'Match' : 'Session'}
-                      </span>
-                      <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
-                        session.status === 'open'
-                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                          : 'bg-slate-500/15 text-slate-400 border-slate-600/40'
-                      }`}>
-                        {session.status}
-                      </span>
-                    </div>
-                    <h3 className="font-bold text-white text-sm mt-1.5 line-clamp-1">
-                      {session.title}
-                    </h3>
-                  </div>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                    session.status === 'open' ? 'bg-emerald-400' : 'bg-slate-600'
+                  }`}
+                  title={session.status === 'open' ? 'Open' : 'Closed'}
+                />
+                <span
+                  className={`text-[10px] font-extrabold w-3 shrink-0 ${
+                    session.type === 'match' ? 'text-rose-300' : 'text-purple-300'
+                  }`}
+                  title={session.type === 'match' ? 'Match' : 'Session'}
+                >
+                  {session.type === 'match' ? 'M' : 'S'}
+                </span>
+                <span className="shrink-0 whitespace-nowrap text-xs font-bold tabular-nums text-white">
+                  {formatSessionListDate(session.date)}
+                </span>
 
+                <div
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-[10px] font-extrabold tabular-nums"
+                  title="Attendance: here / late / out / excused"
+                >
+                  {preview.markedCount === 0 ? (
+                    <span className="text-slate-600">—</span>
+                  ) : (
+                    ATTENDANCE_BREAKDOWN.map(({ status, letter, label, className }) => (
+                      <span
+                        key={status}
+                        className={preview.attendance[status] > 0 ? className : 'text-slate-700'}
+                        title={`${label}: ${preview.attendance[status]}`}
+                      >
+                        {preview.attendance[status]}
+                        {letter}
+                      </span>
+                    ))
+                  )}
+                </div>
+
+                <span className="w-3.5 shrink-0 flex items-center justify-center">
+                  {preview.hasScoredMetrics && (
+                    <Target
+                      className="w-3.5 h-3.5 text-sky-400"
+                      aria-label="Metrics scored"
+                      title="Metrics scored"
+                    />
+                  )}
+                </span>
+
+                {!readOnly && (
                   <button
                     onClick={(e) => handleDeleteSession(session.id, e)}
-                    className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-700 transition-all"
+                    className="p-1 rounded-md text-slate-600 hover:text-rose-400 hover:bg-slate-700 transition-all"
+                    aria-label={`Delete ${session.title}`}
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3 h-3" />
                   </button>
-                </div>
-
-                <div className="flex items-center gap-3 text-xs text-slate-400 mt-2">
-                  <span className="flex items-center gap-1 font-semibold text-slate-300">
-                    <Clock className="w-3.5 h-3.5 text-purple-400" />
-                    {session.date} {session.time}
-                  </span>
-                  <span>• {entriesCount} metrics logged</span>
-                </div>
+                )}
               </div>
             );
           })}

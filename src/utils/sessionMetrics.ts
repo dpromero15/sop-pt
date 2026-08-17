@@ -184,3 +184,63 @@ export function countAttendanceByStatus(
   }
   return counts;
 }
+
+export function indexEntriesBySessionId(
+  entries: readonly MetricEntry[],
+): Map<string, MetricEntry[]> {
+  const map = new Map<string, MetricEntry[]>();
+  for (const entry of entries) {
+    const list = map.get(entry.sessionId);
+    if (list) list.push(entry);
+    else map.set(entry.sessionId, [entry]);
+  }
+  return map;
+}
+
+export type SessionPreviewStats = {
+  attendance: Record<AttendanceStatus, number>;
+  markedCount: number;
+  hasScoredMetrics: boolean;
+};
+
+/** Compact list-row stats: attendance counts + whether any non-attendance metric was logged. */
+export function sessionPreviewStats(
+  entries: readonly MetricEntry[],
+): SessionPreviewStats {
+  const attendanceStatuses: AttendanceStatus[] = [];
+  let hasScoredMetrics = false;
+  for (const entry of entries) {
+    if (entry.metricId === ATTENDANCE_METRIC_ID) {
+      attendanceStatuses.push(attendanceValueToStatus(entry.value));
+    } else {
+      hasScoredMetrics = true;
+    }
+  }
+  return {
+    attendance: countAttendanceByStatus(attendanceStatuses),
+    markedCount: attendanceStatuses.length,
+    hasScoredMetrics,
+  };
+}
+
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const;
+
+/** Local calendar date for session list rows (`Aug 5`). Invalid input is returned as-is. */
+export function formatSessionListDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  if (!year || !month || !day || month < 1 || month > 12) return isoDate;
+  return `${SHORT_MONTHS[month - 1]} ${day}`;
+}
